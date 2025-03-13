@@ -1,0 +1,14 @@
+[project]
+name = "gte-py"
+version = "0.1.0"
+authors = [
+    { name = "Your Name", email = "your.email@example.com" }
+]
+description = "A short description of the project"
+entrypoint = "gte_py.main:run"
+dependencies = [
+    "typer>=0.9.0",
+]
+
+[tool.container]
+base_image = "python:3.10-slim"
