@@ -1,7 +1,8 @@
-from typing import Any
+from typing import Any, Union, cast
 
-from eth_typing import ChecksumAddress
+from eth_typing import ENS, Address, ChecksumAddress
 from web3 import Web3
+from web3.types import TxParams, Wei
 
 from .utils import load_abi
 
@@ -12,6 +13,11 @@ class Settlement:
     NONE = 0
     WRAP = 1
     UNWRAP = 2
+
+
+# Type aliases to make the code cleaner
+TxDict = dict[str, Any]  # Return type for our transaction methods
+TAddress = Union[Address, ChecksumAddress, ENS, str]  # Address types
 
 
 class Router:
@@ -75,11 +81,32 @@ class Router:
         """Get the Permit2 contract address."""
         return self.contract.functions.permit2().call()
 
+    # Helper methods for transaction building
+    def _prepare_transaction(self, sender_address: str, **kwargs) -> TxParams:
+        """Prepare transaction parameters with proper type casting"""
+        sender = cast(ChecksumAddress, self.web3.to_checksum_address(sender_address))
+        nonce = self.web3.eth.get_transaction_count(sender)
+
+        # Create a properly typed transaction dict
+        tx_params: TxParams = {
+            "from": sender,
+            "nonce": nonce,
+        }
+
+        # Add any additional kwargs
+        for key, value in kwargs.items():
+            if key == "value":
+                tx_params["value"] = cast(Wei, value)
+            else:
+                tx_params[key] = value
+
+        return tx_params
+
     # ================= WRITE METHODS =================
 
     def clob_cancel(
         self, clob_address: str, args: dict[str, Any], sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+    ) -> TxDict:
         """
         Cancel a CLOB order.
 
@@ -93,18 +120,14 @@ class Router:
             Transaction receipt
         """
         clob_address = self.web3.to_checksum_address(clob_address)
-        tx = self.contract.functions.clobCancel(clob_address, args).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        tx_params = self._prepare_transaction(sender_address, **kwargs)
+
+        tx = self.contract.functions.clobCancel(clob_address, args).build_transaction(tx_params)
+        return cast(TxDict, tx)
 
     def clob_deposit(
         self, token_address: str, amount: int, from_router: bool, sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+    ) -> TxDict:
         """
         Deposit tokens into a CLOB.
 
@@ -119,20 +142,16 @@ class Router:
             Transaction receipt
         """
         token_address = self.web3.to_checksum_address(token_address)
+        tx_params = self._prepare_transaction(sender_address, **kwargs)
+
         tx = self.contract.functions.clobDeposit(
             token_address, amount, from_router
-        ).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        ).build_transaction(tx_params)
+        return cast(TxDict, tx)
 
     def clob_post_limit_order(
         self, clob_address: str, args: dict[str, Any], sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+    ) -> TxDict:
         """
         Post a limit order to a CLOB.
 
@@ -146,18 +165,16 @@ class Router:
             Transaction receipt
         """
         clob_address = self.web3.to_checksum_address(clob_address)
+        tx_params = self._prepare_transaction(sender_address, **kwargs)
+
         tx = self.contract.functions.clobPostLimitOrder(clob_address, args).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
+            tx_params
         )
-        return tx
+        return cast(TxDict, tx)
 
     def clob_withdraw(
         self, token_address: str, amount: int, sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+    ) -> TxDict:
         """
         Withdraw tokens from a CLOB.
 
@@ -171,18 +188,16 @@ class Router:
             Transaction receipt
         """
         token_address = self.web3.to_checksum_address(token_address)
+        tx_params = self._prepare_transaction(sender_address, **kwargs)
+
         tx = self.contract.functions.clobWithdraw(token_address, amount).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
+            tx_params
         )
-        return tx
+        return cast(TxDict, tx)
 
     def execute_clob_post_fill_order(
         self, clob_address: str, args: dict[str, Any], sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+    ) -> TxDict:
         """
         Execute a fill order on a CLOB.
 
@@ -196,16 +211,12 @@ class Router:
             Transaction receipt
         """
         clob_address = self.web3.to_checksum_address(clob_address)
+        tx_params = self._prepare_transaction(sender_address, **kwargs)
+
         tx = self.contract.functions.executeClobPostFillOrder(
             clob_address, args
-        ).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        ).build_transaction(tx_params)
+        return cast(TxDict, tx)
 
     def execute_route(
         self,
@@ -218,7 +229,7 @@ class Router:
         sender_address: str,
         value: int = 0,
         **kwargs,
-    ) -> dict[str, Any]:
+    ) -> TxDict:
         """
         Execute a multi-hop route.
 
@@ -237,21 +248,16 @@ class Router:
             Transaction receipt
         """
         token_in = self.web3.to_checksum_address(token_in)
+        tx_params = self._prepare_transaction(sender_address, value=value, **kwargs)
+
         tx = self.contract.functions.executeRoute(
             token_in, amount_in, amount_out_min, deadline, hops, settlement
-        ).build_transaction(
-            {
-                "from": sender_address,
-                "value": value,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        ).build_transaction(tx_params)
+        return cast(TxDict, tx)
 
     def execute_univ2_swap_exact_tokens_for_tokens(
         self, amount_in: int, amount_out_min: int, path: list[str], sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+    ) -> TxDict:
         """
         Execute a UniswapV2 swap.
 
@@ -266,16 +272,12 @@ class Router:
             Transaction receipt
         """
         path = [self.web3.to_checksum_address(addr) for addr in path]
+        tx_params = self._prepare_transaction(sender_address, **kwargs)
+
         tx = self.contract.functions.executeUniV2SwapExactTokensForTokens(
             amount_in, amount_out_min, path
-        ).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        ).build_transaction(tx_params)
+        return cast(TxDict, tx)
 
     def launchpad_buy(
         self,
@@ -286,7 +288,7 @@ class Router:
         sender_address: str,
         value: int = 0,
         **kwargs,
-    ) -> dict[str, Any]:
+    ) -> TxDict:
         """
         Buy tokens from a launchpad.
 
@@ -304,17 +306,12 @@ class Router:
         """
         launch_token = self.web3.to_checksum_address(launch_token)
         quote_token = self.web3.to_checksum_address(quote_token)
+        tx_params = self._prepare_transaction(sender_address, value=value, **kwargs)
+
         tx = self.contract.functions.launchpadBuy(
             launch_token, amount_out_base, quote_token, worst_amount_in_quote
-        ).build_transaction(
-            {
-                "from": sender_address,
-                "value": value,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        ).build_transaction(tx_params)
+        return cast(TxDict, tx)
 
     def launchpad_buy_permit2(
         self,
@@ -326,7 +323,7 @@ class Router:
         signature: bytes,
         sender_address: str,
         **kwargs,
-    ) -> dict[str, Any]:
+    ) -> TxDict:
         """
         Buy tokens from a launchpad using Permit2.
 
@@ -345,6 +342,8 @@ class Router:
         """
         launch_token = self.web3.to_checksum_address(launch_token)
         quote_token = self.web3.to_checksum_address(quote_token)
+        tx_params = self._prepare_transaction(sender_address, **kwargs)
+
         tx = self.contract.functions.launchpadBuyPermit2(
             launch_token,
             amount_out_base,
@@ -352,14 +351,8 @@ class Router:
             worst_amount_in_quote,
             permit_single,
             signature,
-        ).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        ).build_transaction(tx_params)
+        return cast(TxDict, tx)
 
     def launchpad_sell(
         self,
@@ -369,7 +362,7 @@ class Router:
         unwrap_eth: bool,
         sender_address: str,
         **kwargs,
-    ) -> dict[str, Any]:
+    ) -> TxDict:
         """
         Sell tokens on a launchpad.
 
@@ -385,16 +378,12 @@ class Router:
             Transaction receipt
         """
         launch_token = self.web3.to_checksum_address(launch_token)
+        tx_params = self._prepare_transaction(sender_address, **kwargs)
+
         tx = self.contract.functions.launchpadSell(
             launch_token, amount_in_base, worst_amount_out_quote, unwrap_eth
-        ).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        ).build_transaction(tx_params)
+        return cast(TxDict, tx)
 
     def launchpad_sell_permit2(
         self,
@@ -405,7 +394,7 @@ class Router:
         signature: bytes,
         sender_address: str,
         **kwargs,
-    ) -> dict[str, Any]:
+    ) -> TxDict:
         """
         Sell tokens on a launchpad using Permit2.
 
@@ -422,13 +411,9 @@ class Router:
             Transaction receipt
         """
         token = self.web3.to_checksum_address(token)
+        tx_params = self._prepare_transaction(sender_address, **kwargs)
+
         tx = self.contract.functions.launchpadSellPermit2(
             token, amount_in_base, worst_amount_out_quote, permit_single, signature
-        ).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        ).build_transaction(tx_params)
+        return cast(TxDict, tx)

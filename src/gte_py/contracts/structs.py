@@ -1,7 +1,7 @@
 """Structure definitions for GTE contracts."""
 
 from enum import IntEnum
-from typing import TypedDict
+from typing import TypedDict, List, Dict, Any
 
 
 class Side(IntEnum):
@@ -34,7 +34,59 @@ class FillOrderType(IntEnum):
     FILL_OR_KILL = 1
 
 
-# Contract input structs with proper TypedDict definitions
+# Token permissions and permit structures for allowance transfers
+class TokenPermissions(TypedDict):
+    """Token permission definition."""
+    
+    token: str
+    amount: int
+
+
+class PermitDetails(TypedDict):
+    """Permit details for Permit2."""
+    
+    token: str
+    amount: int
+    expiration: int
+    nonce: int
+
+
+class PermitSingle(TypedDict):
+    """PermitSingle struct for Permit2."""
+    
+    details: PermitDetails
+    spender: str
+    sigDeadline: int
+
+
+# Basic order arguments
+class PostLimitOrderArgs(TypedDict):
+    """Arguments for posting a limit order to router."""
+    
+    isBuy: int
+    tokenInOutAmt: int
+    tokenOutInAmt: int
+    deadline: int
+
+
+class PostFillOrderArgs(TypedDict):
+    """Arguments for posting a fill order to router."""
+    
+    isBuy: int
+    tokenInOutAmt: int
+    tokenOutInAmt: int
+    deadline: int
+    orderIds: List[int]
+
+
+class CancelArgs(TypedDict):
+    """Arguments for canceling orders through router."""
+    
+    isBuy: int
+    orderId: int
+
+
+# CLOB specific structures
 class ICLOBPostLimitOrderArgs(TypedDict):
     """Arguments for posting a limit order."""
 
@@ -82,5 +134,19 @@ class ICLOBReduceArgs(TypedDict):
 class ICLOBCancelArgs(TypedDict):
     """Arguments for canceling orders."""
 
-    orderIds: list[int]
+    orderIds: List[int]
     settlement: int
+
+
+# Launchpad structures
+class LaunchDetails(TypedDict):
+    """Details for launching a new token."""
+    
+    name: str
+    symbol: str
+    mediaURI: str
+    initialBaseReserve: int
+    initialQuoteReserve: int
+    quoteToken: str
+    virtualBaseReserve: int
+    virtualQuoteReserve: int

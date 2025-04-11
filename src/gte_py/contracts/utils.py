@@ -1,8 +1,8 @@
 import importlib.resources as pkg_resources
 import json
 import os
-import time
-from typing import Any
+import pathlib
+from typing import Any, Dict, List, Optional, Union
 
 from web3 import Web3
 
@@ -53,51 +53,62 @@ def from_wei(amount: int, decimals: int = 18) -> float:
     return amount / (10**decimals)
 
 
-def load_abi(abi_name: str) -> list[dict[str, Any]]:
+# Fix for the Traversable issue
+def load_abi(abi_name: str, abi_path: Optional[str] = None) -> List[Dict[str, Any]]:
     """
-    Load an ABI from package resources or file path.
+    Load ABI from a file or package resources.
 
     Args:
-        abi_name: Name of the ABI file (e.g., 'iclob', 'launchpad')
-                  or full path to the ABI file
+        abi_name: Name of the ABI file (without .json extension)
+        abi_path: Optional path to the ABI file
 
     Returns:
-        The contract ABI as a Python list
+        The loaded ABI as a Python object
+    
+    Raises:
+        ValueError: If the ABI file cannot be found
     """
-    # If abi_name includes a path separator, treat it as a file path
-    if os.path.sep in abi_name:
+    # If path is provided, try to load from there
+    if abi_path:
         try:
-            with open(abi_name) as f:
+            with open(abi_path, "r") as f:
                 return json.load(f)
         except FileNotFoundError:
-            raise ValueError(f"ABI file not found at {abi_name}")
+            raise ValueError(f"ABI file not found at {abi_name}") from None
 
     # Otherwise, try to load from package resources
-    abi_filename = f"abi/{abi_name}.json"
-    if not abi_filename.endswith(".json"):
-        abi_filename = f"{abi_filename}.json"
-
     try:
-        # For Python 3.9+
-        with pkg_resources.open_text("gte_py.contracts", abi_filename) as f:
-            return json.load(f)
-    except (ImportError, FileNotFoundError):
-        # Fallback method
+        # Look in the abi directory first
+        abi_file = f"{abi_name}.json"
         try:
-            abi_path = pkg_resources.files("gte_py.contracts").joinpath(abi_filename)
-            with open(abi_path) as f:
+            # For Python 3.9+
+            package_path = pkg_resources.files('gte_py.contracts.abi')
+            file_path = package_path.joinpath(abi_file)
+            # Convert Traversable to string path
+            str_path = str(file_path)
+            with open(str_path, 'r') as f:
                 return json.load(f)
-        except (ImportError, FileNotFoundError, AttributeError):
-            # Final fallback: check in the same directory as this module
-            abi_path = os.path.join(os.path.dirname(__file__), "abi", f"{abi_name}.json")
-            if os.path.exists(abi_path):
-                with open(abi_path) as f:
+        except (AttributeError, TypeError):
+            # Fallback for older Python versions
+            resource_pkg = 'gte_py.contracts.abi'
+            with pkg_resources.open_text(resource_pkg, abi_file) as f:
+                return json.load(f)
+    except (FileNotFoundError, ModuleNotFoundError):
+        # Try predefined paths
+        possible_paths = [
+            os.path.join(os.path.dirname(__file__), "abi", f"{abi_name}.json"),
+            os.path.join(os.path.dirname(__file__), f"{abi_name}.json"),
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                with open(path, 'r') as f:
                     return json.load(f)
 
-            raise ValueError(f"ABI '{abi_name}' not found in package resources or expected paths")
+        raise ValueError(f"ABI '{abi_name}' not found in package resources or expected paths") from None
 
 
-def load_iclob_abi() -> list[dict[str, Any]]:
+def load_iclob_abi() -> List[Dict[str, Any]]:
     """
     Load the ICLOB ABI from package resources.
 
@@ -108,8 +119,8 @@ def load_iclob_abi() -> list[dict[str, Any]]:
 
 
 def prepare_permit_signature(
-    web3: Web3, permit_data: dict[str, Any], private_key: str
-) -> tuple[dict[str, Any], bytes]:
+    web3: Web3, permit_data: Dict[str, Any], private_key: str
+) -> tuple[Dict[str, Any], bytes]:
     """
     Helper function to prepare and sign Permit2 data.
 
