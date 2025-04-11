@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import uuid
+import time
 from typing import Dict, List, Callable, Any
 
 import aiohttp
@@ -174,21 +175,60 @@ class WebSocketApi:
         """
         await self.unsubscribe("candles.unsubscribe", {"market": market, "interval": interval})
 
-    # Note: Orderbook subscription is marked as "Coming Soon" in the docs,
-    # but we'll implement it based on the provided example
-    async def subscribe_orderbook(self, pair: str, callback: Callable[[Dict], Any]):
-        """Subscribe to orderbook for a trading pair.
+    async def subscribe_orderbook(self, market: str, limit: int = 10, callback: Callable[[Dict], Any]):
+        """Subscribe to orderbook for a market.
 
         Args:
-            pair: Trading pair (e.g., "ETH-USDC")
+            market: Market address
+            limit: Number of levels to include (defaults to 10)
             callback: Function to call when an orderbook update is received
         """
-        await self.subscribe("subscribe", {"subscription": "orderbook", "args": {"pair": pair}}, callback)
+        # Register with book stream type
+        stream_type = "book"
+        if stream_type not in self.callbacks:
+            self.callbacks[stream_type] = []
+        self.callbacks[stream_type].append(callback)
+        
+        # Send subscription request using new format
+        request_id = str(uuid.uuid4())
+        request = {
+            "id": request_id,
+            "method": "book.subscribe",
+            "params": {
+                "market": market,
+                "limit": limit
+            }
+        }
+        
+        if self.ws:
+            await self.ws.send_json(request)
+            logger.debug(f"Sent orderbook subscription request: {request}")
+        else:
+            logger.error("WebSocket not connected")
 
-    async def unsubscribe_orderbook(self, pair: str):
-        """Unsubscribe from orderbook for a trading pair.
+    async def unsubscribe_orderbook(self, market: str, limit: int = 10):
+        """Unsubscribe from orderbook for a market.
 
         Args:
-            pair: Trading pair (e.g., "ETH-USDC")
+            market: Market address
+            limit: Number of levels that was used for subscription
         """
-        await self.unsubscribe("unsubscribe", {"subscription": "orderbook", "args": {"pair": pair}})
+        # Send unsubscription request using new format
+        request = {
+            "method": "book.unsubscribe",
+            "params": {
+                "market": market,
+                "limit": limit
+            }
+        }
+        
+        if self.ws:
+            await self.ws.send_json(request)
+            
+            # Clean up callbacks for this stream type
+            if "book" in self.callbacks:
+                del self.callbacks["book"]
+            
+            logger.debug(f"Sent orderbook unsubscription request: {request}")
+        else:
+            logger.error("WebSocket not connected")

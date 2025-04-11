@@ -2,10 +2,11 @@
 
 import asyncio
 import logging
+import time
 from typing import Optional, Callable, Any
 
-from .models import Market, Trade, Candle, OrderbookUpdate
-from src.gte_py.api.ws_api import WebSocketApi
+from .models import Market, Trade, Candle, OrderbookUpdate, PriceLevel
+from .api.ws_api import WebSocketApi
 
 logger = logging.getLogger(__name__)
 
@@ -165,11 +166,12 @@ class MarketClient:
         return self._last_candle.get(interval)
 
     # Orderbook methods
-    async def subscribe_orderbook(self, callback: Optional[Callable[[OrderbookUpdate], Any]] = None):
+    async def subscribe_orderbook(self, callback: Optional[Callable[[OrderbookUpdate], Any]] = None, limit: int = 10):
         """Subscribe to real-time orderbook updates.
 
         Args:
             callback: Function to call when an orderbook update is received
+            limit: Depth limit for the orderbook
         """
         if callback:
             self._orderbook_callbacks.append(callback)
@@ -182,21 +184,35 @@ class MarketClient:
 
         # Define handler for raw orderbook messages
         async def handle_orderbook_message(data):
-            if data.get('s') != 'orderbook':
+            if data.get('s') != 'book':
                 return
             
             ob_data = data.get('d', {})
+            
+            # Convert bid and ask arrays to PriceLevel objects
+            bids = [
+                PriceLevel(
+                    price=float(bid.get('px', 0)),
+                    size=float(bid.get('sz', 0)),
+                    count=bid.get('n', 0)
+                )
+                for bid in ob_data.get('b', [])
+            ]
+            
+            asks = [
+                PriceLevel(
+                    price=float(ask.get('px', 0)),
+                    size=float(ask.get('sz', 0)),
+                    count=ask.get('n', 0)
+                )
+                for ask in ob_data.get('a', [])
+            ]
+            
             update = OrderbookUpdate(
-                market_address=ob_data.get('m'),
-                timestamp=ob_data.get('t'),
-                bids=[{'price': float(bid.get('px')), 
-                      'size': float(bid.get('sz')), 
-                      'count': bid.get('n')} 
-                     for bid in ob_data.get('b', [])],
-                asks=[{'price': float(ask.get('px')), 
-                      'size': float(ask.get('sz')), 
-                      'count': ask.get('n')} 
-                     for ask in ob_data.get('a', [])]
+                market_address=ob_data.get('m', self.market.address),
+                timestamp=ob_data.get('t', int(time.time() * 1000)),
+                bids=bids,
+                asks=asks
             )
             
             self._orderbook_state = update
@@ -207,14 +223,20 @@ class MarketClient:
                 except Exception as e:
                     logger.error(f"Error in orderbook callback: {e}")
 
-        # Use the trading pair format required by API
-        pair = f"{self.market.base_asset.symbol}-{self.market.quote_asset.symbol}"
-        await self._ws_client.subscribe_orderbook(pair=pair, callback=handle_orderbook_message)
+        # Subscribe to orderbook using the updated API
+        await self._ws_client.subscribe_orderbook(
+            market=self.market.address,
+            limit=limit,
+            callback=handle_orderbook_message
+        )
 
-    async def unsubscribe_orderbook(self):
-        """Unsubscribe from real-time orderbook updates."""
-        pair = f"{self.market.base_asset.symbol}-{self.market.quote_asset.symbol}"
-        await self._ws_client.unsubscribe_orderbook(pair=pair)
+    async def unsubscribe_orderbook(self, limit: int = 10):
+        """Unsubscribe from real-time orderbook updates.
+        
+        Args:
+            limit: Depth limit that was used for subscription
+        """
+        await self._ws_client.unsubscribe_orderbook(market=self.market.address, limit=limit)
         self._orderbook_callbacks = []
         self._orderbook_state = None
 
