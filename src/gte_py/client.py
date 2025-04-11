@@ -1,14 +1,16 @@
 """High-level GTE client."""
 
+import asyncio
 import logging
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any
 from datetime import datetime, timedelta
 import time
+from web3 import Web3
 
-
+from .api.rest_api import RestApi
 from .market import MarketClient
 from .models import Asset, Market, Position, Trade, Candle, Order
-from src.gte_py.api.rest_api import RestApi
+from .execution import ExecutionClient
 
 logger = logging.getLogger(__name__)
 
@@ -16,16 +18,32 @@ logger = logging.getLogger(__name__)
 class Client:
     """User-friendly client for interacting with GTE."""
 
-    def __init__(self, api_url: str = "https://api.gte.io", ws_url: str = "wss://ws.gte.io/v1"):
+    def __init__(self, api_url: str = "https://api.gte.io", ws_url: str = "wss://ws.gte.io/v1", 
+                 web3_provider: Optional[Union[str, Web3]] = None):
         """Initialize the client.
 
         Args:
             api_url: Base URL for the REST API
             ws_url: URL for the WebSocket API
+            web3_provider: Web3 provider URL or instance for blockchain interactions
         """
         self._rest_client = RestApi(base_url=api_url)
         self._ws_url = ws_url
         self._market_clients = {}  # Cache for market clients
+        
+        # Initialize Web3 and execution client if provider is given
+        self._web3 = None
+        if web3_provider:
+            if isinstance(web3_provider, str):
+                self._web3 = Web3(Web3.HTTPProvider(web3_provider))
+            else:
+                self._web3 = web3_provider
+            
+            if not self._web3.is_connected():
+                logger.warning("Web3 provider is not connected. On-chain functions will not work.")
+        
+        # Initialize execution client for trading operations
+        self._execution_client = GteExecutionClient(web3=self._web3)
 
     async def __aenter__(self):
         """Enter async context."""
@@ -106,7 +124,7 @@ class Client:
         response = await self._rest_client.get_market(address)
         return Market.from_api(response)
 
-    async def get_market_client(self, market_address: str) -> "MarketClient":
+    async def get_market_client(self, market_address: str) -> "GteMarketClient":
         """Get a dedicated client for a specific market.
 
         Creates or reuses a WebSocket-based market client for real-time data.
@@ -120,7 +138,7 @@ class Client:
         if (market_address not in self._market_clients):
             # Get market details first to ensure it's valid
             market = await self.get_market(market_address)
-            self._market_clients[market_address] = MarketClient(
+            self._market_clients[market_address] = GteMarketClient(
                 market=market,
                 ws_url=self._ws_url
             )
@@ -210,11 +228,11 @@ class Client:
         return [Asset.from_api(asset_data, with_balance=True) 
                 for asset_data in response.get('assets', [])]
 
-    # Trading methods - Note: These are placeholders as the API doesn't specify trading endpoints
-    # In a real implementation, these would call the appropriate REST endpoints
+    # Trading methods
     async def create_order(self, market_address: str, side: str, order_type: str, 
                           amount: float, price: Optional[float] = None, 
-                          time_in_force: str = "GTC") -> Order:
+                          time_in_force: str = "GTC", sender_address: str = None,
+                          use_contract: bool = False, **tx_kwargs) -> Union[Order, Dict[str, Any]]:
         """Create a new order.
 
         Args:
@@ -224,184 +242,85 @@ class Client:
             amount: Order amount
             price: Order price (required for limit orders)
             time_in_force: Time in force (GTC, IOC, FOK)
+            sender_address: Address to send transaction from (required for on-chain orders)
+            use_contract: Whether to create the order on-chain using contracts
+            **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Created order
+            Created order information or transaction data when using contracts
+            
+        Raises:
+            ValueError: For missing required parameters or invalid input
         """
-        # This would normally call a REST endpoint
-        # For now, we'll just create a placeholder Order object
-        logger.info(f"Creating {order_type} {side} order for {amount} at price {price}")
+        # Get market details first
+        market = await self.get_market(market_address)
         
-        # In a real implementation, we would call the API and get order details
-        order_data = {
-            "id": f"placeholder-{int(time.time())}",
-            "marketAddress": market_address,
-            "side": side,
-            "type": order_type,
-            "amount": amount,
-            "price": price,
-            "timeInForce": time_in_force,
-            "status": "open",
-            "filledAmount": 0.0,
-            "filledPrice": 0.0,
-            "createdAt": int(time.time() * 1000),
-        }
+        # Delegate to execution client
+        return await self._execution_client.create_order(
+            market=market,
+            side=side,
+            order_type=order_type,
+            amount=amount,
+            price=price,
+            time_in_force=time_in_force,
+            sender_address=sender_address,
+            use_contract=use_contract,
+            **tx_kwargs
+        )
+            
+    async def cancel_order(self, market_address: str, order_id: int, 
+                          sender_address: str, **tx_kwargs) -> Dict[str, Any]:
+        """Cancel an order.
         
-        return Order.from_api(order_data)
-    
-    async def cancel_order(self, order_id: str) -> bool:
-        """Cancel an existing order.
-
-        Args:
-            order_id: Order ID
-
-        Returns:
-            True if cancelled successfully
-        """
-        # This would normally call a REST endpoint
-        logger.info(f"Cancelling order {order_id}")
-        return True
-    
-    async def get_orders(self, market_address: Optional[str] = None, 
-                        status: Optional[str] = None) -> List[Order]:
-        """Get orders for the authenticated user.
-
-        Args:
-            market_address: Filter by market address
-            status: Filter by status (open, closed, cancelled)
-
-        Returns:
-            List of orders
-        """
-        # This would normally call a REST endpoint
-        logger.info(f"Getting orders for market {market_address} with status {status}")
-        return []
-    
-    async def get_order(self, order_id: str) -> Optional[Order]:
-        """Get an order by ID.
-
-        Args:
-            order_id: Order ID
-
-        Returns:
-            Order or None if not found
-        """
-        # This would normally call a REST endpoint
-        logger.info(f"Getting order {order_id}")
-        return None
-    
-    # Helper methods for common trading operations
-    async def buy_limit(self, market_address: str, amount: float, price: float) -> Order:
-        """Create a limit buy order.
-
         Args:
             market_address: Market address
-            amount: Amount to buy
-            price: Limit price
-
+            order_id: ID of the order to cancel
+            sender_address: Address to send transaction from
+            **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+            
         Returns:
-            Created order
+            Transaction data
+            
+        Raises:
+            ValueError: If Web3 is not configured or parameters are invalid
         """
-        return await self.create_order(
-            market_address=market_address,
-            side="buy",
-            order_type="limit",
-            amount=amount,
-            price=price
+        # Get market details first
+        market = await self.get_market(market_address)
+        
+        # Delegate to execution client
+        return self._execution_client.cancel_order(
+            market=market,
+            order_id=order_id,
+            sender_address=sender_address,
+            **tx_kwargs
         )
-    
-    async def sell_limit(self, market_address: str, amount: float, price: float) -> Order:
-        """Create a limit sell order.
-
+        
+    async def modify_order(self, market_address: str, order_id: int,
+                          new_amount: float, sender_address: str, **tx_kwargs) -> Dict[str, Any]:
+        """Modify an existing order's amount (reduce only).
+        
         Args:
             market_address: Market address
-            amount: Amount to sell
-            price: Limit price
-
+            order_id: ID of the order to modify
+            new_amount: New amount for the order (must be less than current)
+            sender_address: Address to send transaction from
+            **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+            
         Returns:
-            Created order
+            Transaction data
+            
+        Raises:
+            ValueError: If Web3 is not configured or parameters are invalid
         """
-        return await self.create_order(
-            market_address=market_address,
-            side="sell",
-            order_type="limit",
-            amount=amount,
-            price=price
+        # Get market details first
+        market = await self.get_market(market_address)
+        
+        # Delegate to execution client
+        return self._execution_client.modify_order(
+            market=market,
+            order_id=order_id,
+            new_amount=new_amount,
+            sender_address=sender_address,
+            **tx_kwargs
         )
-    
-    async def buy_market(self, market_address: str, amount: float) -> Order:
-        """Create a market buy order.
 
-        Args:
-            market_address: Market address
-            amount: Amount to buy
-
-        Returns:
-            Created order
-        """
-        return await self.create_order(
-            market_address=market_address,
-            side="buy",
-            order_type="market",
-            amount=amount
-        )
-    
-    async def sell_market(self, market_address: str, amount: float) -> Order:
-        """Create a market sell order.
-
-        Args:
-            market_address: Market address
-            amount: Amount to sell
-
-        Returns:
-            Created order
-        """
-        return await self.create_order(
-            market_address=market_address,
-            side="sell",
-            order_type="market",
-            amount=amount
-        )
-    
-    # Liquidity pool methods (these would connect to AMM functions)
-    async def add_liquidity(self, market_address: str, 
-                           token0_amount: float, 
-                           token1_amount: float) -> Dict:
-        """Add liquidity to a market.
-
-        Args:
-            market_address: Market address
-            token0_amount: Amount of first token
-            token1_amount: Amount of second token
-
-        Returns:
-            Transaction details
-        """
-        # This would normally call a REST endpoint to submit a transaction
-        logger.info(f"Adding liquidity: {token0_amount}/{token1_amount} to market {market_address}")
-        return {
-            "success": True,
-            "txHash": f"0x{'0'*64}",
-            "marketAddress": market_address,
-            "token0Amount": token0_amount,
-            "token1Amount": token1_amount
-        }
-    
-    async def remove_liquidity(self, market_address: str, percentage: float = 100.0) -> Dict:
-        """Remove liquidity from a market.
-
-        Args:
-            market_address: Market address
-            percentage: Percentage of liquidity to remove (1-100)
-
-        Returns:
-            Transaction details
-        """
-        # This would normally call a REST endpoint to submit a transaction
-        logger.info(f"Removing {percentage}% liquidity from market {market_address}")
-        return {
-            "success": True,
-            "txHash": f"0x{'0'*64}",
-            "marketAddress": market_address,
-            "percentage": percentage
-        }
