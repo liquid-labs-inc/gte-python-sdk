@@ -2,10 +2,10 @@
 
 import logging
 import time
-from typing import Dict, Optional, Union, Any
+from typing import Dict, Optional, Union, Any, List
 
 from web3 import Web3
-from .models import Market, MarketInfo, Order, OrderSide, OrderType, TimeInForce
+from .models import Market, MarketInfo, Order, OrderSide, OrderType, TimeInForce, Trade
 from .contracts.iclob import ICLOB
 from .contracts.router import Router
 from .contracts.structs import Side, LimitOrderType, FillOrderType, Settlement
@@ -378,3 +378,195 @@ class ExecutionClient:
             sender_address=sender_address,
             **tx_kwargs
         )
+    
+    async def get_user_orders(
+        self, 
+        user_address: str, 
+        market_address: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: int = 100, 
+        offset: int = 0
+    ) -> List[Order]:
+        """
+        Fetch orders for a specific user.
+        
+        Args:
+            user_address: Address of the user
+            market_address: Optional market address to filter by
+            status: Optional status to filter by (open, filled, cancelled)
+            limit: Maximum number of orders to return
+            offset: Offset for pagination
+            
+        Returns:
+            List of user orders
+        """
+        # This would make a call to the API in a real implementation
+        # For now we'll return a placeholder
+        
+        placeholder_orders = []
+        for i in range(3):  # Create 3 placeholder orders
+            order_id = f"order-{int(time.time())}-{i}"
+            side = OrderSide.BUY if i % 2 == 0 else OrderSide.SELL
+            order_type = OrderType.LIMIT
+            status_val = "open" if i < 2 else "filled"
+            
+            placeholder_orders.append(Order.from_api({
+                "id": order_id,
+                "marketAddress": market_address or f"0x123456789abcdef{i}",
+                "side": side.value,
+                "type": order_type.value,
+                "amount": 1.0 + i,
+                "price": 100.0 * (1 + 0.01 * i),
+                "timeInForce": TimeInForce.GTC.value,
+                "status": status_val,
+                "filledAmount": 0.0 if status_val == "open" else 1.0 + i,
+                "filledPrice": 0.0 if status_val == "open" else 100.0 * (1 + 0.01 * i),
+                "createdAt": int(time.time() * 1000) - i * 60000,
+            }))
+            
+        return placeholder_orders
+    
+    async def get_user_trades(
+        self, 
+        user_address: str, 
+        market_address: Optional[str] = None,
+        limit: int = 100, 
+        offset: int = 0
+    ) -> List[Trade]:
+        """
+        Fetch historical trades for a specific user.
+        
+        Args:
+            user_address: Address of the user
+            market_address: Optional market address to filter by
+            limit: Maximum number of trades to return
+            offset: Offset for pagination
+            
+        Returns:
+            List of user trades
+        """
+        # This would make a call to the API in a real implementation
+        # For now we'll return placeholders
+        
+        placeholder_trades = []
+        for i in range(5):  # Create 5 placeholder trades
+            side = OrderSide.BUY if i % 2 == 0 else OrderSide.SELL
+            
+            placeholder_trades.append(Trade.from_api({
+                "m": market_address or f"0x123456789abcdef{i}",
+                "timestamp": int(time.time() * 1000) - i * 3600000,  # Each trade 1 hour apart
+                "price": 100.0 + i,
+                "size": 0.5 + 0.1 * i,
+                "side": side.value,
+                "transactionHash": f"0xabcdef1234567890{i}",
+                "maker": f"0xmaker{i}",
+                "taker": user_address,
+                "id": 1000 + i
+            }))
+            
+        return placeholder_trades
+    
+    async def get_order_book_snapshot(
+        self,
+        market: Union[Market, MarketInfo],
+        depth: int = 10
+    ) -> Dict[str, Any]:
+        """
+        Get current order book snapshot from the chain.
+        
+        Args:
+            market: Market object with details
+            depth: Number of price levels to fetch on each side
+            
+        Returns:
+            Dictionary with bids and asks arrays
+            
+        Raises:
+            ValueError: If Web3 is not configured
+        """
+        if not self._web3:
+            raise ValueError("Web3 provider not configured. Cannot fetch on-chain order book.")
+            
+        contract_address = getattr(market, 'contract_address', None)
+        if not contract_address:
+            raise ValueError(f"Market has no contract address")
+            
+        clob = self._get_clob(contract_address)
+        
+        # Get top of book to start traversal
+        highest_bid, lowest_ask = clob.get_tob()
+        
+        # Collect bids
+        bids = []
+        current_bid = highest_bid
+        for _ in range(depth):
+            if current_bid <= 0:
+                break
+                
+            limit = clob.get_limit(current_bid, Side.BUY)
+            bids.append({
+                "price": current_bid,
+                "size": limit.get("size", 0),
+                "orderCount": limit.get("orderCount", 0)
+            })
+            
+            # Move to next price level
+            current_bid = clob.get_next_smallest_tick(current_bid, Side.BUY)
+            
+        # Collect asks
+        asks = []
+        current_ask = lowest_ask
+        for _ in range(depth):
+            if current_ask <= 0:
+                break
+                
+            limit = clob.get_limit(current_ask, Side.SELL)
+            asks.append({
+                "price": current_ask,
+                "size": limit.get("size", 0),
+                "orderCount": limit.get("orderCount", 0)
+            })
+            
+            # Move to next price level
+            current_ask = clob.get_next_biggest_tick(current_ask, Side.SELL)
+            
+        return {
+            "bids": bids,
+            "asks": asks,
+            "timestamp": int(time.time() * 1000)
+        }
+    
+    async def get_user_balances(
+        self, 
+        user_address: str, 
+        market: Union[Market, MarketInfo]
+    ) -> Dict[str, int]:
+        """
+        Get user token balances in the CLOB.
+        
+        Args:
+            user_address: Address of the user
+            market: Market object with details
+            
+        Returns:
+            Dictionary with base and quote token balances
+            
+        Raises:
+            ValueError: If Web3 is not configured or market has no contract address
+        """
+        if not self._web3:
+            raise ValueError("Web3 provider not configured. Cannot fetch on-chain balances.")
+            
+        contract_address = getattr(market, 'contract_address', None)
+        if not contract_address:
+            raise ValueError(f"Market has no contract address")
+            
+        clob = self._get_clob(contract_address)
+        
+        base_balance = clob.get_base_token_account_balance(user_address)
+        quote_balance = clob.get_quote_token_account_balance(user_address)
+        
+        return {
+            "baseBalance": base_balance,
+            "quoteBalance": quote_balance
+        }

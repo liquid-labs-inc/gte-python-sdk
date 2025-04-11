@@ -455,3 +455,119 @@ class Client:
             
         return self._market_info.get_available_markets()
 
+    # User order and trade methods
+    async def get_user_orders(
+        self, 
+        user_address: str, 
+        market_address: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: int = 100, 
+        offset: int = 0
+    ) -> List[Order]:
+        """
+        Fetch orders for a specific user.
+        
+        Args:
+            user_address: Address of the user
+            market_address: Optional market address to filter by
+            status: Optional status to filter by (open, filled, cancelled)
+            limit: Maximum number of orders to return
+            offset: Offset for pagination
+            
+        Returns:
+            List of user orders
+        """
+        return await self._execution_client.get_user_orders(
+            user_address=user_address,
+            market_address=market_address,
+            status=status,
+            limit=limit,
+            offset=offset
+        )
+    
+    async def get_user_trades(
+        self, 
+        user_address: str, 
+        market_address: Optional[str] = None,
+        limit: int = 100, 
+        offset: int = 0
+    ) -> List[Trade]:
+        """
+        Fetch historical trades for a specific user.
+        
+        Args:
+            user_address: Address of the user
+            market_address: Optional market address to filter by
+            limit: Maximum number of trades to return
+            offset: Offset for pagination
+            
+        Returns:
+            List of user trades
+        """
+        return await self._execution_client.get_user_trades(
+            user_address=user_address,
+            market_address=market_address,
+            limit=limit,
+            offset=offset
+        )
+    
+    async def get_order_book_snapshot(
+        self,
+        market_address: str,
+        depth: int = 10
+    ) -> Dict[str, Any]:
+        """
+        Get current order book snapshot from the chain.
+        
+        Args:
+            market_address: Market address
+            depth: Number of price levels to fetch on each side
+            
+        Returns:
+            Dictionary with bids and asks arrays
+        """
+        # Get market details first
+        market_info = None
+        if self._market_info:
+            market_info = self._market_info.get_market_info(market_address)
+            
+        if not market_info:
+            market = await self.get_market(market_address)
+        else:
+            market = market_info
+            
+        return await self._execution_client.get_order_book_snapshot(
+            market=market,
+            depth=depth
+        )
+    
+    async def get_user_balances(
+        self, 
+        user_address: str, 
+        market_address: str
+    ) -> Dict[str, int]:
+        """
+        Get user token balances in the CLOB.
+        
+        Args:
+            user_address: Address of the user
+            market_address: Market address
+            
+        Returns:
+            Dictionary with base and quote token balances
+        """
+        # Get market details first
+        market_info = None
+        if self._market_info:
+            market_info = self._market_info.get_market_info(market_address)
+            
+        if not market_info:
+            market = await self.get_market(market_address)
+        else:
+            market = market_info
+            
+        return await self._execution_client.get_user_balances(
+            user_address=user_address,
+            market=market
+        )
+
