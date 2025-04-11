@@ -282,3 +282,62 @@ class Order:
             filled_price=data.get('filledPrice', 0),
             created_at=data.get('createdAt')
         )
+
+
+class MarketInfo:
+    """Information about a market from blockchain data."""
+    
+    def __init__(self, 
+                 address: str,
+                 contract_address: str,
+                 base_token: str,
+                 quote_token: str,
+                 base_decimals: int, 
+                 quote_decimals: int,
+                 tick_size: float,
+                 base_atoms_per_lot: int,
+                 tick_size_in_decimals: int):
+        """Initialize market info.
+        
+        Args:
+            address: Market address
+            contract_address: Address of the CLOB contract
+            base_token: Base token address
+            quote_token: Quote token address
+            base_decimals: Decimals for base token
+            quote_decimals: Decimals for quote token
+            tick_size: Tick size for the market
+            base_atoms_per_lot: Base atoms per lot
+            tick_size_in_decimals: Tick size in decimals
+        """
+        self.address = address
+        self.contract_address = contract_address
+        self.base_token = base_token
+        self.quote_token = quote_token
+        self.base_decimals = base_decimals
+        self.quote_decimals = quote_decimals
+        self.tick_size = tick_size
+        self.base_atoms_per_lot = base_atoms_per_lot
+        self.tick_size_in_decimals = tick_size_in_decimals
+    
+    @classmethod
+    def from_market(cls, market: 'Market') -> 'MarketInfo':
+        """Create market info from a market.
+        
+        Args:
+            market: Market to create info from
+            
+        Returns:
+            MarketInfo instance
+        """
+        return cls(
+            address=market.address,
+            contract_address=market.contract_address,
+            base_token=market.base_token_address,
+            quote_token=market.quote_token_address,
+            base_decimals=market.base_decimals,
+            quote_decimals=market.quote_decimals,
+            tick_size=market.tick_size,
+            base_atoms_per_lot=market.base_atoms_per_lot,
+            tick_size_in_decimals=market.tick_size_in_decimals
+        )

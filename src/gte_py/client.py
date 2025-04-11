@@ -9,8 +9,9 @@ from web3 import Web3
 
 from .api.rest_api import RestApi
 from .market import MarketClient
-from .models import Asset, Market, Position, Trade, Candle, Order
+from .models import Asset, Market, MarketInfo, Position, Trade, Candle, Order
 from .execution import ExecutionClient
+from .info import MarketInfoService
 
 logger = logging.getLogger(__name__)
 
@@ -19,19 +20,20 @@ class Client:
     """User-friendly client for interacting with GTE."""
 
     def __init__(self, api_url: str = "https://api.gte.io", ws_url: str = "wss://ws.gte.io/v1", 
-                 web3_provider: Optional[Union[str, Web3]] = None):
+                 web3_provider: Optional[Union[str, Web3]] = None, router_address: Optional[str] = None):
         """Initialize the client.
 
         Args:
             api_url: Base URL for the REST API
             ws_url: URL for the WebSocket API
             web3_provider: Web3 provider URL or instance for blockchain interactions
+            router_address: Address of the GTE Router contract
         """
         self._rest_client = RestApi(base_url=api_url)
         self._ws_url = ws_url
         self._market_clients = {}  # Cache for market clients
         
-        # Initialize Web3 and execution client if provider is given
+        # Initialize Web3 if provider is given
         self._web3 = None
         if web3_provider:
             if isinstance(web3_provider, str):
@@ -42,8 +44,19 @@ class Client:
             if not self._web3.is_connected():
                 logger.warning("Web3 provider is not connected. On-chain functions will not work.")
         
+            # Initialize market info service if router address is provided
+            self._market_info = None
+            if router_address:
+                self._market_info = MarketInfoService(
+                    web3=self._web3,
+                    router_address=router_address
+                )
+        
         # Initialize execution client for trading operations
-        self._execution_client = GteExecutionClient(web3=self._web3)
+        self._execution_client = ExecutionClient(
+            web3=self._web3,
+            router_address=router_address if self._web3 and router_address else None
+        )
 
     async def __aenter__(self):
         """Enter async context."""
@@ -110,7 +123,14 @@ class Client:
             limit=limit, offset=offset, market_type=market_type, 
             asset=asset_address, price=max_price
         )
-        return [Market.from_api(market_data) for market_data in response.get('markets', [])]
+        
+        markets = [Market.from_api(market_data) for market_data in response.get('markets', [])]
+        
+        # Update market info cache with discovered markets
+        if self._market_info:
+            self._market_info.update_market_cache(markets)
+            
+        return markets
 
     async def get_market(self, address: str) -> Market:
         """Get market by address.
@@ -232,7 +252,7 @@ class Client:
     async def create_order(self, market_address: str, side: str, order_type: str, 
                           amount: float, price: Optional[float] = None, 
                           time_in_force: str = "GTC", sender_address: str = None,
-                          use_contract: bool = False, **tx_kwargs) -> Union[Order, Dict[str, Any]]:
+                          use_contract: bool = False, use_router: bool = True, **tx_kwargs) -> Union[Order, Dict[str, Any]]:
         """Create a new order.
 
         Args:
@@ -244,6 +264,7 @@ class Client:
             time_in_force: Time in force (GTC, IOC, FOK)
             sender_address: Address to send transaction from (required for on-chain orders)
             use_contract: Whether to create the order on-chain using contracts
+            use_router: Whether to use the router for creating orders (safer)
             **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -252,8 +273,22 @@ class Client:
         Raises:
             ValueError: For missing required parameters or invalid input
         """
-        # Get market details first
-        market = await self.get_market(market_address)
+        # Try to get from market info service first
+        market_info = None
+        if self._market_info:
+            market_info = self._market_info.get_market_info(market_address)
+        
+        # If not found in market info service, fetch from API
+        if not market_info:
+            # Get market details from API
+            market = await self.get_market(market_address)
+            
+            # Update market info cache
+            if self._market_info and market.contract_address:
+                self._market_info.add_market_info(MarketInfo.from_market(market))
+        else:
+            # Convert market info to market
+            market = market_info
         
         # Delegate to execution client
         return await self._execution_client.create_order(
@@ -265,6 +300,7 @@ class Client:
             time_in_force=time_in_force,
             sender_address=sender_address,
             use_contract=use_contract,
+            use_router=use_router,
             **tx_kwargs
         )
             
@@ -323,4 +359,19 @@ class Client:
             sender_address=sender_address,
             **tx_kwargs
         )
+
+    def get_available_onchain_markets(self) -> List[MarketInfo]:
+        """Get available on-chain markets.
+        
+        Returns:
+            List of market information from the blockchain
+            
+        Raises:
+            ValueError: If Web3 or router not configured
+        """
+        if not self._market_info:
+            raise ValueError("Market info service not configured. " + 
+                           "Initialize with web3_provider and router_address.")
+            
+        return self._market_info.get_available_markets()
 
