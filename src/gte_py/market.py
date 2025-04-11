@@ -3,10 +3,11 @@
 import asyncio
 import logging
 import time
-from typing import Optional, Callable, Any
+from collections.abc import Callable
+from typing import Any
 
-from .models import Market, Trade, Candle, OrderbookUpdate, PriceLevel
 from .api.ws_api import WebSocketApi
+from .models import Candle, Market, OrderbookUpdate, PriceLevel, Trade
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ class MarketClient:
         logger.info(f"Disconnected from WebSocket for market {self.market.address}")
 
     # Trade methods
-    async def subscribe_trades(self, callback: Optional[Callable[[Trade], Any]] = None):
+    async def subscribe_trades(self, callback: Callable[[Trade], Any] | None = None):
         """Subscribe to real-time trades.
 
         Args:
@@ -52,26 +53,26 @@ class MarketClient:
 
         if not self._trade_callbacks:
             # If no callbacks, add a dummy one to store the last trade
-            self._trade_callbacks.append(lambda trade: setattr(self, '_last_trade', trade))
+            self._trade_callbacks.append(lambda trade: setattr(self, "_last_trade", trade))
 
         # Define handler for raw trade messages
         async def handle_trade_message(data):
-            if data.get('s') != 'trades':
+            if data.get("s") != "trades":
                 return
-            
-            trade_data = data.get('d', {})
+
+            trade_data = data.get("d", {})
             trade = Trade(
-                market_address=trade_data.get('m'),
-                side=trade_data.get('sd'),
-                price=float(trade_data.get('px')),
-                size=float(trade_data.get('sz')),
-                timestamp=trade_data.get('t'),
-                tx_hash=trade_data.get('h'),
-                trade_id=trade_data.get('id')
+                market_address=trade_data.get("m"),
+                side=trade_data.get("sd"),
+                price=float(trade_data.get("px")),
+                size=float(trade_data.get("sz")),
+                timestamp=trade_data.get("t"),
+                tx_hash=trade_data.get("h"),
+                trade_id=trade_data.get("id"),
             )
-            
+
             self._last_trade = trade
-            
+
             for cb in self._trade_callbacks:
                 try:
                     await cb(trade) if asyncio.iscoroutinefunction(cb) else cb(trade)
@@ -86,13 +87,14 @@ class MarketClient:
         self._trade_callbacks = []
 
     @property
-    def last_trade(self) -> Optional[Trade]:
+    def last_trade(self) -> Trade | None:
         """Get the most recent trade."""
         return self._last_trade
 
     # Candle methods
-    async def subscribe_candles(self, interval: str = "1m", 
-                               callback: Optional[Callable[[Candle], Any]] = None):
+    async def subscribe_candles(
+        self, interval: str = "1m", callback: Callable[[Candle], Any] | None = None
+    ):
         """Subscribe to real-time candles.
 
         Args:
@@ -101,10 +103,10 @@ class MarketClient:
         """
         if interval not in self._candle_callbacks:
             self._candle_callbacks[interval] = []
-        
+
         if callback:
             self._candle_callbacks[interval].append(callback)
-        
+
         if not self._candle_callbacks[interval]:
             # If no callbacks, add a dummy one to store the last candle
             self._candle_callbacks[interval].append(
@@ -113,27 +115,27 @@ class MarketClient:
 
         # Define handler for raw candle messages
         async def handle_candle_message(data):
-            if data.get('s') != 'candle':
+            if data.get("s") != "candle":
                 return
-            
-            candle_data = data.get('d', {})
-            if candle_data.get('i') != interval:
+
+            candle_data = data.get("d", {})
+            if candle_data.get("i") != interval:
                 return  # Ignore candles for other intervals
-                
+
             candle = Candle(
-                market_address=candle_data.get('m'),
-                interval=candle_data.get('i'),
-                timestamp=candle_data.get('t'),
-                open=float(candle_data.get('o')),
-                high=float(candle_data.get('h')),
-                low=float(candle_data.get('l')),
-                close=float(candle_data.get('c')),
-                volume=float(candle_data.get('v')),
-                num_trades=candle_data.get('n')
+                market_address=candle_data.get("m"),
+                interval=candle_data.get("i"),
+                timestamp=candle_data.get("t"),
+                open=float(candle_data.get("o")),
+                high=float(candle_data.get("h")),
+                low=float(candle_data.get("l")),
+                close=float(candle_data.get("c")),
+                volume=float(candle_data.get("v")),
+                num_trades=candle_data.get("n"),
             )
-            
+
             self._last_candle[interval] = candle
-            
+
             for cb in self._candle_callbacks[interval]:
                 try:
                     await cb(candle) if asyncio.iscoroutinefunction(cb) else cb(candle)
@@ -141,9 +143,7 @@ class MarketClient:
                     logger.error(f"Error in candle callback: {e}")
 
         await self._ws_client.subscribe_candles(
-            market=self.market.address, 
-            interval=interval,
-            callback=handle_candle_message
+            market=self.market.address, interval=interval, callback=handle_candle_message
         )
 
     async def unsubscribe_candles(self, interval: str = "1m"):
@@ -152,21 +152,20 @@ class MarketClient:
         Args:
             interval: Candle interval to unsubscribe from
         """
-        await self._ws_client.unsubscribe_candles(
-            market=self.market.address, 
-            interval=interval
-        )
+        await self._ws_client.unsubscribe_candles(market=self.market.address, interval=interval)
         if interval in self._candle_callbacks:
             del self._candle_callbacks[interval]
         if interval in self._last_candle:
             del self._last_candle[interval]
 
-    def get_last_candle(self, interval: str = "1m") -> Optional[Candle]:
+    def get_last_candle(self, interval: str = "1m") -> Candle | None:
         """Get the most recent candle for the specified interval."""
         return self._last_candle.get(interval)
 
     # Orderbook methods
-    async def subscribe_orderbook(self, callback: Optional[Callable[[OrderbookUpdate], Any]] = None, limit: int = 10):
+    async def subscribe_orderbook(
+        self, callback: Callable[[OrderbookUpdate], Any] | None = None, limit: int = 10
+    ):
         """Subscribe to real-time orderbook updates.
 
         Args:
@@ -175,48 +174,48 @@ class MarketClient:
         """
         if callback:
             self._orderbook_callbacks.append(callback)
-        
+
         if not self._orderbook_callbacks:
             # If no callbacks, add a dummy one to update the orderbook state
             self._orderbook_callbacks.append(
-                lambda update: setattr(self, '_orderbook_state', update)
+                lambda update: setattr(self, "_orderbook_state", update)
             )
 
         # Define handler for raw orderbook messages
         async def handle_orderbook_message(data):
-            if data.get('s') != 'book':
+            if data.get("s") != "book":
                 return
-            
-            ob_data = data.get('d', {})
-            
+
+            ob_data = data.get("d", {})
+
             # Convert bid and ask arrays to PriceLevel objects
             bids = [
                 PriceLevel(
-                    price=float(bid.get('px', 0)),
-                    size=float(bid.get('sz', 0)),
-                    count=bid.get('n', 0)
+                    price=float(bid.get("px", 0)),
+                    size=float(bid.get("sz", 0)),
+                    count=bid.get("n", 0),
                 )
-                for bid in ob_data.get('b', [])
+                for bid in ob_data.get("b", [])
             ]
-            
+
             asks = [
                 PriceLevel(
-                    price=float(ask.get('px', 0)),
-                    size=float(ask.get('sz', 0)),
-                    count=ask.get('n', 0)
+                    price=float(ask.get("px", 0)),
+                    size=float(ask.get("sz", 0)),
+                    count=ask.get("n", 0),
                 )
-                for ask in ob_data.get('a', [])
+                for ask in ob_data.get("a", [])
             ]
-            
+
             update = OrderbookUpdate(
-                market_address=ob_data.get('m', self.market.address),
-                timestamp=ob_data.get('t', int(time.time() * 1000)),
+                market_address=ob_data.get("m", self.market.address),
+                timestamp=ob_data.get("t", int(time.time() * 1000)),
                 bids=bids,
-                asks=asks
+                asks=asks,
             )
-            
+
             self._orderbook_state = update
-            
+
             for cb in self._orderbook_callbacks:
                 try:
                     await cb(update) if asyncio.iscoroutinefunction(cb) else cb(update)
@@ -225,14 +224,12 @@ class MarketClient:
 
         # Subscribe to orderbook using the updated API
         await self._ws_client.subscribe_orderbook(
-            market=self.market.address,
-            limit=limit,
-            callback=handle_orderbook_message
+            market=self.market.address, limit=limit, callback=handle_orderbook_message
         )
 
     async def unsubscribe_orderbook(self, limit: int = 10):
         """Unsubscribe from real-time orderbook updates.
-        
+
         Args:
             limit: Depth limit that was used for subscription
         """
@@ -241,16 +238,18 @@ class MarketClient:
         self._orderbook_state = None
 
     @property
-    def orderbook(self) -> Optional[OrderbookUpdate]:
+    def orderbook(self) -> OrderbookUpdate | None:
         """Get the current orderbook state."""
         return self._orderbook_state
 
     # Convenience method to subscribe to all data types
-    async def subscribe_all(self, 
-                           trade_callback: Optional[Callable[[Trade], Any]] = None,
-                           candle_callback: Optional[Callable[[Candle], Any]] = None,
-                           orderbook_callback: Optional[Callable[[OrderbookUpdate], Any]] = None,
-                           candle_interval: str = "1m"):
+    async def subscribe_all(
+        self,
+        trade_callback: Callable[[Trade], Any] | None = None,
+        candle_callback: Callable[[Candle], Any] | None = None,
+        orderbook_callback: Callable[[OrderbookUpdate], Any] | None = None,
+        candle_interval: str = "1m",
+    ):
         """Subscribe to all data types for this market.
 
         Args:

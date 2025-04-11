@@ -1,24 +1,26 @@
 """Structure definitions for GTE contracts."""
 
 from enum import IntEnum
-from dataclasses import dataclass
-from typing import List, TypedDict
+from typing import TypedDict
 
 
 class Side(IntEnum):
     """Order side enum."""
+
     BUY = 0
     SELL = 1
 
 
 class Settlement(IntEnum):
     """Settlement type enum."""
+
     NONE = 0
     INSTANT = 1
 
 
 class LimitOrderType(IntEnum):
     """Limit order type enum."""
+
     GOOD_TILL_CANCELLED = 0
     IMMEDIATE_OR_CANCEL = 1
     FILL_OR_KILL = 2
@@ -27,6 +29,7 @@ class LimitOrderType(IntEnum):
 
 class FillOrderType(IntEnum):
     """Fill order type enum."""
+
     IMMEDIATE_OR_CANCEL = 0
     FILL_OR_KILL = 1
 
@@ -34,6 +37,7 @@ class FillOrderType(IntEnum):
 # Contract input structs with proper TypedDict definitions
 class ICLOBPostLimitOrderArgs(TypedDict):
     """Arguments for posting a limit order."""
+
     amountInBaseLots: int
     priceInTicks: int
     cancelTimestamp: int
@@ -44,6 +48,7 @@ class ICLOBPostLimitOrderArgs(TypedDict):
 
 class ICLOBPostLimitOrderResult(TypedDict):
     """Result from posting a limit order."""
+
     orderId: int
     makerAmountInQuote: int
     takerAmountInQuote: int
@@ -51,6 +56,7 @@ class ICLOBPostLimitOrderResult(TypedDict):
 
 class ICLOBPostFillOrderArgs(TypedDict):
     """Arguments for posting a fill order."""
+
     amountInBaseLots: int
     priceInTicks: int
     side: int
@@ -60,12 +66,14 @@ class ICLOBPostFillOrderArgs(TypedDict):
 
 class ICLOBPostFillOrderResult(TypedDict):
     """Result from posting a fill order."""
+
     makerAmountInQuote: int
     takerAmountInQuote: int
 
 
 class ICLOBReduceArgs(TypedDict):
     """Arguments for reducing an order."""
+
     orderId: int
     amountInBaseLots: int
     settlement: int
@@ -73,5 +81,6 @@ class ICLOBReduceArgs(TypedDict):
 
 class ICLOBCancelArgs(TypedDict):
     """Arguments for canceling orders."""
-    orderIds: List[int]
+
+    orderIds: list[int]
     settlement: int

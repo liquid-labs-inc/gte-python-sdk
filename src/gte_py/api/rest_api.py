@@ -1,7 +1,6 @@
 """REST API client for GTE."""
 
 import logging
-from typing import Dict, Optional
 
 import aiohttp
 
@@ -17,7 +16,7 @@ class RestApi:
         Args:
             base_url: Base URL for the API
         """
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.session = None
 
     async def __aenter__(self):
@@ -31,8 +30,13 @@ class RestApi:
             await self.session.close()
             self.session = None
 
-    async def _request(self, method: str, endpoint: str, params: Optional[Dict] = None, 
-                       data: Optional[Dict] = None) -> Dict:
+    async def _request(
+        self,
+        method: str,
+        endpoint: str,
+        params: dict | None = None,
+        data: dict | None = None,
+    ) -> dict:
         """Make a request to the API.
 
         Args:
@@ -48,7 +52,7 @@ class RestApi:
             self.session = aiohttp.ClientSession()
 
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
-        
+
         try:
             async with self.session.request(method, url, params=params, json=data) as response:
                 response_data = await response.json()
@@ -61,7 +65,7 @@ class RestApi:
             raise
 
     # Health endpoint
-    async def get_health(self) -> Dict:
+    async def get_health(self) -> dict:
         """Get API health status.
 
         Returns:
@@ -70,8 +74,9 @@ class RestApi:
         return await self._request("GET", "/health")
 
     # Assets endpoints
-    async def get_assets(self, creator: Optional[str] = None, 
-                         limit: int = 100, offset: int = 0) -> Dict:
+    async def get_assets(
+        self, creator: str | None = None, limit: int = 100, offset: int = 0
+    ) -> dict:
         """Get list of assets.
 
         Args:
@@ -87,7 +92,7 @@ class RestApi:
             params["creator"] = creator
         return await self._request("GET", "/assets", params=params)
 
-    async def get_asset(self, asset_address: str) -> Dict:
+    async def get_asset(self, asset_address: str) -> dict:
         """Get asset by address.
 
         Args:
@@ -99,10 +104,14 @@ class RestApi:
         return await self._request("GET", f"/assets/{asset_address}")
 
     # Markets endpoints
-    async def get_markets(self, limit: int = 100, offset: int = 0, 
-                          market_type: Optional[str] = None, 
-                          asset: Optional[str] = None, 
-                          price: Optional[float] = None) -> Dict:
+    async def get_markets(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        market_type: str | None = None,
+        asset: str | None = None,
+        price: float | None = None,
+    ) -> dict:
         """Get list of markets.
 
         Args:
@@ -124,7 +133,7 @@ class RestApi:
             params["price"] = price
         return await self._request("GET", "/markets", params=params)
 
-    async def get_market(self, market_address: str) -> Dict:
+    async def get_market(self, market_address: str) -> dict:
         """Get market by address.
 
         Args:
@@ -135,9 +144,14 @@ class RestApi:
         """
         return await self._request("GET", f"/markets/{market_address}")
 
-    async def get_candles(self, market_address: str, interval: str, 
-                         start_time: int, end_time: Optional[int] = None, 
-                         limit: int = 500) -> Dict:
+    async def get_candles(
+        self,
+        market_address: str,
+        interval: str,
+        start_time: int,
+        end_time: int | None = None,
+        limit: int = 500,
+    ) -> dict:
         """Get candles for a market.
 
         Args:
@@ -150,16 +164,12 @@ class RestApi:
         Returns:
             Dict: List of candles
         """
-        params = {
-            "interval": interval,
-            "startTime": start_time,
-            "limit": limit
-        }
+        params = {"interval": interval, "startTime": start_time, "limit": limit}
         if end_time:
             params["endTime"] = end_time
         return await self._request("GET", f"/markets/{market_address}/candles", params=params)
 
-    async def get_trades(self, market_address: str, limit: int = 100, offset: int = 0) -> Dict:
+    async def get_trades(self, market_address: str, limit: int = 100, offset: int = 0) -> dict:
         """Get trades for a market.
 
         Args:
@@ -174,7 +184,7 @@ class RestApi:
         return await self._request("GET", f"/markets/{market_address}/trades", params=params)
 
     # Users endpoints
-    async def get_user_positions(self, user_address: str) -> Dict:
+    async def get_user_positions(self, user_address: str) -> dict:
         """Get LP positions for a user.
 
         Args:
@@ -185,7 +195,7 @@ class RestApi:
         """
         return await self._request("GET", f"/users/{user_address}/positions")
 
-    async def get_user_assets(self, user_address: str, limit: int = 100, offset: int = 0) -> Dict:
+    async def get_user_assets(self, user_address: str, limit: int = 100, offset: int = 0) -> dict:
         """Get assets held by a user.
 
         Args:

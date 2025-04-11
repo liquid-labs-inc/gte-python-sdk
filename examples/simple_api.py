@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-from datetime import datetime, timedelta
 
 from gte_py.api.rest_api import RestApi
 from gte_py.api.websocket_api import WebSocketClient
@@ -28,18 +27,18 @@ async def websocket_example():
     """Example of using the WebSocket client."""
     # This is a placeholder - you'll need actual market addresses
     market_addresses = ["0x1234567890abcdef1234567890abcdef12345678"]
-    
+
     ws_client = WebSocketClient()
-    
+
     async def handle_trade(data):
         print("Trade received:")
         print(json.dumps(data, indent=2))
-    
+
     await ws_client.connect()
-    
+
     # Subscribe to trades
     await ws_client.subscribe_trades(market_addresses, handle_trade)
-    
+
     # Keep the connection open for 30 seconds
     try:
         print("Watching trades for 30 seconds...")
@@ -55,7 +54,7 @@ async def main():
     print("REST API Example")
     print("===============")
     await rest_example()
-    
+
     print("\nWebSocket Example")
     print("================")
     await websocket_example()

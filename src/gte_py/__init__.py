@@ -4,16 +4,16 @@ __version__ = "0.1.0"
 
 from .client import Client
 from .market import MarketClient
-from .models import Asset, Market, Trade, Candle, Position, OrderbookUpdate, Order
+from .models import Asset, Candle, Market, Order, OrderbookUpdate, Position, Trade
 
 __all__ = [
     "Client",
     "MarketClient",
     "Asset",
-    "Market", 
+    "Market",
     "Trade",
     "Candle",
     "Position",
     "OrderbookUpdate",
-    "Order"
+    "Order",
 ]
