@@ -5,7 +5,7 @@ import logging
 from typing import Optional, Callable, Any
 
 from .models import Market, Trade, Candle, OrderbookUpdate
-from .ws_api import WebSocketApi
+from src.gte_py.api.ws_api import WebSocketApi
 
 logger = logging.getLogger(__name__)
 

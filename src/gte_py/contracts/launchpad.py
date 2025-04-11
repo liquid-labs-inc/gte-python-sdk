@@ -1,0 +1,461 @@
+from typing import List, Tuple, Dict, Any, Optional, Union
+from web3 import Web3
+from web3.contract import Contract
+from eth_typing import Address, ChecksumAddress
+import json
+import os
+import importlib.resources as pkg_resources
+from .utils import get_current_timestamp, create_deadline, to_wei, from_wei
+
+class LaunchpadError(Exception):
+    """Base exception for Launchpad contract errors"""
+    pass
+
+class Launchpad:
+    """
+    Python wrapper for the GTE Launchpad smart contract.
+    Provides methods to interact with the Launchpad functionality including:
+    - Token launches
+    - Bonding curve trading
+    - Fee management
+    """
+    
+    def __init__(self, web3: Web3, contract_address: str, abi_path: Optional[str] = None, abi: Optional[List[Dict[str, Any]]] = None):
+        """
+        Initialize the GTELaunchpad wrapper.
+        
+        Args:
+            web3: Web3 instance connected to a provider
+            contract_address: Address of the Launchpad contract
+            abi_path: Path to the ABI JSON file (optional)
+            abi: The contract ABI as a Python dictionary (optional)
+        """
+        self.web3 = web3
+        self.address = web3.to_checksum_address(contract_address)
+        
+        if abi is None:
+            # First try to load ABI using importlib resources
+            try:
+                with pkg_resources.open_text('gte_py.contracts', 'abi/launchpad.json') as f:
+                    abi = json.load(f)
+            except (ImportError, FileNotFoundError):
+                # If that fails, try the specified ABI path or default path
+                if abi_path is None:
+                    # Default ABI location
+                    default_path = os.path.join(os.path.dirname(__file__), 'abi', 'launchpad.json')
+                    if os.path.exists(default_path):
+                        abi_path = default_path
+                    else:
+                        raise ValueError("No ABI provided or found at default location. Please provide abi or abi_path.")
+                
+                try:
+                    with open(abi_path, 'r') as f:
+                        abi = json.load(f)
+                except FileNotFoundError:
+                    raise ValueError(f"ABI file not found at {abi_path}")
+        
+        self.contract = self.web3.eth.contract(address=self.address, abi=abi)
+    
+    # ================= READ METHODS =================
+    
+    def get_base_scaling(self) -> int:
+        """Get the base token scaling factor."""
+        return self.contract.functions.BASE_SCALING().call()
+    
+    def get_bonding_supply(self) -> int:
+        """Get the bonding curve supply."""
+        return self.contract.functions.BONDING_SUPPLY().call()
+    
+    def get_launch_fee(self) -> int:
+        """Get the launch fee."""
+        return self.contract.functions.LAUNCH_FEE().call()
+    
+    def get_quote_scaling(self) -> int:
+        """Get the quote token scaling factor."""
+        return self.contract.functions.QUOTE_SCALING().call()
+    
+    def get_total_supply(self) -> int:
+        """Get the total supply."""
+        return self.contract.functions.TOTAL_SUPPLY().call()
+    
+    def get_bonding_curve(self) -> ChecksumAddress:
+        """Get the bonding curve address."""
+        return self.contract.functions.bondingCurve().call()
+    
+    def get_event_nonce(self) -> int:
+        """Get the event nonce."""
+        return self.contract.functions.eventNonce().call()
+    
+    def get_gte_router(self) -> ChecksumAddress:
+        """Get the GTE Router address."""
+        return self.contract.functions.gteRouter().call()
+    
+    def get_launches(self, launch_token: str) -> Dict[str, Any]:
+        """
+        Get launch details for a token.
+        
+        Args:
+            launch_token: Address of the launched token
+            
+        Returns:
+            Dictionary containing launch details
+        """
+        launch_token = self.web3.to_checksum_address(launch_token)
+        active, bonding_curve, quote, quote_scaling, base_scaling, base_sold, quote_bought = self.contract.functions.launches(launch_token).call()
+        
+        return {
+            'active': active,
+            'bonding_curve': bonding_curve,
+            'quote': quote,
+            'quote_scaling': quote_scaling,
+            'base_scaling': base_scaling,
+            'base_sold_from_curve': base_sold,
+            'quote_bought_by_curve': quote_bought
+        }
+    
+    def get_owner(self) -> ChecksumAddress:
+        """Get the contract owner."""
+        return self.contract.functions.owner().call()
+    
+    def get_ownership_handover_expires_at(self, pending_owner: str) -> int:
+        """
+        Get the expiration time for an ownership handover request.
+        
+        Args:
+            pending_owner: Address of the pending owner
+            
+        Returns:
+            Timestamp when the handover expires
+        """
+        pending_owner = self.web3.to_checksum_address(pending_owner)
+        return self.contract.functions.ownershipHandoverExpiresAt(pending_owner).call()
+    
+    def get_quote_asset(self) -> ChecksumAddress:
+        """Get the quote asset address."""
+        return self.contract.functions.quoteAsset().call()
+    
+    def get_univ2_router(self) -> ChecksumAddress:
+        """Get the UniswapV2 Router address."""
+        return self.contract.functions.uniV2Router().call()
+    
+    def quote_base_for_quote(self, token: str, quote_amount: int, is_buy: bool) -> int:
+        """
+        Quote base amount for a given quote amount.
+        
+        Args:
+            token: Address of the token
+            quote_amount: Amount of quote tokens
+            is_buy: Whether this is a buy or sell
+            
+        Returns:
+            Amount of base tokens
+        """
+        token = self.web3.to_checksum_address(token)
+        return self.contract.functions.quoteBaseForQuote(token, quote_amount, is_buy).call()
+    
+    def quote_quote_for_base(self, token: str, base_amount: int, is_buy: bool) -> int:
+        """
+        Quote quote amount for a given base amount.
+        
+        Args:
+            token: Address of the token
+            base_amount: Amount of base tokens
+            is_buy: Whether this is a buy or sell
+            
+        Returns:
+            Amount of quote tokens
+        """
+        token = self.web3.to_checksum_address(token)
+        return self.contract.functions.quoteQuoteForBase(token, base_amount, is_buy).call()
+    
+    # ================= WRITE METHODS =================
+    
+    def buy(self, token: str, recipient: str, amount_out_base: int, max_amount_in_quote: int,
+            sender_address: str, **kwargs) -> Dict[str, Any]:
+        """
+        Buy base tokens with quote tokens.
+        
+        Args:
+            token: Address of the token
+            recipient: Address to receive the tokens
+            amount_out_base: Amount of base tokens to buy
+            max_amount_in_quote: Maximum amount of quote tokens to spend
+            sender_address: Address of the transaction sender
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+            
+        Returns:
+            Transaction object
+        """
+        token = self.web3.to_checksum_address(token)
+        recipient = self.web3.to_checksum_address(recipient)
+        
+        tx = self.contract.functions.buy(
+            token, recipient, amount_out_base, max_amount_in_quote
+        ).build_transaction({
+            'from': sender_address,
+            'nonce': self.web3.eth.get_transaction_count(sender_address),
+            **kwargs
+        })
+        return tx
+    
+    def cancel_ownership_handover(self, sender_address: str, **kwargs) -> Dict[str, Any]:
+        """
+        Cancel an ownership handover request.
+        
+        Args:
+            sender_address: Address of the transaction sender
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction object
+        """
+        tx = self.contract.functions.cancelOwnershipHandover().build_transaction({
+            'from': sender_address,
+            'nonce': self.web3.eth.get_transaction_count(sender_address),
+            **kwargs
+        })
+        return tx
+    
+    def complete_ownership_handover(self, pending_owner: str, sender_address: str, **kwargs) -> Dict[str, Any]:
+        """
+        Complete an ownership handover.
+        
+        Args:
+            pending_owner: Address of the pending owner
+            sender_address: Address of the transaction sender
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction object
+        """
+        pending_owner = self.web3.to_checksum_address(pending_owner)
+        tx = self.contract.functions.completeOwnershipHandover(pending_owner).build_transaction({
+            'from': sender_address,
+            'nonce': self.web3.eth.get_transaction_count(sender_address),
+            **kwargs
+        })
+        return tx
+    
+    def initialize(self, owner: str, sender_address: str, **kwargs) -> Dict[str, Any]:
+        """
+        Initialize the contract with an owner.
+        
+        Args:
+            owner: Address of the owner
+            sender_address: Address of the transaction sender
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction object
+        """
+        owner = self.web3.to_checksum_address(owner)
+        tx = self.contract.functions.initialize(owner).build_transaction({
+            'from': sender_address,
+            'nonce': self.web3.eth.get_transaction_count(sender_address),
+            **kwargs
+        })
+        return tx
+    
+    def launch(self, name: str, symbol: str, media_uri: str, sender_address: str, value: int = 0, **kwargs) -> Dict[str, Any]:
+        """
+        Launch a new token.
+        
+        Args:
+            name: Name of the token
+            symbol: Symbol of the token
+            media_uri: Media URI for the token
+            sender_address: Address of the transaction sender
+            value: ETH value to send with the transaction (for launch fee)
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction object
+        """
+        tx = self.contract.functions.launch(name, symbol, media_uri).build_transaction({
+            'from': sender_address,
+            'value': value,
+            'nonce': self.web3.eth.get_transaction_count(sender_address),
+            **kwargs
+        })
+        return tx
+    
+    def pull_fees(self, sender_address: str, **kwargs) -> Dict[str, Any]:
+        """
+        Pull accumulated fees.
+        
+        Args:
+            sender_address: Address of the transaction sender
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction object
+        """
+        tx = self.contract.functions.pullFees().build_transaction({
+            'from': sender_address,
+            'nonce': self.web3.eth.get_transaction_count(sender_address),
+            **kwargs
+        })
+        return tx
+    
+    def renounce_ownership(self, sender_address: str, **kwargs) -> Dict[str, Any]:
+        """
+        Renounce ownership of the contract.
+        
+        Args:
+            sender_address: Address of the transaction sender
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction object
+        """
+        tx = self.contract.functions.renounceOwnership().build_transaction({
+            'from': sender_address,
+            'nonce': self.web3.eth.get_transaction_count(sender_address),
+            **kwargs
+        })
+        return tx
+    
+    def request_ownership_handover(self, sender_address: str, **kwargs) -> Dict[str, Any]:
+        """
+        Request an ownership handover.
+        
+        Args:
+            sender_address: Address of the transaction sender
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction object
+        """
+        tx = self.contract.functions.requestOwnershipHandover().build_transaction({
+            'from': sender_address,
+            'nonce': self.web3.eth.get_transaction_count(sender_address),
+            **kwargs
+        })
+        return tx
+    
+    def sell(self, token: str, recipient: str, amount_in_base: int, min_amount_out_quote: int,
+             sender_address: str, **kwargs) -> Dict[str, Any]:
+        """
+        Sell base tokens for quote tokens.
+        
+        Args:
+            token: Address of the token
+            recipient: Address to receive the quote tokens
+            amount_in_base: Amount of base tokens to sell
+            min_amount_out_quote: Minimum amount of quote tokens to receive
+            sender_address: Address of the transaction sender
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction object
+        """
+        token = self.web3.to_checksum_address(token)
+        recipient = self.web3.to_checksum_address(recipient)
+        
+        tx = self.contract.functions.sell(
+            token, recipient, amount_in_base, min_amount_out_quote
+        ).build_transaction({
+            'from': sender_address,
+            'nonce': self.web3.eth.get_transaction_count(sender_address),
+            **kwargs
+        })
+        return tx
+    
+    def set_virtual_reserves(self, virtual_base: int, virtual_quote: int, sender_address: str, **kwargs) -> Dict[str, Any]:
+        """
+        Set virtual reserves for the bonding curve.
+        
+        Args:
+            virtual_base: Virtual base reserves
+            virtual_quote: Virtual quote reserves
+            sender_address: Address of the transaction sender
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction object
+        """
+        tx = self.contract.functions.setVirtualReserves(virtual_base, virtual_quote).build_transaction({
+            'from': sender_address,
+            'nonce': self.web3.eth.get_transaction_count(sender_address),
+            **kwargs
+        })
+        return tx
+    
+    def transfer_ownership(self, new_owner: str, sender_address: str, **kwargs) -> Dict[str, Any]:
+        """
+        Transfer ownership of the contract.
+        
+        Args:
+            new_owner: Address of the new owner
+            sender_address: Address of the transaction sender
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction object
+        """
+        new_owner = self.web3.to_checksum_address(new_owner)
+        tx = self.contract.functions.transferOwnership(new_owner).build_transaction({
+            'from': sender_address,
+            'nonce': self.web3.eth.get_transaction_count(sender_address),
+            **kwargs
+        })
+        return tx
+    
+    def update_bonding_curve(self, new_bonding_curve: str, sender_address: str, **kwargs) -> Dict[str, Any]:
+        """
+        Update the bonding curve address.
+        
+        Args:
+            new_bonding_curve: Address of the new bonding curve
+            sender_address: Address of the transaction sender
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction object
+        """
+        new_bonding_curve = self.web3.to_checksum_address(new_bonding_curve)
+        tx = self.contract.functions.updateBondingCurve(new_bonding_curve).build_transaction({
+            'from': sender_address,
+            'nonce': self.web3.eth.get_transaction_count(sender_address),
+            **kwargs
+        })
+        return tx
+    
+    def update_init_code_hash(self, new_hash: bytes, sender_address: str, **kwargs) -> Dict[str, Any]:
+        """
+        Update the init code hash.
+        
+        Args:
+            new_hash: New init code hash
+            sender_address: Address of the transaction sender
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction object
+        """
+        tx = self.contract.functions.updateInitCodeHash(new_hash).build_transaction({
+            'from': sender_address,
+            'nonce': self.web3.eth.get_transaction_count(sender_address),
+            **kwargs
+        })
+        return tx
+    
+    def update_quote_asset(self, new_quote_asset: str, sender_address: str, **kwargs) -> Dict[str, Any]:
+        """
+        Update the quote asset address.
+        
+        Args:
+            new_quote_asset: Address of the new quote asset
+            sender_address: Address of the transaction sender
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction object
+        """
+        new_quote_asset = self.web3.to_checksum_address(new_quote_asset)
+        tx = self.contract.functions.updateQuoteAsset(new_quote_asset).build_transaction({
+            'from': sender_address,
+            'nonce': self.web3.eth.get_transaction_count(sender_address),
+            **kwargs
+        })
+        return tx

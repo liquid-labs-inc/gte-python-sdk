@@ -1,15 +1,14 @@
 """High-level GTE client."""
 
-import asyncio
 import logging
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Union
 from datetime import datetime, timedelta
 import time
 
 
 from .market import MarketClient
 from .models import Asset, Market, Position, Trade, Candle, Order
-from .rest_api import RestApi
+from src.gte_py.api.rest_api import RestApi
 
 logger = logging.getLogger(__name__)
 

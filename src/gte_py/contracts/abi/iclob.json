@@ -1,0 +1,478 @@
+[
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "getQuoteToken",
+    "outputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "getBaseToken",
+    "outputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "getMarketConfig",
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "getTokenConfig",
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "getOpenInterest",
+    "outputs": [
+      {
+        "name": "quoteOpenInterest",
+        "type": "uint256"
+      },
+      {
+        "name": "baseOpenInterest",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "orderId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getOrder",
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "getTOB",
+    "outputs": [
+      {
+        "name": "highestBidPrice",
+        "type": "uint256"
+      },
+      {
+        "name": "lowestAskPrice",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "priceInTicks",
+        "type": "uint256"
+      },
+      {
+        "name": "side",
+        "type": "uint8"
+      }
+    ],
+    "name": "getLimit",
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "getNumBids",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "getNumAsks",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "priceInTicks",
+        "type": "uint256"
+      },
+      {
+        "name": "side",
+        "type": "uint8"
+      }
+    ],
+    "name": "getNextBiggestTick",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "priceInTicks",
+        "type": "uint256"
+      },
+      {
+        "name": "side",
+        "type": "uint8"
+      }
+    ],
+    "name": "getNextSmallestTick",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "startOrderId",
+        "type": "uint256"
+      },
+      {
+        "name": "numOrders",
+        "type": "uint256"
+      }
+    ],
+    "name": "getOrders",
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "getQuoteTokenAccountBalance",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "getBaseTokenAccountBalance",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "getNextOrderId",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "getFactory",
+    "outputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "getFactoryOwner",
+    "outputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [],
+    "name": "getFeeRecipient",
+    "outputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+
+  
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "tokenAddress",
+        "type": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "deposit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "tokenAddress",
+        "type": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "withdraw",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "args",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "amountInBaseLots",
+            "type": "uint256"
+          },
+          {
+            "name": "priceInTicks",
+            "type": "uint256"
+          },
+          {
+            "name": "cancelTimestamp",
+            "type": "uint256"
+          },
+          {
+            "name": "side",
+            "type": "uint8"
+          },
+          {
+            "name": "limitOrderType",
+            "type": "uint8"
+          },
+          {
+            "name": "settlement",
+            "type": "uint8"
+          }
+        ]
+      }
+    ],
+    "name": "postLimitOrder",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "args",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "amountInBaseLots",
+            "type": "uint256"
+          },
+          {
+            "name": "priceInTicks",
+            "type": "uint256"
+          },
+          {
+            "name": "side",
+            "type": "uint8"
+          },
+          {
+            "name": "fillOrderType",
+            "type": "uint8"
+          },
+          {
+            "name": "settlement",
+            "type": "uint8"
+          }
+        ]
+      }
+    ],
+    "name": "postFillOrder",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "args",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "orderId",
+            "type": "uint256"
+          },
+          {
+            "name": "amountInBaseLots",
+            "type": "uint256"
+          },
+          {
+            "name": "settlement",
+            "type": "uint8"
+          }
+        ]
+      }
+    ],
+    "name": "reduce",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "args",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "orderIds",
+            "type": "uint256[]"
+          },
+          {
+            "name": "settlement",
+            "type": "uint8"
+          }
+        ]
+      }
+    ],
+    "name": "cancel",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]
