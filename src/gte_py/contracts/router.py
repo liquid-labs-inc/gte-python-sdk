@@ -12,7 +12,7 @@ class Settlement:
     WRAP = 1
     UNWRAP = 2
 
-class GTERouter:
+class Router:
     """
     Python wrapper for the GTERouter smart contract.
     Provides methods to interact with the GTERouter functionality including:

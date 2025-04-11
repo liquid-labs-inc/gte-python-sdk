@@ -2,12 +2,15 @@
 
 import asyncio
 import json
-from gte_py.raw import GTERestClient, GTEWebSocketClient
+from datetime import datetime, timedelta
+
+from gte_py.api.rest_api import RestApi
+from gte_py.api.websocket_api import WebSocketClient
 
 
 async def rest_example():
     """Example of using the REST API client."""
-    async with GTERestClient() as client:
+    async with RestApi() as client:
         # Get API health status
         health = await client.get_health()
         print("API Health:")
@@ -26,7 +29,7 @@ async def websocket_example():
     # This is a placeholder - you'll need actual market addresses
     market_addresses = ["0x1234567890abcdef1234567890abcdef12345678"]
     
-    ws_client = GTEWebSocketClient()
+    ws_client = WebSocketClient()
     
     async def handle_trade(data):
         print("Trade received:")

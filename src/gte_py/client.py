@@ -10,6 +10,7 @@ from web3 import Web3
 from .api.rest_api import RestApi
 from .market import MarketClient
 from .models import Asset, Market, MarketInfo, Position, Trade, Candle, Order
+from .models import OrderSide, OrderType, TimeInForce
 from .execution import ExecutionClient
 from .info import MarketInfoService
 
@@ -19,9 +20,15 @@ logger = logging.getLogger(__name__)
 class Client:
     """User-friendly client for interacting with GTE."""
 
-    def __init__(self, api_url: str = "https://api.gte.io", ws_url: str = "wss://ws.gte.io/v1", 
-                 web3_provider: Optional[Union[str, Web3]] = None, router_address: Optional[str] = None):
-        """Initialize the client.
+    def __init__(
+        self, 
+        api_url: str = "https://api.gte.io", 
+        ws_url: str = "wss://ws.gte.io/v1", 
+        web3_provider: Optional[Union[str, Web3]] = None, 
+        router_address: Optional[str] = None
+    ):
+        """
+        Initialize the client.
 
         Args:
             api_url: Base URL for the REST API
@@ -31,10 +38,12 @@ class Client:
         """
         self._rest_client = RestApi(base_url=api_url)
         self._ws_url = ws_url
-        self._market_clients = {}  # Cache for market clients
+        self._market_clients: Dict[str, MarketClient] = {}
         
         # Initialize Web3 if provider is given
         self._web3 = None
+        self._market_info = None
+        
         if web3_provider:
             if isinstance(web3_provider, str):
                 self._web3 = Web3(Web3.HTTPProvider(web3_provider))
@@ -45,7 +54,6 @@ class Client:
                 logger.warning("Web3 provider is not connected. On-chain functions will not work.")
         
             # Initialize market info service if router address is provided
-            self._market_info = None
             if router_address:
                 self._market_info = MarketInfoService(
                     web3=self._web3,
@@ -63,9 +71,9 @@ class Client:
         await self._rest_client.__aenter__()
         return self
 
-    async def __aexit__(self, exc_type, exc_value, traceback):
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Exit async context."""
-        await self._rest_client.__aexit__(exc_type, exc_value, traceback)
+        await self._rest_client.__aexit__(exc_type, exc_val, exc_tb)
         # Close any open market clients
         for client in self._market_clients.values():
             await client.close()
@@ -75,9 +83,14 @@ class Client:
         await self.__aexit__(None, None, None)
 
     # Asset methods
-    async def get_assets(self, creator: Optional[str] = None, 
-                         limit: int = 100, offset: int = 0) -> List[Asset]:
-        """Get list of assets.
+    async def get_assets(
+        self, 
+        creator: Optional[str] = None, 
+        limit: int = 100, 
+        offset: int = 0
+    ) -> List[Asset]:
+        """
+        Get list of assets.
 
         Args:
             creator: Filter by creator address
@@ -91,7 +104,8 @@ class Client:
         return [Asset.from_api(asset_data) for asset_data in response.get('assets', [])]
 
     async def get_asset(self, address: str) -> Asset:
-        """Get asset by address.
+        """
+        Get asset by address.
 
         Args:
             address: Asset address
@@ -103,16 +117,21 @@ class Client:
         return Asset.from_api(response)
 
     # Market methods
-    async def get_markets(self, limit: int = 100, offset: int = 0,
-                          market_type: Optional[str] = None,
-                          asset_address: Optional[str] = None,
-                          max_price: Optional[float] = None) -> List[Market]:
-        """Get list of markets.
+    async def get_markets(
+        self, 
+        limit: int = 100, 
+        offset: int = 0,
+        market_type: Optional[str] = None,
+        asset_address: Optional[str] = None,
+        max_price: Optional[float] = None
+    ) -> List[Market]:
+        """
+        Get list of markets.
 
         Args:
             limit: Maximum number of markets to return
             offset: Offset for pagination
-            market_type: Filter by market type (amm, launchpad)
+            market_type: Filter by market type (amm, launchpad, clob)
             asset_address: Filter by base asset address
             max_price: Maximum price filter
 
@@ -133,7 +152,8 @@ class Client:
         return markets
 
     async def get_market(self, address: str) -> Market:
-        """Get market by address.
+        """
+        Get market by address.
 
         Args:
             address: Market address
@@ -144,8 +164,9 @@ class Client:
         response = await self._rest_client.get_market(address)
         return Market.from_api(response)
 
-    async def get_market_client(self, market_address: str) -> "GteMarketClient":
-        """Get a dedicated client for a specific market.
+    async def get_market_client(self, market_address: str) -> MarketClient:
+        """
+        Get a dedicated client for a specific market.
 
         Creates or reuses a WebSocket-based market client for real-time data.
 
@@ -153,12 +174,12 @@ class Client:
             market_address: Market address
 
         Returns:
-            GteMarketClient instance
+            MarketClient instance
         """
-        if (market_address not in self._market_clients):
+        if market_address not in self._market_clients:
             # Get market details first to ensure it's valid
             market = await self.get_market(market_address)
-            self._market_clients[market_address] = GteMarketClient(
+            self._market_clients[market_address] = MarketClient(
                 market=market,
                 ws_url=self._ws_url
             )
@@ -167,11 +188,16 @@ class Client:
         return self._market_clients[market_address]
 
     # Historical data methods
-    async def get_candles(self, market_address: str, interval: str = "1h",
-                          start_time: Optional[Union[int, datetime]] = None,
-                          end_time: Optional[Union[int, datetime]] = None,
-                          limit: int = 500) -> List[Candle]:
-        """Get historical candles for a market.
+    async def get_candles(
+        self, 
+        market_address: str, 
+        interval: str = "1h",
+        start_time: Optional[Union[int, datetime]] = None,
+        end_time: Optional[Union[int, datetime]] = None,
+        limit: int = 500
+    ) -> List[Candle]:
+        """
+        Get historical candles for a market.
 
         Args:
             market_address: Market address
@@ -205,7 +231,8 @@ class Client:
         return [Candle.from_api(candle_data) for candle_data in response.get('candles', [])]
 
     async def get_recent_trades(self, market_address: str, limit: int = 50) -> List[Trade]:
-        """Get recent trades for a market.
+        """
+        Get recent trades for a market.
 
         Args:
             market_address: Market address
@@ -223,7 +250,8 @@ class Client:
 
     # User-specific methods
     async def get_positions(self, user_address: str) -> List[Position]:
-        """Get LP positions for a user.
+        """
+        Get LP positions for a user.
 
         Args:
             user_address: User address
@@ -235,7 +263,8 @@ class Client:
         return [Position.from_api(pos_data) for pos_data in response.get('positions', [])]
 
     async def get_user_assets(self, user_address: str, limit: int = 100) -> List[Asset]:
-        """Get assets held by a user.
+        """
+        Get assets held by a user.
 
         Args:
             user_address: User address
@@ -249,11 +278,21 @@ class Client:
                 for asset_data in response.get('assets', [])]
 
     # Trading methods
-    async def create_order(self, market_address: str, side: str, order_type: str, 
-                          amount: float, price: Optional[float] = None, 
-                          time_in_force: str = "GTC", sender_address: str = None,
-                          use_contract: bool = False, use_router: bool = True, **tx_kwargs) -> Union[Order, Dict[str, Any]]:
-        """Create a new order.
+    async def create_order(
+        self, 
+        market_address: str, 
+        side: Union[OrderSide, str], 
+        order_type: Union[OrderType, str], 
+        amount: float, 
+        price: Optional[float] = None, 
+        time_in_force: Union[TimeInForce, str] = TimeInForce.GTC, 
+        sender_address: Optional[str] = None,
+        use_contract: bool = False, 
+        use_router: bool = True, 
+        **tx_kwargs
+    ) -> Union[Order, Dict[str, Any]]:
+        """
+        Create a new order.
 
         Args:
             market_address: Market address
@@ -273,6 +312,16 @@ class Client:
         Raises:
             ValueError: For missing required parameters or invalid input
         """
+        # Convert string enums to proper enum types if needed
+        if isinstance(side, str):
+            side = OrderSide(side)
+            
+        if isinstance(order_type, str):
+            order_type = OrderType(order_type)
+            
+        if isinstance(time_in_force, str):
+            time_in_force = TimeInForce(time_in_force)
+        
         # Try to get from market info service first
         market_info = None
         if self._market_info:
@@ -287,7 +336,7 @@ class Client:
             if self._market_info and market.contract_address:
                 self._market_info.add_market_info(MarketInfo.from_market(market))
         else:
-            # Convert market info to market
+            # Use market_info directly
             market = market_info
         
         # Delegate to execution client
@@ -304,14 +353,22 @@ class Client:
             **tx_kwargs
         )
             
-    async def cancel_order(self, market_address: str, order_id: int, 
-                          sender_address: str, **tx_kwargs) -> Dict[str, Any]:
-        """Cancel an order.
+    async def cancel_order(
+        self, 
+        market_address: str, 
+        order_id: int, 
+        sender_address: str, 
+        use_router: bool = True,
+        **tx_kwargs
+    ) -> Dict[str, Any]:
+        """
+        Cancel an order.
         
         Args:
             market_address: Market address
             order_id: ID of the order to cancel
             sender_address: Address to send transaction from
+            use_router: Whether to use the router for canceling orders (safer)
             **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
             
         Returns:
@@ -321,19 +378,34 @@ class Client:
             ValueError: If Web3 is not configured or parameters are invalid
         """
         # Get market details first
-        market = await self.get_market(market_address)
+        market_info = None
+        if self._market_info:
+            market_info = self._market_info.get_market_info(market_address)
+            
+        if not market_info:
+            market = await self.get_market(market_address)
+        else:
+            market = market_info
         
         # Delegate to execution client
         return self._execution_client.cancel_order(
             market=market,
             order_id=order_id,
             sender_address=sender_address,
+            use_router=use_router,
             **tx_kwargs
         )
         
-    async def modify_order(self, market_address: str, order_id: int,
-                          new_amount: float, sender_address: str, **tx_kwargs) -> Dict[str, Any]:
-        """Modify an existing order's amount (reduce only).
+    async def modify_order(
+        self, 
+        market_address: str, 
+        order_id: int,
+        new_amount: float, 
+        sender_address: str, 
+        **tx_kwargs
+    ) -> Dict[str, Any]:
+        """
+        Modify an existing order's amount (reduce only).
         
         Args:
             market_address: Market address
@@ -349,7 +421,14 @@ class Client:
             ValueError: If Web3 is not configured or parameters are invalid
         """
         # Get market details first
-        market = await self.get_market(market_address)
+        market_info = None
+        if self._market_info:
+            market_info = self._market_info.get_market_info(market_address)
+            
+        if not market_info:
+            market = await self.get_market(market_address)
+        else:
+            market = market_info
         
         # Delegate to execution client
         return self._execution_client.modify_order(
@@ -361,7 +440,8 @@ class Client:
         )
 
     def get_available_onchain_markets(self) -> List[MarketInfo]:
-        """Get available on-chain markets.
+        """
+        Get available on-chain markets.
         
         Returns:
             List of market information from the blockchain

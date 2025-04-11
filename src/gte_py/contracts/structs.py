@@ -1,83 +1,39 @@
-from typing import Dict, Any, List, TypedDict, Optional, Union
+"""Structure definitions for GTE contracts."""
 
-class CancelArgs(TypedDict):
-    """CLOB CancelArgs struct"""
-    limitOrderHash: bytes
-    refundGasTo: str
+from enum import IntEnum
+from dataclasses import dataclass
+from typing import List, TypedDict
 
-class PostLimitOrderArgs(TypedDict):
-    """CLOB PostLimitOrderArgs struct"""
-    orderType: int
-    deadline: int
-    tokenIn: str
-    tokenOut: str
-    amountIn: int
-    limitPrice: int
-    reservePrice: int
-    maker: str
-    salt: bytes
-    hook: str
-    additionalValidationData: bytes
 
-class PostFillOrderArgs(TypedDict):
-    """CLOB PostFillOrderArgs struct"""
-    orderType: int  
-    limitOrderHash: bytes
-    takerSalt: bytes
-    refundGasTo: str
-    matcher: str
-    additionalValidationData: bytes
-    fillAmount: int
-    fillPrice: int
-    signature: bytes
-
-class TokenPermissions(TypedDict):
-    """Permit2 TokenPermissions struct"""
-    token: str
-    amount: int
-
-class PermitDetails(TypedDict):
-    """Permit2 PermitDetails struct"""
-    token: str
-    amount: int
-    expiration: int
-    nonce: int
-
-class PermitSingle(TypedDict):
-    """Permit2 PermitSingle struct"""
-    details: PermitDetails
-    spender: str
-    sigDeadline: int
-
-# ICLOB specific enums
-class Side:
-    """ICLOB Side enum"""
+class Side(IntEnum):
+    """Order side enum."""
     BUY = 0
     SELL = 1
 
-class Settlement:
-    """ICLOB Settlement enum"""
-    INSTANT = 0
-    ACCOUNT = 1
 
-class LimitOrderType:
-    """ICLOB LimitOrderType enum"""
+class Settlement(IntEnum):
+    """Settlement type enum."""
+    NONE = 0
+    INSTANT = 1
+
+
+class LimitOrderType(IntEnum):
+    """Limit order type enum."""
     GOOD_TILL_CANCELLED = 0
-    POST_ONLY = 1
-
-class FillOrderType:
-    """ICLOB FillOrderType enum"""
-    FILL_OR_KILL = 0
     IMMEDIATE_OR_CANCEL = 1
+    FILL_OR_KILL = 2
+    GOOD_TILL_TIME = 3
 
-# ICLOB specific structs
-class ICLOBCancelArgs(TypedDict):
-    """ICLOB CancelArgs struct"""
-    orderIds: List[int]
-    settlement: int
 
+class FillOrderType(IntEnum):
+    """Fill order type enum."""
+    IMMEDIATE_OR_CANCEL = 0
+    FILL_OR_KILL = 1
+
+
+# Contract input structs with proper TypedDict definitions
 class ICLOBPostLimitOrderArgs(TypedDict):
-    """ICLOB PostLimitOrderArgs struct"""
+    """Arguments for posting a limit order."""
     amountInBaseLots: int
     priceInTicks: int
     cancelTimestamp: int
@@ -85,40 +41,37 @@ class ICLOBPostLimitOrderArgs(TypedDict):
     limitOrderType: int
     settlement: int
 
+
 class ICLOBPostLimitOrderResult(TypedDict):
-    """ICLOB PostLimitOrderResult struct"""
+    """Result from posting a limit order."""
     orderId: int
-    amountPostedInBaseLots: int
-    quoteTokenAmountTradedInAtoms: int
-    baseTokenAmountTradedInAtoms: int
+    makerAmountInQuote: int
+    takerAmountInQuote: int
+
 
 class ICLOBPostFillOrderArgs(TypedDict):
-    """ICLOB PostFillOrderArgs struct"""
+    """Arguments for posting a fill order."""
     amountInBaseLots: int
     priceInTicks: int
     side: int
     fillOrderType: int
     settlement: int
 
+
 class ICLOBPostFillOrderResult(TypedDict):
-    """ICLOB PostFillOrderResult struct"""
-    orderId: int
-    amountFilledInBaseLots: int
-    quoteTokenAmountTradedInAtoms: int
-    baseTokenAmountTradedInAtoms: int
+    """Result from posting a fill order."""
+    makerAmountInQuote: int
+    takerAmountInQuote: int
+
 
 class ICLOBReduceArgs(TypedDict):
-    """ICLOB ReduceArgs struct"""
+    """Arguments for reducing an order."""
     orderId: int
     amountInBaseLots: int
     settlement: int
 
-class LaunchDetails(TypedDict):
-    """Launchpad details struct"""
-    active: bool
-    bondingCurve: str
-    quote: str
-    quoteScaling: int
-    baseScaling: int
-    baseSoldFromCurve: int
-    quoteBoughtByCurve: int
+
+class ICLOBCancelArgs(TypedDict):
+    """Arguments for canceling orders."""
+    orderIds: List[int]
+    settlement: int
