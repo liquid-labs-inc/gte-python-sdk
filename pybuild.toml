@@ -2,13 +2,14 @@
 name = "gte-py"
 version = "0.1.0"
 authors = [
-    { name = "Your Name", email = "your.email@example.com" }
+    { name = "Jakku Sakura", email = "jakku.sakura@auros.global" }
 ]
 description = "A short description of the project"
 entrypoint = "gte_py.main:run"
 dependencies = [
     "typer>=0.9.0",
     "aiohttp>=3.8.0",
+    "web3~=7.10.0"
 ]
 
 [tool.container]

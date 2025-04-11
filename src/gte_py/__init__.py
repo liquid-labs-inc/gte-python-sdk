@@ -2,13 +2,13 @@
 
 __version__ = "0.1.0"
 
-from .client import GteClient
-from .market import GteMarketClient
+from .client import Client
+from .market import MarketClient
 from .models import Asset, Market, Trade, Candle, Position, OrderbookUpdate, Order
 
 __all__ = [
-    "GteClient",
-    "GteMarketClient",
+    "Client",
+    "MarketClient",
     "Asset",
     "Market", 
     "Trade",

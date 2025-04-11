@@ -6,14 +6,15 @@ from typing import Dict, List, Optional, Union, Any
 from datetime import datetime, timedelta
 import time
 
-from .raw import GTERestClient
-from .market import GteMarketClient
+
+from .market import MarketClient
 from .models import Asset, Market, Position, Trade, Candle, Order
+from .rest_api import RestApi
 
 logger = logging.getLogger(__name__)
 
 
-class GteClient:
+class Client:
     """User-friendly client for interacting with GTE."""
 
     def __init__(self, api_url: str = "https://api.gte.io", ws_url: str = "wss://ws.gte.io/v1"):
@@ -23,7 +24,7 @@ class GteClient:
             api_url: Base URL for the REST API
             ws_url: URL for the WebSocket API
         """
-        self._rest_client = GTERestClient(base_url=api_url)
+        self._rest_client = RestApi(base_url=api_url)
         self._ws_url = ws_url
         self._market_clients = {}  # Cache for market clients
 
@@ -106,7 +107,7 @@ class GteClient:
         response = await self._rest_client.get_market(address)
         return Market.from_api(response)
 
-    async def get_market_client(self, market_address: str) -> "GteMarketClient":
+    async def get_market_client(self, market_address: str) -> "MarketClient":
         """Get a dedicated client for a specific market.
 
         Creates or reuses a WebSocket-based market client for real-time data.
@@ -120,7 +121,7 @@ class GteClient:
         if (market_address not in self._market_clients):
             # Get market details first to ensure it's valid
             market = await self.get_market(market_address)
-            self._market_clients[market_address] = GteMarketClient(
+            self._market_clients[market_address] = MarketClient(
                 market=market,
                 ws_url=self._ws_url
             )

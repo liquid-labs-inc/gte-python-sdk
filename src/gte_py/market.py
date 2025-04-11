@@ -2,17 +2,15 @@
 
 import asyncio
 import logging
-from typing import Dict, List, Optional, Callable, Any, Union
-import json
-from datetime import datetime
+from typing import Optional, Callable, Any
 
-from .raw import GTEWebSocketClient
 from .models import Market, Trade, Candle, OrderbookUpdate
+from .ws_api import WebSocketApi
 
 logger = logging.getLogger(__name__)
 
 
-class GteMarketClient:
+class MarketClient:
     """WebSocket-based client for real-time market data."""
 
     def __init__(self, market: Market, ws_url: str = "wss://ws.gte.io/v1"):
@@ -23,7 +21,7 @@ class GteMarketClient:
             ws_url: WebSocket URL
         """
         self.market = market
-        self._ws_client = GTEWebSocketClient(ws_url=ws_url)
+        self._ws_client = WebSocketApi(ws_url=ws_url)
         self._trade_callbacks = []
         self._candle_callbacks = {}  # Keyed by interval
         self._orderbook_callbacks = []

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import typer
 from pprint import pprint
 
-from . import GteClient, GteMarketClient
+from . import Client, MarketClient
 
 app = typer.Typer(help="gte_py - A Python CLI for interacting with GTE API")
 
@@ -22,7 +22,7 @@ def hello(name: str = "World"):
 def health():
     """Check the health of the GTE API."""
     async def _health():
-        async with GteClient() as client:
+        async with Client() as client:
             # Use the raw client directly for health check
             result = await client._rest_client.get_health()
             typer.echo(json.dumps(result, indent=2))
@@ -34,7 +34,7 @@ def health():
 def assets(creator: Optional[str] = None, limit: int = 100, offset: int = 0):
     """Get list of assets."""
     async def _assets():
-        async with GteClient() as client:
+        async with Client() as client:
             assets = await client.get_assets(creator=creator, limit=limit, offset=offset)
             # Convert to dict for JSON serialization
             assets_data = [
@@ -57,7 +57,7 @@ def assets(creator: Optional[str] = None, limit: int = 100, offset: int = 0):
 def asset(address: str):
     """Get asset by address."""
     async def _asset():
-        async with GteClient() as client:
+        async with Client() as client:
             asset = await client.get_asset(address)
             # Convert to dict for JSON serialization
             asset_data = {
@@ -84,7 +84,7 @@ def markets(
 ):
     """Get list of markets."""
     async def _markets():
-        async with GteClient() as client:
+        async with Client() as client:
             markets = await client.get_markets(
                 limit=limit,
                 offset=offset,
@@ -123,7 +123,7 @@ def markets(
 def market(address: str):
     """Get market by address."""
     async def _market():
-        async with GteClient() as client:
+        async with Client() as client:
             market = await client.get_market(address)
             # Convert to dict for JSON serialization
             market_data = {
@@ -159,7 +159,7 @@ def candles(
 ):
     """Get historical candles for a market."""
     async def _candles():
-        async with GteClient() as client:
+        async with Client() as client:
             start_time = datetime.now() - timedelta(days=days)
             candles = await client.get_candles(
                 market_address=market_address,
@@ -188,7 +188,7 @@ def candles(
 def trades(market_address: str, limit: int = 50):
     """Get recent trades for a market."""
     async def _trades():
-        async with GteClient() as client:
+        async with Client() as client:
             trades = await client.get_recent_trades(market_address, limit)
             # Convert to dict for JSON serialization
             trades_data = [
@@ -226,7 +226,7 @@ def watch_market(
         duration: Duration in seconds to watch
     """
     async def _watch_market():
-        async with GteClient() as client:
+        async with Client() as client:
             # Get market info first
             market = await client.get_market(market_address)
             typer.echo(f"Watching market: {market.pair} ({market.address})")
@@ -274,7 +274,7 @@ def watch_market(
 def user_assets(user_address: str, limit: int = 100):
     """Get assets held by a user."""
     async def _user_assets():
-        async with GteClient() as client:
+        async with Client() as client:
             assets = await client.get_user_assets(user_address, limit)
             # Convert to dict for JSON serialization
             assets_data = [
@@ -295,7 +295,7 @@ def user_assets(user_address: str, limit: int = 100):
 def user_positions(user_address: str):
     """Get LP positions for a user."""
     async def _user_positions():
-        async with GteClient() as client:
+        async with Client() as client:
             positions = await client.get_positions(user_address)
             # Convert to dict for JSON serialization
             positions_data = [

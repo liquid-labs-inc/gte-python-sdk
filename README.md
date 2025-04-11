@@ -2,7 +2,7 @@
 
 A Python project created with PyBuild.
 
-GET is an decentralized exchange
+GTE is an decentralized exchange
 
 ## Introduction
 

@@ -4,14 +4,14 @@ import asyncio
 import json
 import logging
 import uuid
-from typing import Dict, List, Optional, Callable, Any
+from typing import Dict, List, Callable, Any
 
 import aiohttp
 
 logger = logging.getLogger(__name__)
 
 
-class GTEWebSocketClient:
+class WebSocketApi:
     """WebSocket client for GTE."""
 
     def __init__(self, ws_url: str = "wss://ws.gte.io/v1"):

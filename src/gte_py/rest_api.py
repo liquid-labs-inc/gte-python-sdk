@@ -1,14 +1,14 @@
 """REST API client for GTE."""
 
 import logging
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, Optional
+
 import aiohttp
-from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
 
 
-class GTERestClient:
+class RestApi:
     """REST API client for GTE."""
 
     def __init__(self, base_url: str = "https://api.gte.io"):
