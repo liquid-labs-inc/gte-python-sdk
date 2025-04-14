@@ -5,8 +5,9 @@ from typing import Any
 
 from eth_typing import ChecksumAddress
 from web3 import Web3
+from web3.types import Address, HexBytes
 
-from .utils import load_abi
+from .utils import TypedContractFunction, load_abi
 
 logger = logging.getLogger(__name__)
 
@@ -107,9 +108,9 @@ class CLOBFactory:
         step_size: int,
         maker_fee_rate: int,
         taker_fee_rate: int,
-        sender_address: str,
+        sender_address: Address,
         **kwargs,
-    ) -> dict[str, Any]:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Create a new CLOB market.
 
@@ -124,25 +125,26 @@ class CLOBFactory:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction object
+            TypedContractFunction for the transaction
         """
         base_token = self.web3.to_checksum_address(base_token)
         quote_token = self.web3.to_checksum_address(quote_token)
 
-        tx = self.contract.functions.createClob(
+        func = self.contract.functions.createClob(
             base_token, quote_token, tick_size, step_size, maker_fee_rate, taker_fee_rate
-        ).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
         )
-        return tx
+
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
 
     def set_fee_recipient(
-        self, new_recipient: str, sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+        self, new_recipient: str, sender_address: Address, **kwargs
+    ) -> TypedContractFunction[HexBytes]:
         """
         Set the fee recipient address.
 
@@ -152,20 +154,23 @@ class CLOBFactory:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction object
+            TypedContractFunction for the transaction
         """
         new_recipient = self.web3.to_checksum_address(new_recipient)
 
-        tx = self.contract.functions.setFeeRecipient(new_recipient).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.setFeeRecipient(new_recipient)
 
-    def transfer_ownership(self, new_owner: str, sender_address: str, **kwargs) -> dict[str, Any]:
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
+
+    def transfer_ownership(
+        self, new_owner: str, sender_address: Address, **kwargs
+    ) -> TypedContractFunction[HexBytes]:
         """
         Transfer ownership of the factory to a new address.
 
@@ -175,18 +180,19 @@ class CLOBFactory:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction object
+            TypedContractFunction for the transaction
         """
         new_owner = self.web3.to_checksum_address(new_owner)
 
-        tx = self.contract.functions.transferOwnership(new_owner).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.transferOwnership(new_owner)
+
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
 
     def get_clob_by_tokens(self, base_token: str, quote_token: str) -> ChecksumAddress | None:
         """

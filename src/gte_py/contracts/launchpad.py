@@ -1,8 +1,8 @@
 from eth_typing import ChecksumAddress
 from web3 import Web3
-from web3.types import Address, TxParams
+from web3.types import Address, HexBytes, TxParams
 
-from src.gte_py.contracts.utils import load_abi
+from src.gte_py.contracts.utils import TypedContractFunction, load_abi
 
 
 class LaunchpadError(Exception):
@@ -164,7 +164,7 @@ class Launchpad:
         max_amount_in_quote: int,
         sender_address: Address,
         **kwargs,
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Buy base tokens with quote tokens.
 
@@ -177,23 +177,24 @@ class Launchpad:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction object
+            TypedContractFunction with the transaction
         """
         token = self.web3.to_checksum_address(token)
         recipient = self.web3.to_checksum_address(recipient)
 
-        tx = self.contract.functions.buy(
-            token, recipient, amount_out_base, max_amount_in_quote
-        ).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.buy(token, recipient, amount_out_base, max_amount_in_quote)
 
-    def cancel_ownership_handover(self, sender_address: Address, **kwargs) -> TxParams:
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
+
+    def cancel_ownership_handover(
+        self, sender_address: Address, **kwargs
+    ) -> TypedContractFunction[HexBytes]:
         """
         Cancel an ownership handover request.
 
@@ -202,20 +203,21 @@ class Launchpad:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction object
+            TypedContractFunction with the transaction
         """
-        tx = self.contract.functions.cancelOwnershipHandover().build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.cancelOwnershipHandover()
+
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
 
     def complete_ownership_handover(
         self, pending_owner: str, sender_address: Address, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Complete an ownership handover.
 
@@ -225,19 +227,22 @@ class Launchpad:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction object
+            TypedContractFunction with the transaction
         """
         pending_owner = self.web3.to_checksum_address(pending_owner)
-        tx = self.contract.functions.completeOwnershipHandover(pending_owner).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.completeOwnershipHandover(pending_owner)
 
-    def initialize(self, owner: str, sender_address: Address, **kwargs) -> TxParams:
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
+
+    def initialize(
+        self, owner: str, sender_address: Address, **kwargs
+    ) -> TypedContractFunction[HexBytes]:
         """
         Initialize the contract with an owner.
 
@@ -247,17 +252,18 @@ class Launchpad:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction object
+            TypedContractFunction with the transaction
         """
         owner = self.web3.to_checksum_address(owner)
-        tx = self.contract.functions.initialize(owner).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.initialize(owner)
+
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
 
     def launch(
         self,
@@ -267,7 +273,7 @@ class Launchpad:
         sender_address: Address,
         value: int = 0,
         **kwargs,
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Launch a new token.
 
@@ -280,19 +286,20 @@ class Launchpad:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction object
+            TypedContractFunction with the transaction
         """
-        tx = self.contract.functions.launch(name, symbol, media_uri).build_transaction(
-            {
-                "from": sender_address,
-                "value": value,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.launch(name, symbol, media_uri)
 
-    def pull_fees(self, sender_address: Address, **kwargs) -> TxParams:
+        params = {
+            "from": sender_address,
+            "value": value,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
+
+    def pull_fees(self, sender_address: Address, **kwargs) -> TypedContractFunction[HexBytes]:
         """
         Pull accumulated fees.
 
@@ -301,18 +308,21 @@ class Launchpad:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction object
+            TypedContractFunction with the transaction
         """
-        tx = self.contract.functions.pullFees().build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.pullFees()
 
-    def renounce_ownership(self, sender_address: Address, **kwargs) -> TxParams:
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
+
+    def renounce_ownership(
+        self, sender_address: Address, **kwargs
+    ) -> TypedContractFunction[HexBytes]:
         """
         Renounce ownership of the contract.
 
@@ -321,18 +331,21 @@ class Launchpad:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction object
+            TypedContractFunction with the transaction
         """
-        tx = self.contract.functions.renounceOwnership().build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.renounceOwnership()
 
-    def request_ownership_handover(self, sender_address: Address, **kwargs) -> TxParams:
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
+
+    def request_ownership_handover(
+        self, sender_address: Address, **kwargs
+    ) -> TypedContractFunction[HexBytes]:
         """
         Request an ownership handover.
 
@@ -341,16 +354,17 @@ class Launchpad:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction object
+            TypedContractFunction with the transaction
         """
-        tx = self.contract.functions.requestOwnershipHandover().build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.requestOwnershipHandover()
+
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
 
     def sell(
         self,
@@ -360,7 +374,7 @@ class Launchpad:
         min_amount_out_quote: int,
         sender_address: Address,
         **kwargs,
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Sell base tokens for quote tokens.
 
@@ -373,32 +387,24 @@ class Launchpad:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction object
+            TypedContractFunction with the transaction
         """
         token = self.web3.to_checksum_address(token)
         recipient = self.web3.to_checksum_address(recipient)
 
-        tx = self.contract.functions.sell(
-            token, recipient, amount_in_base, min_amount_out_quote
-        ).build_transaction(
-            TxParams(
-                {
-                    "from": sender_address,
-                    "nonce": self.web3.eth.get_transaction_count(sender_address),
-                    **kwargs,
-                }
-            )
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.sell(token, recipient, amount_in_base, min_amount_out_quote)
+
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
 
     def set_virtual_reserves(
         self, virtual_base: int, virtual_quote: int, sender_address: Address, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Set virtual reserves for the bonding curve.
 
@@ -409,20 +415,21 @@ class Launchpad:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction object
+            TypedContractFunction with the transaction
         """
-        tx = self.contract.functions.setVirtualReserves(
-            virtual_base, virtual_quote
-        ).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.setVirtualReserves(virtual_base, virtual_quote)
 
-    def transfer_ownership(self, new_owner: str, sender_address: Address, **kwargs) -> TxParams:
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
+
+    def transfer_ownership(
+        self, new_owner: str, sender_address: Address, **kwargs
+    ) -> TypedContractFunction[HexBytes]:
         """
         Transfer ownership of the contract.
 
@@ -432,21 +439,22 @@ class Launchpad:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction object
+            TypedContractFunction with the transaction
         """
         new_owner = self.web3.to_checksum_address(new_owner)
-        tx = self.contract.functions.transferOwnership(new_owner).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.transferOwnership(new_owner)
+
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
 
     def update_bonding_curve(
         self, new_bonding_curve: str, sender_address: Address, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Update the bonding curve address.
 
@@ -456,21 +464,22 @@ class Launchpad:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction object
+            TypedContractFunction with the transaction
         """
         new_bonding_curve = self.web3.to_checksum_address(new_bonding_curve)
-        tx = self.contract.functions.updateBondingCurve(new_bonding_curve).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.updateBondingCurve(new_bonding_curve)
+
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
 
     def update_init_code_hash(
         self, new_hash: bytes, sender_address: Address, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Update the init code hash.
 
@@ -480,20 +489,21 @@ class Launchpad:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction object
+            TypedContractFunction with the transaction
         """
-        tx = self.contract.functions.updateInitCodeHash(new_hash).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.updateInitCodeHash(new_hash)
+
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
 
     def update_quote_asset(
         self, new_quote_asset: str, sender_address: Address, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Update the quote asset address.
 
@@ -503,14 +513,15 @@ class Launchpad:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction object
+            TypedContractFunction with the transaction
         """
         new_quote_asset = self.web3.to_checksum_address(new_quote_asset)
-        tx = self.contract.functions.updateQuoteAsset(new_quote_asset).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.updateQuoteAsset(new_quote_asset)
+
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)

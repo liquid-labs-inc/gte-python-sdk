@@ -1,3 +1,5 @@
+from typing import TypeVar
+
 from web3 import Web3
 from web3.types import Address, ChecksumAddress, TxParams
 
@@ -10,7 +12,10 @@ from .structs import (
     LimitOrderType,
     Settlement,
 )
-from .utils import load_abi
+from .utils import TypedContractFunction, load_abi
+
+# Type variable for contract function return types
+T = TypeVar("T")
 
 
 class CLOBError(Exception):
@@ -219,7 +224,7 @@ class ICLOB:
 
     def post_limit_order(
         self, account: str, args: ICLOBPostLimitOrderArgs, sender_address: Address, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[int]:
         """
         Post a limit order to the CLOB.
 
@@ -230,21 +235,20 @@ class ICLOB:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction object
+            TypedContractFunction that can be used to execute the transaction
         """
         account = self.web3.to_checksum_address(account)
-        tx = self.contract.functions.postLimitOrder(account, args).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.postLimitOrder(account, args)
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)
 
     def post_fill_order(
         self, account: str, args: ICLOBPostFillOrderArgs, sender_address: Address, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[tuple[int, int]]:
         """
         Post a fill order to the CLOB.
 
@@ -255,21 +259,20 @@ class ICLOB:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction object
+            TypedContractFunction that can be used to execute the transaction
         """
         account = self.web3.to_checksum_address(account)
-        tx = self.contract.functions.postFillOrder(account, args).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.postFillOrder(account, args)
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)
 
     def amend(
         self, account: str, args: ICLOBAmendArgs, sender_address: Address, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[int]:
         """
         Amend an existing order.
 
@@ -280,21 +283,20 @@ class ICLOB:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction object
+            TypedContractFunction that can be used to execute the transaction
         """
         account = self.web3.to_checksum_address(account)
-        tx = self.contract.functions.amend(account, args).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.amend(account, args)
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)
 
     def cancel(
         self, account: str, args: ICLOBCancelArgs, sender_address: Address, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[None]:
         """
         Cancel one or more orders.
 
@@ -305,19 +307,18 @@ class ICLOB:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction object
+            TypedContractFunction that can be used to execute the transaction
         """
         account = self.web3.to_checksum_address(account)
-        tx = self.contract.functions.cancel(account, args).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.cancel(account, args)
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)
 
-    def accept_ownership(self, sender_address: Address, **kwargs) -> TxParams:
+    def accept_ownership(self, sender_address: Address, **kwargs) -> TypedContractFunction[None]:
         """
         Accept ownership of the contract.
 
@@ -326,18 +327,17 @@ class ICLOB:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction object
+            TypedContractFunction that can be used to execute the transaction
         """
-        tx = self.contract.functions.acceptOwnership().build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.acceptOwnership()
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)
 
-    def renounce_ownership(self, sender_address: Address, **kwargs) -> TxParams:
+    def renounce_ownership(self, sender_address: Address, **kwargs) -> TypedContractFunction[None]:
         """
         Renounce ownership of the contract.
 
@@ -346,18 +346,19 @@ class ICLOB:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction object
+            TypedContractFunction that can be used to execute the transaction
         """
-        tx = self.contract.functions.renounceOwnership().build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.renounceOwnership()
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)
 
-    def transfer_ownership(self, new_owner: str, sender_address: Address, **kwargs) -> TxParams:
+    def transfer_ownership(
+        self, new_owner: str, sender_address: Address, **kwargs
+    ) -> TypedContractFunction[None]:
         """
         Transfer ownership of the contract.
 
@@ -367,21 +368,20 @@ class ICLOB:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction object
+            TypedContractFunction that can be used to execute the transaction
         """
         new_owner = self.web3.to_checksum_address(new_owner)
-        tx = self.contract.functions.transferOwnership(new_owner).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.transferOwnership(new_owner)
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)
 
     def set_max_limits_exempt(
         self, account: str, toggle: bool, sender_address: Address, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[None]:
         """
         Set whether an account is exempt from the max limits restriction.
 
@@ -392,21 +392,20 @@ class ICLOB:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction object
+            TypedContractFunction that can be used to execute the transaction
         """
         account = self.web3.to_checksum_address(account)
-        tx = self.contract.functions.setMaxLimitsExempt(account, toggle).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.setMaxLimitsExempt(account, toggle)
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)
 
     def set_max_limits_per_tx(
         self, new_max_limits: int, sender_address: Address, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[None]:
         """
         Set the maximum number of limit orders allowed per transaction.
 
@@ -416,20 +415,19 @@ class ICLOB:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction object
+            TypedContractFunction that can be used to execute the transaction
         """
-        tx = self.contract.functions.setMaxLimitsPerTx(new_max_limits).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.setMaxLimitsPerTx(new_max_limits)
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)
 
     def set_min_limit_order_amount_in_base(
         self, new_min_amount: int, sender_address: Address, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[None]:
         """
         Set the minimum amount in base for limit orders.
 
@@ -439,20 +437,19 @@ class ICLOB:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction object
+            TypedContractFunction that can be used to execute the transaction
         """
-        tx = self.contract.functions.setMinLimitOrderAmountInBase(
-            new_min_amount
-        ).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.setMinLimitOrderAmountInBase(new_min_amount)
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)
 
-    def set_tick_size(self, tick_size: int, sender_address: Address, **kwargs) -> TxParams:
+    def set_tick_size(
+        self, tick_size: int, sender_address: Address, **kwargs
+    ) -> TypedContractFunction[None]:
         """
         Set the tick size for the CLOB.
 
@@ -462,16 +459,15 @@ class ICLOB:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction object
+            TypedContractFunction that can be used to execute the transaction
         """
-        tx = self.contract.functions.setTickSize(tick_size).build_transaction(
-            {
-                "from": sender_address,
-                "nonce": self.web3.eth.get_transaction_count(sender_address),
-                **kwargs,
-            }
-        )
-        return tx
+        func = self.contract.functions.setTickSize(tick_size)
+        params = {
+            "from": sender_address,
+            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)
 
     # ================= HELPER METHODS =================
 
