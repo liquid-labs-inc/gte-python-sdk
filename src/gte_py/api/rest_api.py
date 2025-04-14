@@ -87,7 +87,7 @@ class RestApi:
         Returns:
             Dict: List of assets
         """
-        params = {"limit": limit, "offset": offset}
+        params: dict = {"limit": limit, "offset": offset}
         if creator:
             params["creator"] = creator
         return await self._request("GET", "/assets", params=params)
@@ -124,7 +124,7 @@ class RestApi:
         Returns:
             Dict: List of markets
         """
-        params = {"limit": limit, "offset": offset}
+        params: dict = {"limit": limit, "offset": offset}
         if market_type:
             params["marketType"] = market_type
         if asset:
@@ -164,7 +164,7 @@ class RestApi:
         Returns:
             Dict: List of candles
         """
-        params = {"interval": interval, "startTime": start_time, "limit": limit}
+        params: dict = {"interval": interval, "startTime": start_time, "limit": limit}
         if end_time:
             params["endTime"] = end_time
         return await self._request("GET", f"/markets/{market_address}/candles", params=params)

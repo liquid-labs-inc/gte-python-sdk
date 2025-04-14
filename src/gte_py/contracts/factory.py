@@ -3,9 +3,9 @@
 import logging
 from typing import Any
 
-from eth_typing import ChecksumAddress
+from eth_typing import Address, ChecksumAddress
+from hexbytes import HexBytes
 from web3 import Web3
-from web3.types import Address, HexBytes
 
 from .utils import TypedContractFunction, load_abi
 
@@ -29,8 +29,6 @@ class CLOBFactory:
         Args:
             web3: Web3 instance connected to a provider
             contract_address: Address of the CLOBFactory contract
-            abi_path: Path to the ABI JSON file (optional)
-            abi: The contract ABI as a Python dictionary (optional)
         """
         self.web3 = web3
         self.address = web3.to_checksum_address(contract_address)

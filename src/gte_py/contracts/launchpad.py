@@ -1,6 +1,6 @@
-from eth_typing import ChecksumAddress
+from eth_typing import Address, ChecksumAddress
+from hexbytes import HexBytes
 from web3 import Web3
-from web3.types import Address, HexBytes, TxParams
 
 from src.gte_py.contracts.utils import TypedContractFunction, load_abi
 
@@ -74,7 +74,7 @@ class Launchpad:
         """Get the GTE Router address."""
         return self.contract.functions.gteRouter().call()
 
-    def get_launches(self, launch_token: str) -> TxParams:
+    def get_launches(self, launch_token: str) -> dict:
         """
         Get launch details for a token.
 

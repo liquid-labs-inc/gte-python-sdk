@@ -30,7 +30,7 @@ class WebSocketApi:
     async def connect(self):
         """Connect to the WebSocket."""
         session = aiohttp.ClientSession()
-        self.ws = await session.ws_connect(self.ws_url)
+        self.ws: aiohttp.client.ClientWebSocketResponse = await session.ws_connect(self.ws_url)
         self.running = True
         self.task = asyncio.create_task(self._listen())
         logger.info("Connected to GTE WebSocket")
