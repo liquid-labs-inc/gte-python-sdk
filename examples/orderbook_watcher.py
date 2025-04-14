@@ -193,11 +193,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    try:
-        import rich
-    except ImportError:
-        print("This example requires the 'rich' library for better display.")
-        print("Install it using: pip install rich")
-        exit(1)
-
     asyncio.run(main())

@@ -4,7 +4,6 @@ import asyncio
 import json
 import logging
 import uuid
-import time
 from typing import Dict, List, Callable, Any
 
 import aiohttp
@@ -44,7 +43,7 @@ class WebSocketApi:
                 await self.task
             except asyncio.CancelledError:
                 pass
-        
+
         if self.ws:
             await self.ws.close()
             self.ws = None
@@ -98,12 +97,12 @@ class WebSocketApi:
 
         # Extract the stream type from the method
         stream_type = method.split('.')[0]
-        
+
         # Register callback
         if stream_type not in self.callbacks:
             self.callbacks[stream_type] = []
         self.callbacks[stream_type].append(callback)
-        
+
         # Send subscription request
         request_id = str(uuid.uuid4())
         request = {
@@ -130,12 +129,12 @@ class WebSocketApi:
             "params": params
         }
         await self.ws.send_json(request)
-        
+
         # Clean up callbacks for this stream type
         stream_type = method.split('.')[0]
         if stream_type in self.callbacks:
             del self.callbacks[stream_type]
-        
+
         logger.debug(f"Sent unsubscription request: {request}")
 
     # WebSocket API methods
@@ -175,7 +174,7 @@ class WebSocketApi:
         """
         await self.unsubscribe("candles.unsubscribe", {"market": market, "interval": interval})
 
-    async def subscribe_orderbook(self, market: str, limit: int = 10, callback: Callable[[Dict], Any]):
+    async def subscribe_orderbook(self, market: str, limit: int = 10, callback: Callable[[Dict], Any] | None = None):
         """Subscribe to orderbook for a market.
 
         Args:
@@ -185,10 +184,11 @@ class WebSocketApi:
         """
         # Register with book stream type
         stream_type = "book"
-        if stream_type not in self.callbacks:
-            self.callbacks[stream_type] = []
-        self.callbacks[stream_type].append(callback)
-        
+        if callback is not None:
+            if stream_type not in self.callbacks:
+                self.callbacks[stream_type] = []
+            self.callbacks[stream_type].append(callback)
+
         # Send subscription request using new format
         request_id = str(uuid.uuid4())
         request = {
@@ -199,7 +199,7 @@ class WebSocketApi:
                 "limit": limit
             }
         }
-        
+
         if self.ws:
             await self.ws.send_json(request)
             logger.debug(f"Sent orderbook subscription request: {request}")
@@ -221,14 +221,14 @@ class WebSocketApi:
                 "limit": limit
             }
         }
-        
+
         if self.ws:
             await self.ws.send_json(request)
-            
+
             # Clean up callbacks for this stream type
             if "book" in self.callbacks:
                 del self.callbacks["book"]
-            
+
             logger.debug(f"Sent orderbook unsubscription request: {request}")
         else:
             logger.error("WebSocket not connected")

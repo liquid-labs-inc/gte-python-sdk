@@ -11,6 +11,9 @@ dependencies = [
     "aiohttp>=3.8.0",
     "web3~=7.10.0"
 ]
-
+dev-dependencies = [
+    "rich>=14.0.0",
+    "dotenv>=0.9.9",
+]
 [tool.container]
 base_image = "python:3.10-slim"

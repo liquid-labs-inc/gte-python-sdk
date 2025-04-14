@@ -248,7 +248,6 @@ async def main():
 
     print("Connected to blockchain:")
     print(f"Chain ID: {web3.eth.chain_id}")
-    chain_id = web3.eth.chain_id
 
     # Initialize client with Web3
     print("Initializing GTE client...")
