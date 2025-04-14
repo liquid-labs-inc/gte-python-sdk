@@ -1,21 +1,22 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from eth_typing import ChecksumAddress
 from web3 import Web3
 
 from .structs import (
     FillOrderType,
+    ICLOBAmendArgs,
     ICLOBCancelArgs,
     ICLOBPostFillOrderArgs,
     ICLOBPostLimitOrderArgs,
-    ICLOBAmendArgs,
     LimitOrderType,
     Settlement,
-    Side,
 )
+
 
 class CLOBError(Exception):
     """Base exception for CLOB contract errors"""
+
     pass
 
 
@@ -169,11 +170,11 @@ class ICLOB:
     def get_base_token_amount(self, price: int, quote_amount: int) -> int:
         """
         Calculate the base token amount for a given price and quote token amount.
-        
+
         Args:
             price: The price
             quote_amount: The quote token amount
-            
+
         Returns:
             The base token amount
         """
@@ -182,11 +183,11 @@ class ICLOB:
     def get_quote_token_amount(self, price: int, base_amount: int) -> int:
         """
         Calculate the quote token amount for a given price and base token amount.
-        
+
         Args:
             price: The price
             base_amount: The base token amount
-            
+
         Returns:
             The quote token amount
         """
@@ -195,24 +196,24 @@ class ICLOB:
     def get_event_nonce(self) -> int:
         """Get the current event nonce."""
         return self.contract.functions.getEventNonce().call()
-    
+
     def get_max_limit_exempt(self, account: str) -> bool:
         """
         Check if an account is exempt from the max limit restriction.
-        
+
         Args:
             account: The address of the account
-            
+
         Returns:
             True if the account is exempt, False otherwise
         """
         account = self.web3.to_checksum_address(account)
         return self.contract.functions.getMaxLimitExempt(account).call()
-    
+
     def owner(self) -> ChecksumAddress:
         """Get the owner of the CLOB contract."""
         return self.contract.functions.owner().call()
-    
+
     def pending_owner(self) -> ChecksumAddress:
         """Get the pending owner of the CLOB contract."""
         return self.contract.functions.pendingOwner().call()
@@ -318,15 +319,15 @@ class ICLOB:
             }
         )
         return tx
-    
+
     def accept_ownership(self, sender_address: str, **kwargs) -> dict[str, Any]:
         """
         Accept ownership of the contract.
-        
+
         Args:
             sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-            
+
         Returns:
             Transaction object
         """
@@ -338,15 +339,15 @@ class ICLOB:
             }
         )
         return tx
-    
+
     def renounce_ownership(self, sender_address: str, **kwargs) -> dict[str, Any]:
         """
         Renounce ownership of the contract.
-        
+
         Args:
             sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-            
+
         Returns:
             Transaction object
         """
@@ -358,16 +359,16 @@ class ICLOB:
             }
         )
         return tx
-    
+
     def transfer_ownership(self, new_owner: str, sender_address: str, **kwargs) -> dict[str, Any]:
         """
         Transfer ownership of the contract.
-        
+
         Args:
             new_owner: Address of the new owner
             sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-            
+
         Returns:
             Transaction object
         """
@@ -380,17 +381,19 @@ class ICLOB:
             }
         )
         return tx
-    
-    def set_max_limits_exempt(self, account: str, toggle: bool, sender_address: str, **kwargs) -> dict[str, Any]:
+
+    def set_max_limits_exempt(
+        self, account: str, toggle: bool, sender_address: str, **kwargs
+    ) -> dict[str, Any]:
         """
         Set whether an account is exempt from the max limits restriction.
-        
+
         Args:
             account: Address of the account
             toggle: True to exempt, False to not exempt
             sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-            
+
         Returns:
             Transaction object
         """
@@ -403,16 +406,18 @@ class ICLOB:
             }
         )
         return tx
-    
-    def set_max_limits_per_tx(self, new_max_limits: int, sender_address: str, **kwargs) -> dict[str, Any]:
+
+    def set_max_limits_per_tx(
+        self, new_max_limits: int, sender_address: str, **kwargs
+    ) -> dict[str, Any]:
         """
         Set the maximum number of limit orders allowed per transaction.
-        
+
         Args:
             new_max_limits: The new maximum number of limits per transaction
             sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-            
+
         Returns:
             Transaction object
         """
@@ -424,20 +429,24 @@ class ICLOB:
             }
         )
         return tx
-    
-    def set_min_limit_order_amount_in_base(self, new_min_amount: int, sender_address: str, **kwargs) -> dict[str, Any]:
+
+    def set_min_limit_order_amount_in_base(
+        self, new_min_amount: int, sender_address: str, **kwargs
+    ) -> dict[str, Any]:
         """
         Set the minimum amount in base for limit orders.
-        
+
         Args:
             new_min_amount: The new minimum amount in base
             sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-            
+
         Returns:
             Transaction object
         """
-        tx = self.contract.functions.setMinLimitOrderAmountInBase(new_min_amount).build_transaction(
+        tx = self.contract.functions.setMinLimitOrderAmountInBase(
+            new_min_amount
+        ).build_transaction(
             {
                 "from": sender_address,
                 "nonce": self.web3.eth.get_transaction_count(sender_address),
@@ -445,16 +454,16 @@ class ICLOB:
             }
         )
         return tx
-    
+
     def set_tick_size(self, tick_size: int, sender_address: str, **kwargs) -> dict[str, Any]:
         """
         Set the tick size for the CLOB.
-        
+
         Args:
             tick_size: The new tick size
             sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-            
+
         Returns:
             Transaction object
         """

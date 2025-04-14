@@ -1,8 +1,7 @@
 import importlib.resources as pkg_resources
 import json
 import os
-import pathlib
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from web3 import Web3
 
@@ -54,7 +53,7 @@ def from_wei(amount: int, decimals: int = 18) -> float:
 
 
 # Fix for the Traversable issue
-def load_abi(abi_name: str, abi_path: Optional[str] = None) -> List[Dict[str, Any]]:
+def load_abi(abi_name: str, abi_path: str | None = None) -> list[dict[str, Any]]:
     """
     Load ABI from a file or package resources.
 
@@ -64,14 +63,14 @@ def load_abi(abi_name: str, abi_path: Optional[str] = None) -> List[Dict[str, An
 
     Returns:
         The loaded ABI as a Python object
-    
+
     Raises:
         ValueError: If the ABI file cannot be found
     """
     # If path is provided, try to load from there
     if abi_path:
         try:
-            with open(abi_path, "r") as f:
+            with open(abi_path) as f:
                 return json.load(f)
         except FileNotFoundError:
             raise ValueError(f"ABI file not found at {abi_name}") from None
@@ -82,15 +81,15 @@ def load_abi(abi_name: str, abi_path: Optional[str] = None) -> List[Dict[str, An
         abi_file = f"{abi_name}.json"
         try:
             # For Python 3.9+
-            package_path = pkg_resources.files('gte_py.contracts.abi')
+            package_path = pkg_resources.files("gte_py.contracts.abi")
             file_path = package_path.joinpath(abi_file)
             # Convert Traversable to string path
             str_path = str(file_path)
-            with open(str_path, 'r') as f:
+            with open(str_path) as f:
                 return json.load(f)
         except (AttributeError, TypeError):
             # Fallback for older Python versions
-            resource_pkg = 'gte_py.contracts.abi'
+            resource_pkg = "gte_py.contracts.abi"
             with pkg_resources.open_text(resource_pkg, abi_file) as f:
                 return json.load(f)
     except (FileNotFoundError, ModuleNotFoundError):
@@ -99,16 +98,18 @@ def load_abi(abi_name: str, abi_path: Optional[str] = None) -> List[Dict[str, An
             os.path.join(os.path.dirname(__file__), "abi", f"{abi_name}.json"),
             os.path.join(os.path.dirname(__file__), f"{abi_name}.json"),
         ]
-        
+
         for path in possible_paths:
             if os.path.exists(path):
-                with open(path, 'r') as f:
+                with open(path) as f:
                     return json.load(f)
 
-        raise ValueError(f"ABI '{abi_name}' not found in package resources or expected paths") from None
+        raise ValueError(
+            f"ABI '{abi_name}' not found in package resources or expected paths"
+        ) from None
 
 
-def load_iclob_abi() -> List[Dict[str, Any]]:
+def load_iclob_abi() -> list[dict[str, Any]]:
     """
     Load the ICLOB ABI from package resources.
 
@@ -119,8 +120,8 @@ def load_iclob_abi() -> List[Dict[str, Any]]:
 
 
 def prepare_permit_signature(
-    web3: Web3, permit_data: Dict[str, Any], private_key: str
-) -> tuple[Dict[str, Any], bytes]:
+    web3: Web3, permit_data: dict[str, Any], private_key: str
+) -> tuple[dict[str, Any], bytes]:
     """
     Helper function to prepare and sign Permit2 data.
 

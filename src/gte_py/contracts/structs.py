@@ -1,7 +1,7 @@
 """Structure definitions for GTE contracts."""
 
 from enum import IntEnum
-from typing import TypedDict, List, Dict, Any
+from typing import TypedDict
 
 
 class Side(IntEnum):
@@ -37,14 +37,14 @@ class FillOrderType(IntEnum):
 # Token permissions and permit structures for allowance transfers
 class TokenPermissions(TypedDict):
     """Token permission definition."""
-    
+
     token: str
     amount: int
 
 
 class PermitDetails(TypedDict):
     """Permit details for Permit2."""
-    
+
     token: str
     amount: int
     expiration: int
@@ -53,7 +53,7 @@ class PermitDetails(TypedDict):
 
 class PermitSingle(TypedDict):
     """PermitSingle struct for Permit2."""
-    
+
     details: PermitDetails
     spender: str
     sigDeadline: int
@@ -62,7 +62,7 @@ class PermitSingle(TypedDict):
 # Basic order arguments
 class PostLimitOrderArgs(TypedDict):
     """Arguments for posting a limit order to router."""
-    
+
     isBuy: int
     tokenInOutAmt: int
     tokenOutInAmt: int
@@ -71,17 +71,17 @@ class PostLimitOrderArgs(TypedDict):
 
 class PostFillOrderArgs(TypedDict):
     """Arguments for posting a fill order to router."""
-    
+
     isBuy: int
     tokenInOutAmt: int
     tokenOutInAmt: int
     deadline: int
-    orderIds: List[int]
+    orderIds: list[int]
 
 
 class CancelArgs(TypedDict):
     """Arguments for canceling orders through router."""
-    
+
     isBuy: int
     orderId: int
 
@@ -90,8 +90,8 @@ class CancelArgs(TypedDict):
 class ICLOBPostLimitOrderArgs(TypedDict):
     """Arguments for posting a limit order."""
 
-    amountInBaseLots: int
-    priceInTicks: int
+    amountInBase: int
+    price: int
     cancelTimestamp: int
     side: int
     limitOrderType: int
@@ -101,17 +101,21 @@ class ICLOBPostLimitOrderArgs(TypedDict):
 class ICLOBPostLimitOrderResult(TypedDict):
     """Result from posting a limit order."""
 
+    account: str
     orderId: int
-    makerAmountInQuote: int
-    takerAmountInQuote: int
+    amountPostedInBase: int
+    quoteTokenAmountTraded: int
+    baseTokenAmountTraded: int
+    takerFee: int
 
 
 class ICLOBPostFillOrderArgs(TypedDict):
     """Arguments for posting a fill order."""
 
-    amountInBaseLots: int
-    priceInTicks: int
+    amount: int
+    priceLimit: int
     side: int
+    amountIsBase: bool
     fillOrderType: int
     settlement: int
 
@@ -119,29 +123,77 @@ class ICLOBPostFillOrderArgs(TypedDict):
 class ICLOBPostFillOrderResult(TypedDict):
     """Result from posting a fill order."""
 
-    makerAmountInQuote: int
-    takerAmountInQuote: int
+    account: str
+    orderId: int
+    quoteTokenAmountTraded: int
+    baseTokenAmountTraded: int
+    takerFee: int
 
 
-class ICLOBReduceArgs(TypedDict):
-    """Arguments for reducing an order."""
+class ICLOBAmendArgs(TypedDict):
+    """Arguments for amending an order."""
 
     orderId: int
-    amountInBaseLots: int
+    amountInBase: int
+    price: int
+    cancelTimestamp: int
+    side: int
+    limitOrderType: int
     settlement: int
 
 
 class ICLOBCancelArgs(TypedDict):
     """Arguments for canceling orders."""
 
-    orderIds: List[int]
+    orderIds: list[int]
     settlement: int
+
+
+class OrderStruct(TypedDict):
+    """Order structure from contract."""
+
+    side: int
+    cancelTimestamp: int
+    id: int
+    prevOrderId: int
+    nextOrderId: int
+    owner: str
+    price: int
+    amount: int
+
+
+class LimitStruct(TypedDict):
+    """Limit structure from contract."""
+
+    numOrders: int
+    headOrder: int
+    tailOrder: int
+
+
+class MarketConfig(TypedDict):
+    """Market configuration."""
+
+    factory: str
+    maxNumOrders: int
+    quoteToken: str
+    baseToken: str
+    quoteSize: int
+    baseSize: int
+
+
+class MarketSettings(TypedDict):
+    """Market settings."""
+
+    status: bool
+    maxLimitsPerTx: int
+    minLimitOrderAmountInBase: int
+    tickSize: int
 
 
 # Launchpad structures
 class LaunchDetails(TypedDict):
     """Details for launching a new token."""
-    
+
     name: str
     symbol: str
     mediaURI: str
