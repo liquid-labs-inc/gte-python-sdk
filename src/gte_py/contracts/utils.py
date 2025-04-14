@@ -1,8 +1,11 @@
 import importlib.resources as pkg_resources
 import json
-import os
 import time
-from typing import Any
+from symtable import Function
+from typing import Any, TypeVar, Generic, Callable, Optional
+
+from web3.types import TxParams, HexBytes
+from web3.contract.contract import ContractFunction
 
 
 def get_current_timestamp() -> int:
@@ -34,7 +37,7 @@ def to_wei(amount: float, decimals: int = 18) -> int:
     Returns:
         Integer amount in wei
     """
-    return int(amount * (10**decimals))
+    return int(amount * (10 ** decimals))
 
 
 def from_wei(amount: int, decimals: int = 18) -> float:
@@ -48,17 +51,17 @@ def from_wei(amount: int, decimals: int = 18) -> float:
     Returns:
         Decimal amount
     """
-    return amount / (10**decimals)
+    return amount / (10 ** decimals)
 
 
 # Fix for the Traversable issue
-def load_abi(abi_name: str, abi_path: str | None = None) -> list[dict[str, Any]]:
+def load_abi(abi_name: str) -> list[dict[str, Any]]:
     """
     Load ABI from a file or package resources.
 
     Args:
         abi_name: Name of the ABI file (without .json extension)
-        abi_path: Optional path to the ABI file
+
 
     Returns:
         The loaded ABI as a Python object
@@ -66,43 +69,48 @@ def load_abi(abi_name: str, abi_path: str | None = None) -> list[dict[str, Any]]
     Raises:
         ValueError: If the ABI file cannot be found
     """
-    # If path is provided, try to load from there
-    if abi_path:
-        try:
-            with open(abi_path) as f:
-                return json.load(f)
-        except FileNotFoundError:
-            raise ValueError(f"ABI file not found at {abi_name}") from None
+    # Look in the abi directory first
+    abi_file = f"{abi_name}.json"
 
-    # Otherwise, try to load from package resources
-    try:
-        # Look in the abi directory first
-        abi_file = f"{abi_name}.json"
-        try:
-            # For Python 3.9+
-            package_path = pkg_resources.files("gte_py.contracts.abi")
-            file_path = package_path.joinpath(abi_file)
-            # Convert Traversable to string path
-            str_path = str(file_path)
-            with open(str_path) as f:
-                return json.load(f)
-        except (AttributeError, TypeError):
-            # Fallback for older Python versions
-            resource_pkg = "gte_py.contracts.abi"
-            with pkg_resources.open_text(resource_pkg, abi_file) as f:
-                return json.load(f)
-    except (FileNotFoundError, ModuleNotFoundError):
-        # Try predefined paths
-        possible_paths = [
-            os.path.join(os.path.dirname(__file__), "abi", f"{abi_name}.json"),
-            os.path.join(os.path.dirname(__file__), f"{abi_name}.json"),
-        ]
+    package_path = pkg_resources.files("gte_py.contracts.abi")
+    file_path = package_path.joinpath(abi_file)
+    # Convert Traversable to string path
+    str_path = str(file_path)
+    with open(str_path) as f:
+        return json.load(f)
 
-        for path in possible_paths:
-            if os.path.exists(path):
-                with open(path) as f:
-                    return json.load(f)
 
-        raise ValueError(
-            f"ABI '{abi_name}' not found in package resources or expected paths"
-        ) from None
+T = TypeVar("T")
+
+
+class TypedContractFunction(Generic[T]):
+    """Generic transaction wrapper with typed results and async support"""
+
+    def __init__(self, func: ContractFunction, params: TxParams):
+        self.func = func  # Bound contract function (with arguments)
+        self.params = params  # Transaction parameters
+        self.result: Optional[T] = None
+        self.receipt: Optional[dict[str, Any]] = None
+        self.tx_hash: Optional[HexBytes] = None
+
+    def call(self) -> T:
+        """Synchronous read operation"""
+        self.result = self.func.call(self.params)
+        return self.result
+
+    def send(self) -> HexBytes:
+        """Synchronous write operation"""
+        self.tx_hash = self.func.transact(self.params)
+        return self.tx_hash
+
+    # replace from the chain
+    def retrieve(self) -> T:
+        if self.result is not None:
+            return self.result
+        if self.tx_hash is None:
+            raise ValueError("Transaction hash is None. Call send() first.")
+        # Wait for the transaction to be mined
+        self.receipt = self.func.w3.eth.wait_for_transaction_receipt(self.tx_hash)
+        if self.receipt['status'] != 1:
+            raise ValueError("Transaction failed {}".format(self.receipt))
+        raise NotImplementedError
