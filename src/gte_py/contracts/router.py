@@ -1,10 +1,11 @@
 from typing import Any
 
-from eth_typing import ChecksumAddress
+from eth_typing import Address, ChecksumAddress
 from hexbytes import HexBytes
 from web3 import Web3
-from web3.types import Address, TxParams
+from web3.types import TxParams
 
+from .structs import ICLOBCancelArgs, ICLOBPostLimitOrderArgs
 from .utils import TypedContractFunction, load_abi
 
 
@@ -68,7 +69,7 @@ class Router:
     # ================= WRITE METHODS =================
 
     def clob_cancel(
-        self, clob_address: str, args: dict[str, Any], sender_address: Address, **kwargs
+        self, clob_address: str, args: ICLOBCancelArgs, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[HexBytes]:
         """
         Cancel a CLOB order.
@@ -76,21 +77,25 @@ class Router:
         Args:
             clob_address: Address of the CLOB contract
             args: CancelArgs struct from the CLOB interface
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
             TypedContractFunction that can be executed
         """
         clob_address = self.web3.to_checksum_address(clob_address)
-        params: TxParams = {"from": sender_address, **kwargs}
-        tx_params = params
+        tx_params = {"from": sender_address, **kwargs}
 
         func = self.contract.functions.clobCancel(clob_address, args)
         return TypedContractFunction(func, tx_params)
 
     def clob_deposit(
-        self, token_address: str, amount: int, from_router: bool, sender_address: Address, **kwargs
+        self,
+        token_address: ChecksumAddress,
+        amount: int,
+        from_router: bool,
+        sender_address: ChecksumAddress,
+        **kwargs,
     ) -> TypedContractFunction[HexBytes]:
         """
         Deposit tokens into a CLOB.
@@ -99,20 +104,24 @@ class Router:
             token_address: Address of the token to deposit
             amount: Amount of tokens to deposit
             from_router: Whether the deposit is from the router
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
             TypedContractFunction that can be executed
         """
-        token_address = self.web3.to_checksum_address(token_address)
+
         tx_params = {"from": sender_address, **kwargs}
 
         func = self.contract.functions.clobDeposit(token_address, amount, from_router)
         return TypedContractFunction(func, tx_params)
 
     def clob_post_limit_order(
-        self, clob_address: str, args: dict[str, Any], sender_address: Address, **kwargs
+        self,
+        clob_address: str,
+        args: ICLOBPostLimitOrderArgs,
+        sender_address: ChecksumAddress,
+        **kwargs,
     ) -> TypedContractFunction[HexBytes]:
         """
         Post a limit order to a CLOB.
@@ -120,7 +129,7 @@ class Router:
         Args:
             clob_address: Address of the CLOB contract
             args: PostLimitOrderArgs struct from the CLOB interface
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -133,7 +142,7 @@ class Router:
         return TypedContractFunction(func, tx_params)
 
     def clob_withdraw(
-        self, token_address: str, amount: int, sender_address: Address, **kwargs
+        self, token_address: str, amount: int, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[HexBytes]:
         """
         Withdraw tokens from a CLOB.
@@ -141,7 +150,7 @@ class Router:
         Args:
             token_address: Address of the token to withdraw
             amount: Amount of tokens to withdraw
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -154,7 +163,7 @@ class Router:
         return TypedContractFunction(func, tx_params)
 
     def execute_clob_post_fill_order(
-        self, clob_address: str, args: dict[str, Any], sender_address: Address, **kwargs
+        self, clob_address: str, args: dict[str, Any], sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[HexBytes]:
         """
         Execute a fill order on a CLOB.
@@ -162,7 +171,7 @@ class Router:
         Args:
             clob_address: Address of the CLOB contract
             args: PostFillOrderArgs struct from the CLOB interface
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -183,7 +192,7 @@ class Router:
         deadline: int,
         hops: list[bytes],
         settlement: int,
-        sender_address: Address,
+        sender_address: ChecksumAddress,
         value: int = 0,
         **kwargs,
     ) -> TypedContractFunction[HexBytes]:
@@ -197,7 +206,7 @@ class Router:
             deadline: Transaction deadline timestamp
             hops: Array of encoded hop data
             settlement: Settlement type (NONE=0, WRAP=1, UNWRAP=2)
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             value: ETH value to send with the transaction (for wrapping)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
@@ -217,7 +226,7 @@ class Router:
         amount_in: int,
         amount_out_min: int,
         path: list[Address],
-        sender_address: Address,
+        sender_address: ChecksumAddress,
         **kwargs,
     ) -> TypedContractFunction[HexBytes]:
         """
@@ -227,7 +236,7 @@ class Router:
             amount_in: Amount of input tokens
             amount_out_min: Minimum amount of output tokens expected
             path: Array of token addresses in the swap path
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -247,7 +256,7 @@ class Router:
         amount_out_base: int,
         quote_token: Address,
         worst_amount_in_quote: int,
-        sender_address: Address,
+        sender_address: ChecksumAddress,
         value: int = 0,
         **kwargs,
     ) -> TypedContractFunction[HexBytes]:
@@ -259,7 +268,7 @@ class Router:
             amount_out_base: Amount of base tokens to receive
             quote_token: Address of the quote token
             worst_amount_in_quote: Maximum amount of quote tokens to spend
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             value: ETH value to send with the transaction (if using ETH)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
@@ -281,7 +290,7 @@ class Router:
         worst_amount_in_quote: int,
         permit_single: dict[str, Any],
         signature: bytes,
-        sender_address: Address,
+        sender_address: ChecksumAddress,
         **kwargs,
     ) -> TypedContractFunction[HexBytes]:
         """
@@ -294,7 +303,7 @@ class Router:
             worst_amount_in_quote: Maximum amount of quote tokens to spend
             permit_single: PermitSingle struct from the IAllowanceTransfer interface
             signature: Signature bytes for the permit
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -319,7 +328,7 @@ class Router:
         amount_in_base: int,
         worst_amount_out_quote: int,
         unwrap_eth: bool,
-        sender_address: Address,
+        sender_address: ChecksumAddress,
         **kwargs,
     ) -> TypedContractFunction[HexBytes]:
         """
@@ -330,7 +339,7 @@ class Router:
             amount_in_base: Amount of base tokens to sell
             worst_amount_out_quote: Minimum amount of quote tokens to receive
             unwrap_eth: Whether to unwrap WETH to ETH
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -351,7 +360,7 @@ class Router:
         worst_amount_out_quote: int,
         permit_single: dict[str, Any],
         signature: bytes,
-        sender_address: Address,
+        sender_address: ChecksumAddress,
         **kwargs,
     ) -> TypedContractFunction[HexBytes]:
         """
@@ -363,7 +372,7 @@ class Router:
             worst_amount_out_quote: Minimum amount of quote tokens to receive
             permit_single: PermitSingle struct from the IAllowanceTransfer interface
             signature: Signature bytes for the permit
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:

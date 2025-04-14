@@ -2,11 +2,12 @@
 
 import logging
 
+from eth_typing import ChecksumAddress
 from web3 import Web3
 
 from .contracts.factory import CLOBFactory
 from .contracts.router import Router
-from .models import Market
+from .models import Asset, Market, MarketType
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 class MarketService:
     """Service for retrieving market information from the blockchain."""
 
-    def __init__(self, web3: Web3, router_address: str):
+    def __init__(self, web3: Web3, router_address: ChecksumAddress):
         """
         Initialize the market info service.
 
@@ -23,18 +24,18 @@ class MarketService:
             router_address: Address of the GTE Router contract
         """
         self._web3 = web3
-        self.router_address = web3.to_checksum_address(router_address)
+        self.router_address = router_address
         self.router = Router(web3=web3, contract_address=self.router_address)
 
         # Get and initialize CLOB factory
-        self._clob_factory_address = self.router.get_clob_factory()
+        self._clob_factory_address: ChecksumAddress = self.router.get_clob_factory()
         self._clob_factory = CLOBFactory(web3=web3, contract_address=self._clob_factory_address)
 
         # Cache of discovered markets
-        self._markets: dict[str, Market] = {}
+        self._markets: dict[ChecksumAddress, Market] = {}
 
     @property
-    def factory_address(self) -> str:
+    def factory_address(self) -> ChecksumAddress:
         """Get the CLOB factory address from the router."""
         return self._clob_factory_address
 
@@ -49,7 +50,7 @@ class MarketService:
         clob_count = self._clob_factory.get_clob_count()
 
         for i in range(clob_count):
-            clob_address = self._clob_factory.get_clob(i)
+            clob_address: ChecksumAddress = self._clob_factory.get_clob(i)
             if not clob_address:
                 continue
 
@@ -59,19 +60,36 @@ class MarketService:
 
                 clob = ICLOB(web3=self._web3, contract_address=clob_address)
 
-                base_token = clob.get_base_token()
-                quote_token = clob.get_quote_token()
+                base_token_address: ChecksumAddress = clob.get_base_token()
+                quote_token_address: ChecksumAddress = clob.get_quote_token()
 
                 # Get market config for additional details
                 market_config = clob.get_market_config()
                 token_config = clob.get_market_config()
 
+                # Create basic asset objects with addresses
+                base_asset = Asset(
+                    address=base_token_address,
+                    decimals=token_config.get("baseDecimals", 18),
+                    name="",  # To be filled later
+                    symbol="",  # To be filled later
+                )
+
+                quote_asset = Asset(
+                    address=quote_token_address,
+                    decimals=token_config.get("quoteDecimals", 18),
+                    name="",  # To be filled later
+                    symbol="",  # To be filled later
+                )
+
                 # Create a market info object
                 market_info = Market(
-                    address=f"market-{clob_address}",  # Generate a virtual market address
-                    contract_address=clob_address,
-                    base_token=base_token,
-                    quote_token=quote_token,
+                    address=clob_address,
+                    market_type=MarketType.CLOB,
+                    base_asset=base_asset,
+                    quote_asset=quote_asset,
+                    base_token_address=base_token_address,
+                    quote_token_address=quote_token_address,
                     base_decimals=token_config.get("baseDecimals", 18),
                     quote_decimals=token_config.get("quoteDecimals", 18),
                     tick_size=market_config.get("tickSize", 0.01),
@@ -108,26 +126,20 @@ class MarketService:
         """
         self._markets[market_info.address] = market_info
 
-    def get_market_info(self, market_address: str) -> Market | None:
+    def get_market_info(self, market_address: ChecksumAddress) -> Market | None:
         """
         Get market information for a specific market.
 
         Args:
-            market_address: Market address
+            market_address: Market contract address
 
         Returns:
             Market information or None if not found
         """
-        # Try to get from cache
-        if market_address in self._markets:
-            return self._markets[market_address]
-
-        # Not in cache, check for contract-based lookup
-        if market_address.startswith("0x"):
-            # Look up by contract address
-            for market_info in self._markets.values():
-                if market_info.contract_address.lower() == market_address.lower():
-                    return market_info
+        # Look up by contract address
+        for market_info in self._markets.values():
+            if market_info.address == market_address:
+                return market_info
 
         # Still not found - market might not be registered yet
         return None
@@ -141,6 +153,4 @@ class MarketService:
         """
         for market in api_markets:
             # Only cache markets that have a contract address
-            if market.contract_address:
-                market_info = Market.from_market(market)
-                self._markets[market_info.address] = market_info
+            self._markets[market.address] = market

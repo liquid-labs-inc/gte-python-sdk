@@ -1,7 +1,8 @@
 from typing import TypeVar
 
+from eth_typing import ChecksumAddress
 from web3 import Web3
-from web3.types import Address, ChecksumAddress, TxParams
+from web3.types import TxParams
 
 from .structs import (
     FillOrderType,
@@ -63,11 +64,11 @@ class ICLOB:
         """Get the base token used in the CLOB."""
         return self.contract.functions.getBaseToken().call()
 
-    def get_market_config(self) -> TxParams:
+    def get_market_config(self) -> dict:
         """Get the market configuration settings for the CLOB."""
         return self.contract.functions.getMarketConfig().call()
 
-    def get_market_settings(self) -> TxParams:
+    def get_market_settings(self) -> dict:
         """Get the market settings for the CLOB."""
         return self.contract.functions.getMarketSettings().call()
 
@@ -122,7 +123,7 @@ class ICLOB:
         """Get the total number of ask orders in the order book."""
         return self.contract.functions.getNumAsks().call()
 
-    def get_next_biggest_price(self, price: int, side: int) -> int:
+    def get_next_biggest_ticks(self, price: int, side: int) -> int:
         """
         Get the next biggest price for a given side.
 
@@ -133,9 +134,9 @@ class ICLOB:
         Returns:
             The next biggest price
         """
-        return self.contract.functions.getNextBiggestPrice(price, side).call()
+        return self.contract.functions.getNextBiggestTicks(price, side).call()
 
-    def get_next_smallest_price(self, price: int, side: int) -> int:
+    def get_next_smallest_ticks(self, price: int, side: int) -> int:
         """
         Get the next smallest price for a given side.
 
@@ -146,7 +147,7 @@ class ICLOB:
         Returns:
             The next smallest price
         """
-        return self.contract.functions.getNextSmallestPrice(price, side).call()
+        return self.contract.functions.getNextSmallestTicks(price, side).call()
 
     def get_next_orders(self, start_order_id: int, num_orders: int) -> list[TxParams]:
         """
@@ -181,6 +182,30 @@ class ICLOB:
             The base token amount
         """
         return self.contract.functions.getBaseTokenAmount(price, quote_amount).call()
+
+    def get_base_token_account_balance(self, account: ChecksumAddress) -> int:
+        """
+        Get the base token account balance for a specific account.
+
+        Args:
+            account: The address of the account
+
+        Returns:
+            The base token account balance
+        """
+        return self.contract.functions.getBaseTokenAccountBalance(account).call()
+
+    def get_quote_token_account_balance(self, account: ChecksumAddress) -> int:
+        """
+        Get the quote token account balance for a specific account.
+
+        Args:
+            account: The address of the account
+
+        Returns:
+            The quote token account balance
+        """
+        return self.contract.functions.getQuoteTokenAccountBalance(account).call()
 
     def get_quote_token_amount(self, price: int, base_amount: int) -> int:
         """
@@ -223,7 +248,11 @@ class ICLOB:
     # ================= WRITE METHODS =================
 
     def post_limit_order(
-        self, account: str, args: ICLOBPostLimitOrderArgs, sender_address: Address, **kwargs
+        self,
+        account: str,
+        args: ICLOBPostLimitOrderArgs,
+        sender_address: ChecksumAddress,
+        **kwargs,
     ) -> TypedContractFunction[int]:
         """
         Post a limit order to the CLOB.
@@ -231,7 +260,7 @@ class ICLOB:
         Args:
             account: Address of the account to post the order for
             args: PostLimitOrderArgs struct with order details
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -247,7 +276,7 @@ class ICLOB:
         return TypedContractFunction(func, params)
 
     def post_fill_order(
-        self, account: str, args: ICLOBPostFillOrderArgs, sender_address: Address, **kwargs
+        self, account: str, args: ICLOBPostFillOrderArgs, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[tuple[int, int]]:
         """
         Post a fill order to the CLOB.
@@ -255,7 +284,7 @@ class ICLOB:
         Args:
             account: Address of the account to post the order for
             args: PostFillOrderArgs struct with order details
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -271,7 +300,7 @@ class ICLOB:
         return TypedContractFunction(func, params)
 
     def amend(
-        self, account: str, args: ICLOBAmendArgs, sender_address: Address, **kwargs
+        self, account: str, args: ICLOBAmendArgs, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[int]:
         """
         Amend an existing order.
@@ -279,7 +308,7 @@ class ICLOB:
         Args:
             account: Address of the account that owns the order
             args: AmendArgs struct with order details
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -295,7 +324,7 @@ class ICLOB:
         return TypedContractFunction(func, params)
 
     def cancel(
-        self, account: str, args: ICLOBCancelArgs, sender_address: Address, **kwargs
+        self, account: str, args: ICLOBCancelArgs, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Cancel one or more orders.
@@ -303,7 +332,7 @@ class ICLOB:
         Args:
             account: Address of the account that owns the orders
             args: CancelArgs struct with order IDs and settlement type
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -318,12 +347,14 @@ class ICLOB:
         }
         return TypedContractFunction(func, params)
 
-    def accept_ownership(self, sender_address: Address, **kwargs) -> TypedContractFunction[None]:
+    def accept_ownership(
+        self, sender_address: ChecksumAddress, **kwargs
+    ) -> TypedContractFunction[None]:
         """
         Accept ownership of the contract.
 
         Args:
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -337,12 +368,14 @@ class ICLOB:
         }
         return TypedContractFunction(func, params)
 
-    def renounce_ownership(self, sender_address: Address, **kwargs) -> TypedContractFunction[None]:
+    def renounce_ownership(
+        self, sender_address: ChecksumAddress, **kwargs
+    ) -> TypedContractFunction[None]:
         """
         Renounce ownership of the contract.
 
         Args:
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -357,14 +390,14 @@ class ICLOB:
         return TypedContractFunction(func, params)
 
     def transfer_ownership(
-        self, new_owner: str, sender_address: Address, **kwargs
+        self, new_owner: str, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Transfer ownership of the contract.
 
         Args:
             new_owner: Address of the new owner
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -380,7 +413,7 @@ class ICLOB:
         return TypedContractFunction(func, params)
 
     def set_max_limits_exempt(
-        self, account: str, toggle: bool, sender_address: Address, **kwargs
+        self, account: str, toggle: bool, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Set whether an account is exempt from the max limits restriction.
@@ -388,7 +421,7 @@ class ICLOB:
         Args:
             account: Address of the account
             toggle: True to exempt, False to not exempt
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -404,14 +437,14 @@ class ICLOB:
         return TypedContractFunction(func, params)
 
     def set_max_limits_per_tx(
-        self, new_max_limits: int, sender_address: Address, **kwargs
+        self, new_max_limits: int, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Set the maximum number of limit orders allowed per transaction.
 
         Args:
             new_max_limits: The new maximum number of limits per transaction
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -426,14 +459,14 @@ class ICLOB:
         return TypedContractFunction(func, params)
 
     def set_min_limit_order_amount_in_base(
-        self, new_min_amount: int, sender_address: Address, **kwargs
+        self, new_min_amount: int, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Set the minimum amount in base for limit orders.
 
         Args:
             new_min_amount: The new minimum amount in base
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -448,14 +481,14 @@ class ICLOB:
         return TypedContractFunction(func, params)
 
     def set_tick_size(
-        self, tick_size: int, sender_address: Address, **kwargs
+        self, tick_size: int, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Set the tick size for the CLOB.
 
         Args:
             tick_size: The new tick size
-            sender_address: Address of the transaction sender
+            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:

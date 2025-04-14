@@ -2,10 +2,11 @@
 
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
+from eth_typing import AnyAddress, ChecksumAddress
 from web3 import Web3
-from web3.types import TxParams
+from web3.types import TxReceipt
 
 from .contracts.iclob import ICLOB
 from .contracts.router import Router
@@ -20,7 +21,7 @@ from .contracts.structs import (
 )
 from .contracts.utils import get_current_timestamp
 from .info import MarketService
-from .models import Market, Order, OrderSide, OrderType, TimeInForce, Trade
+from .models import Market, Order, OrderSide, OrderStatus, OrderType, TimeInForce, Trade
 
 logger = logging.getLogger(__name__)
 
@@ -28,18 +29,20 @@ logger = logging.getLogger(__name__)
 class ExecutionClient:
     """Client for executing orders on the GTE exchange."""
 
-    def __init__(self, web3: Web3 | None = None, router_address: str | None = None):
+    def __init__(self, web3: Web3, sender_address: AnyAddress, router_address: str | None = None):
         """
         Initialize the execution client.
 
         Args:
             web3: Web3 instance for on-chain interactions
             router_address: Address of the GTE Router contract
+            sender_address: Address to send transactions from
         """
         self._web3 = web3
         self._clob_clients: dict[str, ICLOB] = {}
         self._router: Router | None = None
         self._market_info: MarketService | None = None
+        self._sender_address: ChecksumAddress = self._web3.to_checksum_address(sender_address)
 
         if web3 and router_address:
             self.setup_contracts(web3, router_address)
@@ -86,7 +89,7 @@ class ExecutionClient:
 
     def _map_order_params_to_contract_args(
         self,
-        market: Market | Market,
+        market: Market,
         side: OrderSide,
         order_type: OrderType,
         amount: float,
@@ -97,7 +100,7 @@ class ExecutionClient:
         Map order parameters to contract arguments.
 
         Args:
-            market: Market or Market object
+            market: Market object
             side: Order side
             order_type: Order type
             amount: Order amount
@@ -107,10 +110,12 @@ class ExecutionClient:
         Returns:
             Dictionary with contract arguments
         """
-        # Get market parameters
-        base_decimals = getattr(market, "base_decimals", 18)
-        tick_size_in_decimals = getattr(market, "tick_size_in_decimals", 6)
-        base_atoms_per_lot = getattr(market, "base_atoms_per_lot", 1)
+        # Get market parameters with proper defaults
+        base_decimals = 18 if market.base_decimals is None else market.base_decimals
+        tick_size_in_decimals = (
+            6 if market.tick_size_in_decimals is None else market.tick_size_in_decimals
+        )
+        base_atoms_per_lot = 1 if market.base_atoms_per_lot is None else market.base_atoms_per_lot
 
         # Map order side
         side_value = Side.BUY if side == OrderSide.BUY else Side.SELL
@@ -144,16 +149,61 @@ class ExecutionClient:
                 "fill_type": FillOrderType.IMMEDIATE_OR_CANCEL,
             }
 
+    def _convert_receipt_to_order(
+        self,
+        receipt: TxReceipt,
+        market: Market,
+        side: OrderSide,
+        order_type: OrderType,
+        amount: float,
+        price: float | None,
+        time_in_force: TimeInForce,
+    ) -> Order:
+        """
+        Convert transaction receipt to Order model.
+
+        Args:
+            receipt: Transaction receipt
+            market: Market object
+            side: Order side
+            order_type: Order type
+            amount: Order amount
+            price: Order price
+            time_in_force: Time in force
+
+        Returns:
+            Order model
+        """
+        # In a real implementation, you would parse the logs from the receipt
+        # to extract the order ID and other details
+        # For now, create a placeholder order with the transaction hash as ID
+
+        order_id = f"tx-{receipt['transactionHash'].hex()}"
+        market_address = market.address
+
+        order = Order(
+            id=order_id,
+            market_address=market_address,
+            side=side,
+            order_type=order_type,
+            amount=amount,
+            price=price if price is not None else 0.0,
+            time_in_force=time_in_force,
+            status=OrderStatus.OPEN,
+            filled_amount=0.0,
+            filled_price=0.0,
+            created_at=int(time.time() * 1000),
+        )
+        return order
+
     async def create_order(
         self,
-        market: Market | Market,
+        market: Market,
         side: OrderSide,
         order_type: OrderType,
         amount: float,
         price: float | None = None,
         time_in_force: TimeInForce = TimeInForce.GTC,
-        sender_address: str | None = None,
-        use_contract: bool = False,
         use_router: bool = True,
         **tx_kwargs,
     ) -> Order:
@@ -167,13 +217,11 @@ class ExecutionClient:
             amount: Order amount
             price: Order price (required for limit orders)
             time_in_force: Time in force
-            sender_address: Address to send transaction from (required for on-chain orders)
-            use_contract: Whether to create the order on-chain using contracts
             use_router: Whether to use the router for creating orders (safer)
             **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Created order information or transaction data when using contracts
+            Created order information
 
         Raises:
             ValueError: For missing required parameters or invalid input
@@ -182,126 +230,120 @@ class ExecutionClient:
             f"Creating {order_type.value} {side.value} order for {amount} at price {price}"
         )
 
-        # Handle on-chain order creation via contract
-        if use_contract:
-            if not self._web3:
-                raise ValueError("Web3 provider not configured. Cannot create on-chain orders.")
+        if not self._web3:
+            raise ValueError("Web3 provider not configured. Cannot create on-chain orders.")
 
-            if not sender_address:
-                raise ValueError("sender_address is required for on-chain orders")
-
-            if not price and order_type == OrderType.LIMIT:
-                raise ValueError("Price is required for limit orders")
-
-            if not price:
-                raise ValueError("Price is required for on-chain orders")
-
-            # Get contract address
-            contract_address = getattr(market, "contract_address", None)
-            if not contract_address:
-                raise ValueError("Market has no contract address")
-
-            # Get mapped contract parameters
-            params = self._map_order_params_to_contract_args(
-                market=market,
-                side=side,
-                order_type=order_type,
-                amount=amount,
-                price=price,
-                time_in_force=time_in_force,
+        if not self._sender_address:
+            raise ValueError(
+                "sender_address is required for on-chain orders. Set it during client initialization."
             )
 
-            # Create the appropriate order based on type and use router or direct contract
-            if order_type == OrderType.LIMIT:
-                # Create limit order arguments
-                limit_args = ICLOBPostLimitOrderArgs(
-                    amountInBase=params["amount_in_base_lots"],
-                    price=params["price_in_ticks"],
-                    cancelTimestamp=0,
-                    side=params["side_value"],
-                    limitOrderType=params["limit_type"],
-                    settlement=Settlement.INSTANT,
-                )
+        if not price and order_type == OrderType.LIMIT:
+            raise ValueError("Price is required for limit orders")
 
-                # Use router or direct CLOB contract
-                if use_router and self._router:
-                    return self._router.clob_post_limit_order(
-                        clob_address=contract_address,
-                        args=limit_args,
-                        sender_address=sender_address,
-                        **tx_kwargs,
-                    )
-                else:
-                    # Use direct CLOB contract
-                    clob = self._get_clob(contract_address)
-                    return clob.post_limit_order(
-                        args=limit_args, sender_address=sender_address, **tx_kwargs
-                    )
-            else:  # Market order
-                # Create fill order arguments
-                fill_args = ICLOBPostFillOrderArgs(
-                    amountInBaseLots=params["amount_in_base_lots"],
-                    priceInTicks=params["price_in_ticks"],
-                    side=params["side_value"],
-                    fillOrderType=params["fill_type"],
-                    settlement=Settlement.INSTANT,
-                )
+        if not price:
+            raise ValueError("Price is required for on-chain orders")
 
-                # Use router or direct CLOB contract
-                if use_router and self._router:
-                    return self._router.execute_clob_post_fill_order(
-                        clob_address=contract_address,
-                        args=fill_args,
-                        sender_address=sender_address,
-                        **tx_kwargs,
-                    )
-                else:
-                    # Use direct CLOB contract
-                    clob = self._get_clob(contract_address)
-                    return clob.post_fill_order(
-                        args=fill_args, sender_address=sender_address, **tx_kwargs
-                    )
-        else:
-            # This is just a placeholder response for the REST API implementation
-            # In a real implementation, we would call the API and get order details
-            market_address = getattr(market, "address", str(market))
+        # Get contract address
+        contract_address = market.address
 
-            return Order.from_api(
-                {
-                    "id": f"placeholder-{int(time.time())}",
-                    "marketAddress": market_address,
-                    "side": side.value,
-                    "type": order_type.value,
-                    "amount": amount,
-                    "price": price,
-                    "timeInForce": time_in_force.value,
-                    "status": "open",
-                    "filledAmount": 0.0,
-                    "filledPrice": 0.0,
-                    "createdAt": int(time.time() * 1000),
-                }
+        # Get mapped contract parameters
+        params = self._map_order_params_to_contract_args(
+            market=market,
+            side=side,
+            order_type=order_type,
+            amount=amount,
+            price=price,
+            time_in_force=time_in_force,
+        )
+
+        tx_fn = None
+
+        # Create the appropriate order based on type and use router or direct contract
+        if order_type == OrderType.LIMIT:
+            # Create limit order arguments
+            limit_args = ICLOBPostLimitOrderArgs(
+                amountInBase=params["amount_in_base_lots"],
+                price=params["price_in_ticks"],
+                cancelTimestamp=0,
+                side=params["side_value"],
+                limitOrderType=params["limit_type"],
+                settlement=Settlement.INSTANT,
             )
+
+            # Use router or direct CLOB contract
+            if use_router and self._router:
+                tx_fn = self._router.clob_post_limit_order(
+                    clob_address=contract_address,
+                    args=limit_args,
+                    sender_address=self._sender_address,
+                    **tx_kwargs,
+                )
+            else:
+                # Use direct CLOB contract
+                clob = self._get_clob(contract_address)
+                tx_fn = clob.post_limit_order(
+                    args=limit_args, sender_address=self._sender_address, **tx_kwargs
+                )
+        else:  # Market order
+            # Create fill order arguments
+            fill_args = ICLOBPostFillOrderArgs(
+                amountInBaseLots=params["amount_in_base_lots"],
+                priceInTicks=params["price_in_ticks"],
+                side=params["side_value"],
+                fillOrderType=params["fill_type"],
+                settlement=Settlement.INSTANT,
+            )
+
+            # Use router or direct CLOB contract
+            if use_router and self._router:
+                raise NotImplementedError("onchain Router does not support fill orders yet")
+                # tx_fn = self._router.clob_post_fill_order(
+                #     clob_address=contract_address,
+                #     args=fill_args,
+                #     sender_address=self._sender_address,
+                #     **tx_kwargs,
+                # )
+            else:
+                # Use direct CLOB contract
+                clob = self._get_clob(contract_address)
+                tx_fn = clob.post_fill_order(
+                    args=fill_args, sender_address=self._sender_address, **tx_kwargs
+                )
+
+        # Execute the transaction and get the receipt
+        _tx_hash = tx_fn.send()
+        receipt = cast(TxReceipt, tx_fn.retrieve())
+
+        # Convert receipt to Order model
+        return self._convert_receipt_to_order(
+            receipt=receipt,
+            market=market,
+            side=side,
+            order_type=order_type,
+            amount=amount,
+            price=price,
+            time_in_force=time_in_force,
+        )
 
     def cancel_order(
         self,
-        market: Market | Market,
+        market: Market,
         order_id: int,
-        sender_address: str,
         use_router: bool = True,
         **tx_kwargs,
-    ) -> TxParams:
+    ) -> Order:
         """
         Cancel an order.
 
         Args:
             market: Market object with details
             order_id: ID of the order to cancel
-            sender_address: Address to send transaction from
             use_router: Whether to use the router for cancellation (safer)
             **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction data
+            Order object with updated status
 
         Raises:
             ValueError: If Web3 is not configured or parameters are invalid
@@ -309,71 +351,52 @@ class ExecutionClient:
         if not self._web3:
             raise ValueError("Web3 provider not configured. Cannot cancel on-chain orders.")
 
-        contract_address = getattr(market, "contract_address", None)
-        if not contract_address:
-            raise ValueError("Market has no contract address")
+        if not self._sender_address:
+            raise ValueError(
+                "sender_address is required for on-chain orders. Set it during client initialization."
+            )
+
+        contract_address = market.address
 
         # Create cancel arguments
         cancel_args = ICLOBCancelArgs(orderIds=[order_id], settlement=Settlement.INSTANT)
 
         # Use router or direct contract
         if use_router and self._router:
-            return self._router.clob_cancel(
+            _tx_fn = self._router.clob_cancel(
                 clob_address=contract_address,
                 args=cancel_args,
-                sender_address=sender_address,
+                sender_address=self._sender_address,
                 **tx_kwargs,
             )
         else:
             clob = self._get_clob(contract_address)
-            return clob.cancel(args=cancel_args, sender_address=sender_address, **tx_kwargs)
+            _tx_fn = clob.cancel(
+                args=cancel_args, sender_address=self._sender_address, **tx_kwargs
+            )
 
-    # def modify_order(
-    #     self,
-    #     market: Market | Market,
-    #     order_id: int,
-    #     new_amount: float,
-    #     sender_address: str,
-    #     use_router: bool = True,
-    #     **tx_kwargs,
-    # ) -> dict[str, Any]:
-    #     """
-    #     Modify an existing order's amount (reduce only).
-    #
-    #     Args:
-    #         market: Market object with details
-    #         order_id: ID of the order to modify
-    #         new_amount: New amount for the order (must be less than current)
-    #         sender_address: Address to send transaction from
-    #         use_router: Whether to use the router for modification (safer)
-    #         **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-    #
-    #     Returns:
-    #         Transaction data
-    #
-    #     Raises:
-    #         ValueError: If Web3 is not configured or parameters are invalid
-    #     """
-    #     if not self._web3:
-    #         raise ValueError("Web3 provider not configured. Cannot modify on-chain orders.")
-    #
-    #     contract_address = getattr(market, "contract_address", None)
-    #     if not contract_address:
-    #         raise ValueError("Market has no contract address")
-    #
-    #     # Convert amount to base lots
-    #     base_decimals = getattr(market, "base_decimals", 18)
-    #     base_atoms_per_lot = getattr(market, "base_atoms_per_lot", 1)
-    #     amount_in_base_lots = int(new_amount * (10**base_decimals) / base_atoms_per_lot)
-    #
-    #     # Create reduce arguments
-    #     reduce_args = ICLOBReduceArgs(
-    #         orderId=order_id, amountInBaseLots=amount_in_base_lots, settlement=Settlement.INSTANT
-    #     )
-    #
-    #     # Use direct contract - router doesn't support reduce
-    #     clob = self._get_clob(contract_address)
-    #     return clob.reduce(args=reduce_args, sender_address=sender_address, **tx_kwargs)
+        # Execute transaction and get receipt
+        # tx_hash = tx_fn.send()
+        # receipt = cast(TxReceipt, tx_fn.retrieve())
+
+        # Return a cancelled order model
+        market_address = market.address if market.address else contract_address
+
+        return Order.from_api(
+            {
+                "id": str(order_id),
+                "marketAddress": market_address,
+                "side": "buy",  # We don't know the side, so this is a placeholder
+                "type": "limit",  # We don't know the type, so this is a placeholder
+                "amount": 0.0,  # We don't know the amount, so this is a placeholder
+                "price": 0.0,  # We don't know the price, so this is a placeholder
+                "timeInForce": "GTC",  # We don't know the time in force, so this is a placeholder
+                "status": OrderStatus.CANCELLED.value,
+                "filledAmount": 0.0,
+                "filledPrice": 0.0,
+                "createdAt": int(time.time() * 1000),
+            }
+        )
 
     async def get_user_orders(
         self,
@@ -471,9 +494,7 @@ class ExecutionClient:
 
         return placeholder_trades
 
-    async def get_order_book_snapshot(
-        self, market: Market | Market, depth: int = 10
-    ) -> dict[str, Any]:
+    async def get_order_book_snapshot(self, market: Market, depth: int = 10) -> dict[str, Any]:
         """
         Get current order book snapshot from the chain.
 
@@ -490,9 +511,7 @@ class ExecutionClient:
         if not self._web3:
             raise ValueError("Web3 provider not configured. Cannot fetch on-chain order book.")
 
-        contract_address = getattr(market, "contract_address", None)
-        if not contract_address:
-            raise ValueError("Market has no contract address")
+        contract_address = market.address
 
         clob = self._get_clob(contract_address)
 
@@ -516,7 +535,7 @@ class ExecutionClient:
             )
 
             # Move to next price level
-            current_bid = clob.get_next_smallest_tick(current_bid, Side.BUY)
+            current_bid = clob.get_next_smallest_ticks(current_bid, Side.BUY)
 
         # Collect asks
         asks = []
@@ -535,12 +554,12 @@ class ExecutionClient:
             )
 
             # Move to next price level
-            current_ask = clob.get_next_biggest_price(current_ask, Side.SELL)
+            current_ask = clob.get_next_biggest_ticks(current_ask, Side.SELL)
 
         return {"bids": bids, "asks": asks, "timestamp": get_current_timestamp()}
 
     async def get_user_balances(
-        self, user_address: str, market: Market | Market
+        self, user_address: ChecksumAddress, market: Market
     ) -> dict[str, int]:
         """
         Get user token balances in the CLOB.
@@ -558,13 +577,11 @@ class ExecutionClient:
         if not self._web3:
             raise ValueError("Web3 provider not configured. Cannot fetch on-chain balances.")
 
-        contract_address = getattr(market, "contract_address", None)
-        if not contract_address:
-            raise ValueError("Market has no contract address")
+        contract_address = market.address
 
         clob = self._get_clob(contract_address)
 
-        base_balance = clob.get_base_token_amount(user_address)
-        quote_balance = clob.get_quote_token_amount(user_address)
+        base_balance = clob.get_base_token_account_balance(user_address)
+        quote_balance = clob.get_quote_token_account_balance(user_address)
 
         return {"baseBalance": base_balance, "quoteBalance": quote_balance}

@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
+from eth_typing import ChecksumAddress
 from web3 import Web3
 
 from .api.rest_api import RestApi
@@ -30,10 +31,10 @@ class Client:
 
     def __init__(
         self,
+        web3_provider: str | Web3,
+        sender_address: ChecksumAddress,
         api_url: str = "https://api.gte.io",
         ws_url: str = "wss://ws.gte.io/v1",
-        web3_provider: str | Web3 | None = None,
-        router_address: str | None = None,
     ):
         """
         Initialize the client.
@@ -62,13 +63,14 @@ class Client:
                 logger.warning("Web3 provider is not connected. On-chain functions will not work.")
 
             # Initialize market info service if router address is provided
-            if router_address:
-                self._market_info = MarketService(web3=self._web3, router_address=router_address)
+        router_address = "0x1234567890abcdef1234567890abcdef12345678"  # Example router address
+        self._market_info = MarketService(web3=self._web3, router_address=router_address)
 
         # Initialize execution client for trading operations
         self._execution_client = ExecutionClient(
             web3=self._web3,
-            router_address=router_address if self._web3 and router_address else None,
+            router_address=router_address,
+            sender_address=sender_address,
         )
 
     async def __aenter__(self):
@@ -169,7 +171,7 @@ class Client:
         response = await self._rest_client.get_market(address)
         return Market.from_api(response)
 
-    async def get_market_client(self, market_address: str) -> MarketClient:
+    async def get_market_client(self, market_address: ChecksumAddress) -> MarketClient:
         """
         Get a dedicated client for a specific market.
 
@@ -192,7 +194,7 @@ class Client:
     # Historical data methods
     async def get_candles(
         self,
-        market_address: str,
+        market_address: ChecksumAddress,
         interval: str = "1h",
         start_time: int | datetime | None = None,
         end_time: int | datetime | None = None,
@@ -232,7 +234,9 @@ class Client:
 
         return [Candle.from_api(candle_data) for candle_data in response.get("candles", [])]
 
-    async def get_recent_trades(self, market_address: str, limit: int = 50) -> list[Trade]:
+    async def get_recent_trades(
+        self, market_address: ChecksumAddress, limit: int = 50
+    ) -> list[Trade]:
         """
         Get recent trades for a market.
 
@@ -248,7 +252,7 @@ class Client:
         return [Trade.from_api(trade_data) for trade_data in response.get("trades", [])]
 
     # User-specific methods
-    async def get_positions(self, user_address: str) -> list[Position]:
+    async def get_positions(self, user_address: ChecksumAddress) -> list[Position]:
         """
         Get LP positions for a user.
 
@@ -261,7 +265,9 @@ class Client:
         response = await self._rest_client.get_user_positions(user_address)
         return [Position.from_api(pos_data) for pos_data in response.get("positions", [])]
 
-    async def get_user_assets(self, user_address: str, limit: int = 100) -> list[Asset]:
+    async def get_user_assets(
+        self, user_address: ChecksumAddress, limit: int = 100
+    ) -> list[Asset]:
         """
         Get assets held by a user.
 
@@ -281,7 +287,7 @@ class Client:
     # Trading methods
     async def create_order(
         self,
-        market_address: str,
+        market_address: ChecksumAddress,
         side: OrderSide | str,
         order_type: OrderType | str,
         amount: float,
@@ -334,8 +340,8 @@ class Client:
             market = await self.get_market(market_address)
 
             # Update market info cache
-            if self._market_info and market.contract_address:
-                self._market_info.add_market_info(Market.from_market(market))
+            if self._market_info and market.address:
+                self._market_info.add_market_info(market)
         else:
             # Use market_info directly
             market = market_info
@@ -356,12 +362,12 @@ class Client:
 
     async def cancel_order(
         self,
-        market_address: str,
+        market_address: ChecksumAddress,
         order_id: int,
         sender_address: str,
         use_router: bool = True,
         **tx_kwargs,
-    ) -> dict[str, Any]:
+    ) -> Order:
         """
         Cancel an order.
 
@@ -397,48 +403,48 @@ class Client:
             **tx_kwargs,
         )
 
-    async def modify_order(
-        self,
-        market_address: str,
-        order_id: int,
-        new_amount: float,
-        sender_address: str,
-        **tx_kwargs,
-    ) -> dict[str, Any]:
-        """
-        Modify an existing order's amount (reduce only).
-
-        Args:
-            market_address: Market address
-            order_id: ID of the order to modify
-            new_amount: New amount for the order (must be less than current)
-            sender_address: Address to send transaction from
-            **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
-        Returns:
-            Transaction data
-
-        Raises:
-            ValueError: If Web3 is not configured or parameters are invalid
-        """
-        # Get market details first
-        market_info = None
-        if self._market_info:
-            market_info = self._market_info.get_market_info(market_address)
-
-        if not market_info:
-            market = await self.get_market(market_address)
-        else:
-            market = market_info
-
-        # Delegate to execution client
-        return self._execution_client.modify_order(
-            market=market,
-            order_id=order_id,
-            new_amount=new_amount,
-            sender_address=sender_address,
-            **tx_kwargs,
-        )
+    # async def modify_order(
+    #     self,
+    #     market_address: ChecksumAddress,
+    #     order_id: int,
+    #     new_amount: float,
+    #     sender_address: str,
+    #     **tx_kwargs,
+    # ) -> dict[str, Any]:
+    #     """
+    #     Modify an existing order's amount (reduce only).
+    #
+    #     Args:
+    #         market_address: Market address
+    #         order_id: ID of the order to modify
+    #         new_amount: New amount for the order (must be less than current)
+    #         sender_address: Address to send transaction from
+    #         **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+    #
+    #     Returns:
+    #         Transaction data
+    #
+    #     Raises:
+    #         ValueError: If Web3 is not configured or parameters are invalid
+    #     """
+    #     # Get market details first
+    #     market_info = None
+    #     if self._market_info:
+    #         market_info = self._market_info.get_market_info(market_address)
+    #
+    #     if not market_info:
+    #         market = await self.get_market(market_address)
+    #     else:
+    #         market = market_info
+    #
+    #     # Delegate to execution client
+    #     return self._execution_client.modify_order(
+    #         market=market,
+    #         order_id=order_id,
+    #         new_amount=new_amount,
+    #         sender_address=sender_address,
+    #         **tx_kwargs,
+    #     )
 
     def get_available_onchain_markets(self) -> list[Market]:
         """
@@ -461,8 +467,8 @@ class Client:
     # User order and trade methods
     async def get_user_orders(
         self,
-        user_address: str,
-        market_address: str | None = None,
+        user_address: ChecksumAddress,
+        market_address: ChecksumAddress | None = None,
         status: str | None = None,
         limit: int = 100,
         offset: int = 0,
@@ -490,8 +496,8 @@ class Client:
 
     async def get_user_trades(
         self,
-        user_address: str,
-        market_address: str | None = None,
+        user_address: ChecksumAddress,
+        market_address: ChecksumAddress | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[Trade]:
@@ -512,7 +518,7 @@ class Client:
         )
 
     async def get_order_book_snapshot(
-        self, market_address: str, depth: int = 10
+        self, market_address: ChecksumAddress, depth: int = 10
     ) -> dict[str, Any]:
         """
         Get current order book snapshot from the chain.
@@ -536,7 +542,9 @@ class Client:
 
         return await self._execution_client.get_order_book_snapshot(market=market, depth=depth)
 
-    async def get_user_balances(self, user_address: str, market_address: str) -> dict[str, int]:
+    async def get_user_balances(
+        self, user_address: ChecksumAddress, market_address: ChecksumAddress
+    ) -> dict[str, int]:
         """
         Get user token balances in the CLOB.
 

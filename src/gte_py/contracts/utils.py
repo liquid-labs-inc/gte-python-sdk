@@ -3,8 +3,9 @@ import json
 import time
 from typing import Any, Generic, TypeVar
 
+from hexbytes import HexBytes
 from web3.contract.contract import ContractFunction
-from web3.types import HexBytes, TxParams
+from web3.types import TxParams
 
 
 def get_current_timestamp() -> int:
@@ -123,8 +124,7 @@ class TypedContractFunction(Generic[T]):
             raise ValueError("Transaction hash is None. Call send() first.")
 
         # Wait for the transaction to be mined
-        # self.receipt = self.func.w3.eth.wait_for_transaction_receipt(self.tx_hash)
-        #
-        # if self.receipt["status"] != 1:
-        #     raise ValueError(f"Transaction failed: {self.receipt}")
+        web3 = self.func.w3
+        self.receipt = web3.eth.wait_for_transaction_receipt(self.tx_hash)
+
         raise NotImplementedError

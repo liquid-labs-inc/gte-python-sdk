@@ -5,6 +5,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
+from eth_typing import ChecksumAddress
+from web3 import Web3
+
 
 class MarketType(Enum):
     """Market types supported by GTE."""
@@ -50,11 +53,11 @@ class OrderStatus(Enum):
 class Asset:
     """Asset model."""
 
-    address: str
+    address: ChecksumAddress
     decimals: int
     name: str
     symbol: str
-    creator: str | None = None
+    creator: ChecksumAddress | None = None
     total_supply: float | None = None
     media_uri: str | None = None
     balance: float | None = None
@@ -62,12 +65,21 @@ class Asset:
     @classmethod
     def from_api(cls, data: dict[str, Any], with_balance: bool = False) -> "Asset":
         """Create an Asset object from API response data."""
+        address = data.get("address", "")
+        creator = data.get("creator")
+
+        # Convert address strings to ChecksumAddress
+        if address and isinstance(address, str):
+            address = Web3.to_checksum_address(address)
+        if creator and isinstance(creator, str):
+            creator = Web3.to_checksum_address(creator)
+
         return cls(
-            address=data.get("address", ""),
+            address=address,
             decimals=data.get("decimals", 18),
             name=data.get("name", ""),
             symbol=data.get("symbol", ""),
-            creator=data.get("creator"),
+            creator=creator,
             total_supply=data.get("totalSupply"),
             media_uri=data.get("mediaUri"),
             balance=data.get("balance") if with_balance else None,
@@ -78,13 +90,12 @@ class Asset:
 class Market:
     """Market model."""
 
-    address: str
+    address: ChecksumAddress
     market_type: MarketType
     base_asset: Asset
     quote_asset: Asset
-    contract_address: str | None = None
-    base_token_address: str | None = None
-    quote_token_address: str | None = None
+    base_token_address: ChecksumAddress | None = None
+    quote_token_address: ChecksumAddress | None = None
     base_decimals: int = 18
     quote_decimals: int = 18
     tick_size: float = 0.01
@@ -96,14 +107,17 @@ class Market:
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Market":
         """Create a Market object from API response data."""
+        contract_address = data["contractAddress"]
+        base_token_address = data["baseTokenAddress"]
+        quote_token_address = data["quoteTokenAddress"]
+
         return cls(
-            address=data.get("address", ""),
+            address=contract_address,
             market_type=MarketType(data.get("marketType", "amm")),
             base_asset=Asset.from_api(data.get("baseAsset", {})),
             quote_asset=Asset.from_api(data.get("quoteAsset", {})),
-            contract_address=data.get("contractAddress"),
-            base_token_address=data.get("baseTokenAddress"),
-            quote_token_address=data.get("quoteTokenAddress"),
+            base_token_address=base_token_address,
+            quote_token_address=quote_token_address,
             base_decimals=data.get("baseDecimals", 18),
             quote_decimals=data.get("quoteDecimals", 18),
             tick_size=data.get("tickSize", 0.01),
@@ -158,14 +172,14 @@ class Candle:
 class Trade:
     """Trade model."""
 
-    market_address: str
+    market_address: str  # Virtual market address
     timestamp: int
     price: float
     size: float
     side: OrderSide
-    tx_hash: str | None = None
-    maker: str | None = None
-    taker: str | None = None
+    tx_hash: ChecksumAddress | None = None  # Transaction hash is an Ethereum address
+    maker: ChecksumAddress | None = None
+    taker: ChecksumAddress | None = None
     trade_id: int | None = None
 
     @property
@@ -177,15 +191,27 @@ class Trade:
     def from_api(cls, data: dict[str, Any]) -> "Trade":
         """Create a Trade object from API response data."""
         side_str = data.get("side") or data.get("sd", "buy")
+        tx_hash = data.get("transactionHash") or data.get("h")
+        maker = data.get("maker")
+        taker = data.get("taker")
+
+        # Convert address strings to ChecksumAddress when present
+        if tx_hash and isinstance(tx_hash, str):
+            tx_hash = Web3.to_checksum_address(tx_hash)
+        if maker and isinstance(maker, str):
+            maker = Web3.to_checksum_address(maker)
+        if taker and isinstance(taker, str):
+            taker = Web3.to_checksum_address(taker)
+
         return cls(
             market_address=data.get("m", ""),
             timestamp=data.get("timestamp") or data.get("t", 0),
             price=float(data.get("price") or data.get("px", 0)),
             size=float(data.get("size") or data.get("sz", 0)),
             side=OrderSide(side_str),
-            tx_hash=data.get("transactionHash") or data.get("h"),
-            maker=data.get("maker"),
-            taker=data.get("taker"),
+            tx_hash=tx_hash,
+            maker=maker,
+            taker=taker,
             trade_id=data.get("id"),
         )
 
@@ -195,16 +221,20 @@ class Position:
     """LP position model."""
 
     market: Market
-    user: str
+    user: ChecksumAddress
     token0_amount: float
     token1_amount: float
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Position":
         """Create a Position object from API response data."""
+        user = data.get("user", "")
+        if user and isinstance(user, str):
+            user = Web3.to_checksum_address(user)
+
         return cls(
             market=Market.from_api(data.get("market", {})),
-            user=data.get("user", ""),
+            user=user,
             token0_amount=data.get("token0Amount", 0.0),
             token1_amount=data.get("token1Amount", 0.0),
         )

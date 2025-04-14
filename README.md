@@ -8,6 +8,11 @@ GTE is an decentralized exchange
 
 GTE API provides access to static market data and metrics, user profile information, and token information. The API also enables off-chain smart routing to find the best liquidity across markets on GTE.
 
+## TODO
+- [ ] test MarketClient
+- [ ] provide API for reading balances, historical trades and orders
+
+
 > Documentation is a work in progress and will be updated often until launch.
 
 ## API Reference
