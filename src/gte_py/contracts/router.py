@@ -1,8 +1,7 @@
-from typing import Any, Union, cast
+from typing import Any, cast
 
-from eth_typing import ENS, Address, ChecksumAddress
 from web3 import Web3
-from web3.types import TxParams, Wei
+from web3.types import ChecksumAddress, TxParams, Wei
 
 from .utils import load_abi
 
@@ -13,11 +12,6 @@ class Settlement:
     NONE = 0
     WRAP = 1
     UNWRAP = 2
-
-
-# Type aliases to make the code cleaner
-TxDict = dict[str, Any]  # Return type for our transaction methods
-TAddress = Union[Address, ChecksumAddress, ENS, str]  # Address types
 
 
 class Router:
@@ -34,8 +28,6 @@ class Router:
         self,
         web3: Web3,
         contract_address: str,
-        abi_path: str | None = None,
-        abi: list[dict[str, Any]] | None = None,
     ):
         """
         Initialize the GTERouter wrapper.
@@ -48,15 +40,7 @@ class Router:
         """
         self.web3 = web3
         self.address = web3.to_checksum_address(contract_address)
-
-        # Use the ABI provided directly, or load it from the path, or use the default name
-        if abi is not None:
-            loaded_abi = abi
-        elif abi_path is not None:
-            loaded_abi = load_abi(abi_path)
-        else:
-            loaded_abi = load_abi("router")
-
+        loaded_abi = load_abi("router")
         self.contract = self.web3.eth.contract(address=self.address, abi=loaded_abi)
 
     # ================= READ METHODS =================
@@ -106,7 +90,7 @@ class Router:
 
     def clob_cancel(
         self, clob_address: str, args: dict[str, Any], sender_address: str, **kwargs
-    ) -> TxDict:
+    ) -> TxParams:
         """
         Cancel a CLOB order.
 
@@ -123,11 +107,11 @@ class Router:
         tx_params = self._prepare_transaction(sender_address, **kwargs)
 
         tx = self.contract.functions.clobCancel(clob_address, args).build_transaction(tx_params)
-        return cast(TxDict, tx)
+        return cast(TxParams, tx)
 
     def clob_deposit(
         self, token_address: str, amount: int, from_router: bool, sender_address: str, **kwargs
-    ) -> TxDict:
+    ) -> TxParams:
         """
         Deposit tokens into a CLOB.
 
@@ -147,11 +131,11 @@ class Router:
         tx = self.contract.functions.clobDeposit(
             token_address, amount, from_router
         ).build_transaction(tx_params)
-        return cast(TxDict, tx)
+        return cast(TxParams, tx)
 
     def clob_post_limit_order(
         self, clob_address: str, args: dict[str, Any], sender_address: str, **kwargs
-    ) -> TxDict:
+    ) -> TxParams:
         """
         Post a limit order to a CLOB.
 
@@ -170,11 +154,11 @@ class Router:
         tx = self.contract.functions.clobPostLimitOrder(clob_address, args).build_transaction(
             tx_params
         )
-        return cast(TxDict, tx)
+        return cast(TxParams, tx)
 
     def clob_withdraw(
         self, token_address: str, amount: int, sender_address: str, **kwargs
-    ) -> TxDict:
+    ) -> TxParams:
         """
         Withdraw tokens from a CLOB.
 
@@ -193,11 +177,11 @@ class Router:
         tx = self.contract.functions.clobWithdraw(token_address, amount).build_transaction(
             tx_params
         )
-        return cast(TxDict, tx)
+        return cast(TxParams, tx)
 
     def execute_clob_post_fill_order(
         self, clob_address: str, args: dict[str, Any], sender_address: str, **kwargs
-    ) -> TxDict:
+    ) -> TxParams:
         """
         Execute a fill order on a CLOB.
 
@@ -216,7 +200,7 @@ class Router:
         tx = self.contract.functions.executeClobPostFillOrder(
             clob_address, args
         ).build_transaction(tx_params)
-        return cast(TxDict, tx)
+        return cast(TxParams, tx)
 
     def execute_route(
         self,
@@ -229,7 +213,7 @@ class Router:
         sender_address: str,
         value: int = 0,
         **kwargs,
-    ) -> TxDict:
+    ) -> TxParams:
         """
         Execute a multi-hop route.
 
@@ -253,11 +237,11 @@ class Router:
         tx = self.contract.functions.executeRoute(
             token_in, amount_in, amount_out_min, deadline, hops, settlement
         ).build_transaction(tx_params)
-        return cast(TxDict, tx)
+        return cast(TxParams, tx)
 
     def execute_univ2_swap_exact_tokens_for_tokens(
         self, amount_in: int, amount_out_min: int, path: list[str], sender_address: str, **kwargs
-    ) -> TxDict:
+    ) -> TxParams:
         """
         Execute a UniswapV2 swap.
 
@@ -277,7 +261,7 @@ class Router:
         tx = self.contract.functions.executeUniV2SwapExactTokensForTokens(
             amount_in, amount_out_min, path
         ).build_transaction(tx_params)
-        return cast(TxDict, tx)
+        return cast(TxParams, tx)
 
     def launchpad_buy(
         self,
@@ -288,7 +272,7 @@ class Router:
         sender_address: str,
         value: int = 0,
         **kwargs,
-    ) -> TxDict:
+    ) -> TxParams:
         """
         Buy tokens from a launchpad.
 
@@ -311,7 +295,7 @@ class Router:
         tx = self.contract.functions.launchpadBuy(
             launch_token, amount_out_base, quote_token, worst_amount_in_quote
         ).build_transaction(tx_params)
-        return cast(TxDict, tx)
+        return cast(TxParams, tx)
 
     def launchpad_buy_permit2(
         self,
@@ -323,7 +307,7 @@ class Router:
         signature: bytes,
         sender_address: str,
         **kwargs,
-    ) -> TxDict:
+    ) -> TxParams:
         """
         Buy tokens from a launchpad using Permit2.
 
@@ -352,7 +336,7 @@ class Router:
             permit_single,
             signature,
         ).build_transaction(tx_params)
-        return cast(TxDict, tx)
+        return cast(TxParams, tx)
 
     def launchpad_sell(
         self,
@@ -362,7 +346,7 @@ class Router:
         unwrap_eth: bool,
         sender_address: str,
         **kwargs,
-    ) -> TxDict:
+    ) -> TxParams:
         """
         Sell tokens on a launchpad.
 
@@ -383,7 +367,7 @@ class Router:
         tx = self.contract.functions.launchpadSell(
             launch_token, amount_in_base, worst_amount_out_quote, unwrap_eth
         ).build_transaction(tx_params)
-        return cast(TxDict, tx)
+        return cast(TxParams, tx)
 
     def launchpad_sell_permit2(
         self,
@@ -394,7 +378,7 @@ class Router:
         signature: bytes,
         sender_address: str,
         **kwargs,
-    ) -> TxDict:
+    ) -> TxParams:
         """
         Sell tokens on a launchpad using Permit2.
 
@@ -416,4 +400,4 @@ class Router:
         tx = self.contract.functions.launchpadSellPermit2(
             token, amount_in_base, worst_amount_out_quote, permit_single, signature
         ).build_transaction(tx_params)
-        return cast(TxDict, tx)
+        return cast(TxParams, tx)

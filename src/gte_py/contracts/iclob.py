@@ -1,7 +1,5 @@
-from typing import Any
-
-from eth_typing import ChecksumAddress
 from web3 import Web3
+from web3.types import Address, ChecksumAddress, TxParams
 
 from .structs import (
     FillOrderType,
@@ -12,6 +10,7 @@ from .structs import (
     LimitOrderType,
     Settlement,
 )
+from .utils import load_abi
 
 
 class CLOBError(Exception):
@@ -34,8 +33,6 @@ class ICLOB:
         self,
         web3: Web3,
         contract_address: str,
-        abi_path: str | None = None,
-        abi: list[dict[str, Any]] | None = None,
     ):
         """
         Initialize the ICLOB wrapper.
@@ -48,7 +45,7 @@ class ICLOB:
         """
         self.web3 = web3
         self.address = web3.to_checksum_address(contract_address)
-        loaded_abi = get_abi("iclob", abi_path, abi)
+        loaded_abi = load_abi("iclob")
         self.contract = self.web3.eth.contract(address=self.address, abi=loaded_abi)
 
     # ================= READ METHODS =================
@@ -61,11 +58,11 @@ class ICLOB:
         """Get the base token used in the CLOB."""
         return self.contract.functions.getBaseToken().call()
 
-    def get_market_config(self) -> dict[str, Any]:
+    def get_market_config(self) -> TxParams:
         """Get the market configuration settings for the CLOB."""
         return self.contract.functions.getMarketConfig().call()
 
-    def get_market_settings(self) -> dict[str, Any]:
+    def get_market_settings(self) -> TxParams:
         """Get the market settings for the CLOB."""
         return self.contract.functions.getMarketSettings().call()
 
@@ -78,7 +75,7 @@ class ICLOB:
         """
         return self.contract.functions.getOpenInterest().call()
 
-    def get_order(self, order_id: int) -> dict[str, Any]:
+    def get_order(self, order_id: int) -> TxParams:
         """
         Get the details of a specific order.
 
@@ -99,7 +96,7 @@ class ICLOB:
         """
         return self.contract.functions.getTOB().call()
 
-    def get_limit(self, price: int, side: int) -> dict[str, Any]:
+    def get_limit(self, price: int, side: int) -> TxParams:
         """
         Get the limit level details at a specific price level for a given side.
 
@@ -146,7 +143,7 @@ class ICLOB:
         """
         return self.contract.functions.getNextSmallestPrice(price, side).call()
 
-    def get_next_orders(self, start_order_id: int, num_orders: int) -> list[dict[str, Any]]:
+    def get_next_orders(self, start_order_id: int, num_orders: int) -> list[TxParams]:
         """
         Get a list of orders starting from a specific order ID.
 
@@ -221,8 +218,8 @@ class ICLOB:
     # ================= WRITE METHODS =================
 
     def post_limit_order(
-        self, account: str, args: ICLOBPostLimitOrderArgs, sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+        self, account: str, args: ICLOBPostLimitOrderArgs, sender_address: Address, **kwargs
+    ) -> TxParams:
         """
         Post a limit order to the CLOB.
 
@@ -246,8 +243,8 @@ class ICLOB:
         return tx
 
     def post_fill_order(
-        self, account: str, args: ICLOBPostFillOrderArgs, sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+        self, account: str, args: ICLOBPostFillOrderArgs, sender_address: Address, **kwargs
+    ) -> TxParams:
         """
         Post a fill order to the CLOB.
 
@@ -271,8 +268,8 @@ class ICLOB:
         return tx
 
     def amend(
-        self, account: str, args: ICLOBAmendArgs, sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+        self, account: str, args: ICLOBAmendArgs, sender_address: Address, **kwargs
+    ) -> TxParams:
         """
         Amend an existing order.
 
@@ -296,8 +293,8 @@ class ICLOB:
         return tx
 
     def cancel(
-        self, account: str, args: ICLOBCancelArgs, sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+        self, account: str, args: ICLOBCancelArgs, sender_address: Address, **kwargs
+    ) -> TxParams:
         """
         Cancel one or more orders.
 
@@ -320,7 +317,7 @@ class ICLOB:
         )
         return tx
 
-    def accept_ownership(self, sender_address: str, **kwargs) -> dict[str, Any]:
+    def accept_ownership(self, sender_address: Address, **kwargs) -> TxParams:
         """
         Accept ownership of the contract.
 
@@ -340,7 +337,7 @@ class ICLOB:
         )
         return tx
 
-    def renounce_ownership(self, sender_address: str, **kwargs) -> dict[str, Any]:
+    def renounce_ownership(self, sender_address: Address, **kwargs) -> TxParams:
         """
         Renounce ownership of the contract.
 
@@ -360,7 +357,7 @@ class ICLOB:
         )
         return tx
 
-    def transfer_ownership(self, new_owner: str, sender_address: str, **kwargs) -> dict[str, Any]:
+    def transfer_ownership(self, new_owner: str, sender_address: Address, **kwargs) -> TxParams:
         """
         Transfer ownership of the contract.
 
@@ -383,8 +380,8 @@ class ICLOB:
         return tx
 
     def set_max_limits_exempt(
-        self, account: str, toggle: bool, sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+        self, account: str, toggle: bool, sender_address: Address, **kwargs
+    ) -> TxParams:
         """
         Set whether an account is exempt from the max limits restriction.
 
@@ -408,8 +405,8 @@ class ICLOB:
         return tx
 
     def set_max_limits_per_tx(
-        self, new_max_limits: int, sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+        self, new_max_limits: int, sender_address: Address, **kwargs
+    ) -> TxParams:
         """
         Set the maximum number of limit orders allowed per transaction.
 
@@ -431,8 +428,8 @@ class ICLOB:
         return tx
 
     def set_min_limit_order_amount_in_base(
-        self, new_min_amount: int, sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+        self, new_min_amount: int, sender_address: Address, **kwargs
+    ) -> TxParams:
         """
         Set the minimum amount in base for limit orders.
 
@@ -455,7 +452,7 @@ class ICLOB:
         )
         return tx
 
-    def set_tick_size(self, tick_size: int, sender_address: str, **kwargs) -> dict[str, Any]:
+    def set_tick_size(self, tick_size: int, sender_address: Address, **kwargs) -> TxParams:
         """
         Set the tick size for the CLOB.
 

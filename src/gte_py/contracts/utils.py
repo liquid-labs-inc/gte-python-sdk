@@ -1,9 +1,8 @@
 import importlib.resources as pkg_resources
 import json
 import os
+import time
 from typing import Any
-
-from web3 import Web3
 
 
 def get_current_timestamp() -> int:
@@ -107,51 +106,3 @@ def load_abi(abi_name: str, abi_path: str | None = None) -> list[dict[str, Any]]
         raise ValueError(
             f"ABI '{abi_name}' not found in package resources or expected paths"
         ) from None
-
-
-def load_iclob_abi() -> list[dict[str, Any]]:
-    """
-    Load the ICLOB ABI from package resources.
-
-    Returns:
-        The ICLOB contract ABI as a Python list
-    """
-    return load_abi("iclob")
-
-
-def prepare_permit_signature(
-    web3: Web3, permit_data: dict[str, Any], private_key: str
-) -> tuple[dict[str, Any], bytes]:
-    """
-    Helper function to prepare and sign Permit2 data.
-
-    Args:
-        web3: Web3 instance
-        permit_data: Permit data
-        private_key: Private key to sign with
-
-    Returns:
-        Tuple of (permit_single, signature)
-    """
-    # This is a simplified implementation. In a real application,
-    # you would need to implement the full EIP-712 signing logic.
-    # You would typically use a library like eth-account for this.
-
-    # Placeholder for the real implementation
-    permit_single = {
-        "details": {
-            "token": web3.to_checksum_address(permit_data["token"]),
-            "amount": permit_data["amount"],
-            "expiration": permit_data["expiration"],
-            "nonce": permit_data["nonce"],
-        },
-        "spender": web3.to_checksum_address(permit_data["spender"]),
-        "sigDeadline": permit_data["sigDeadline"],
-    }
-
-    # In a real implementation, you would create the correct EIP-712 message
-    # and sign it with the private key
-    message_hash = b""  # Placeholder
-    signature = b""  # Placeholder
-
-    return permit_single, signature

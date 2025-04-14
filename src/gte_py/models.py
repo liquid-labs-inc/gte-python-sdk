@@ -75,36 +75,6 @@ class Asset:
 
 
 @dataclass
-class MarketInfo:
-    """Information about a market from blockchain data."""
-
-    address: str
-    contract_address: str
-    base_token: str
-    quote_token: str
-    base_decimals: int
-    quote_decimals: int
-    tick_size: float
-    base_atoms_per_lot: int
-    tick_size_in_decimals: int
-
-    @classmethod
-    def from_market(cls, market: "Market") -> "MarketInfo":
-        """Create market info from a market."""
-        return cls(
-            address=market.address,
-            contract_address=market.contract_address,
-            base_token=market.base_token_address,
-            quote_token=market.quote_token_address,
-            base_decimals=market.base_decimals,
-            quote_decimals=market.quote_decimals,
-            tick_size=market.tick_size,
-            base_atoms_per_lot=market.base_atoms_per_lot,
-            tick_size_in_decimals=market.tick_size_in_decimals,
-        )
-
-
-@dataclass
 class Market:
     """Market model."""
 

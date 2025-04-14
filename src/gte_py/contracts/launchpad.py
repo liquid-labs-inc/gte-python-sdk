@@ -1,10 +1,8 @@
-import importlib.resources as pkg_resources
-import json
-import os
-from typing import Any
-
 from eth_typing import ChecksumAddress
 from web3 import Web3
+from web3.types import Address, TxParams
+
+from src.gte_py.contracts.utils import load_abi
 
 
 class LaunchpadError(Exception):
@@ -26,8 +24,6 @@ class Launchpad:
         self,
         web3: Web3,
         contract_address: str,
-        abi_path: str | None = None,
-        abi: list[dict[str, Any]] | None = None,
     ):
         """
         Initialize the GTELaunchpad wrapper.
@@ -41,29 +37,7 @@ class Launchpad:
         self.web3 = web3
         self.address = web3.to_checksum_address(contract_address)
 
-        if abi is None:
-            # First try to load ABI using importlib resources
-            try:
-                with pkg_resources.open_text("gte_py.contracts", "abi/launchpad.json") as f:
-                    abi = json.load(f)
-            except (ImportError, FileNotFoundError):
-                # If that fails, try the specified ABI path or default path
-                if abi_path is None:
-                    # Default ABI location
-                    default_path = os.path.join(os.path.dirname(__file__), "abi", "launchpad.json")
-                    if os.path.exists(default_path):
-                        abi_path = default_path
-                    else:
-                        raise ValueError(
-                            "No ABI provided or found at default location. Please provide abi or abi_path."
-                        )
-
-                try:
-                    with open(abi_path) as f:
-                        abi = json.load(f)
-                except FileNotFoundError:
-                    raise ValueError(f"ABI file not found at {abi_path}")
-
+        abi = load_abi("launchpad")
         self.contract = self.web3.eth.contract(address=self.address, abi=abi)
 
     # ================= READ METHODS =================
@@ -100,7 +74,7 @@ class Launchpad:
         """Get the GTE Router address."""
         return self.contract.functions.gteRouter().call()
 
-    def get_launches(self, launch_token: str) -> dict[str, Any]:
+    def get_launches(self, launch_token: str) -> TxParams:
         """
         Get launch details for a token.
 
@@ -188,9 +162,9 @@ class Launchpad:
         recipient: str,
         amount_out_base: int,
         max_amount_in_quote: int,
-        sender_address: str,
+        sender_address: Address,
         **kwargs,
-    ) -> dict[str, Any]:
+    ) -> TxParams:
         """
         Buy base tokens with quote tokens.
 
@@ -219,7 +193,7 @@ class Launchpad:
         )
         return tx
 
-    def cancel_ownership_handover(self, sender_address: str, **kwargs) -> dict[str, Any]:
+    def cancel_ownership_handover(self, sender_address: Address, **kwargs) -> TxParams:
         """
         Cancel an ownership handover request.
 
@@ -240,8 +214,8 @@ class Launchpad:
         return tx
 
     def complete_ownership_handover(
-        self, pending_owner: str, sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+        self, pending_owner: str, sender_address: Address, **kwargs
+    ) -> TxParams:
         """
         Complete an ownership handover.
 
@@ -263,7 +237,7 @@ class Launchpad:
         )
         return tx
 
-    def initialize(self, owner: str, sender_address: str, **kwargs) -> dict[str, Any]:
+    def initialize(self, owner: str, sender_address: Address, **kwargs) -> TxParams:
         """
         Initialize the contract with an owner.
 
@@ -286,8 +260,14 @@ class Launchpad:
         return tx
 
     def launch(
-        self, name: str, symbol: str, media_uri: str, sender_address: str, value: int = 0, **kwargs
-    ) -> dict[str, Any]:
+        self,
+        name: str,
+        symbol: str,
+        media_uri: str,
+        sender_address: Address,
+        value: int = 0,
+        **kwargs,
+    ) -> TxParams:
         """
         Launch a new token.
 
@@ -312,7 +292,7 @@ class Launchpad:
         )
         return tx
 
-    def pull_fees(self, sender_address: str, **kwargs) -> dict[str, Any]:
+    def pull_fees(self, sender_address: Address, **kwargs) -> TxParams:
         """
         Pull accumulated fees.
 
@@ -332,7 +312,7 @@ class Launchpad:
         )
         return tx
 
-    def renounce_ownership(self, sender_address: str, **kwargs) -> dict[str, Any]:
+    def renounce_ownership(self, sender_address: Address, **kwargs) -> TxParams:
         """
         Renounce ownership of the contract.
 
@@ -352,7 +332,7 @@ class Launchpad:
         )
         return tx
 
-    def request_ownership_handover(self, sender_address: str, **kwargs) -> dict[str, Any]:
+    def request_ownership_handover(self, sender_address: Address, **kwargs) -> TxParams:
         """
         Request an ownership handover.
 
@@ -378,9 +358,9 @@ class Launchpad:
         recipient: str,
         amount_in_base: int,
         min_amount_out_quote: int,
-        sender_address: str,
+        sender_address: Address,
         **kwargs,
-    ) -> dict[str, Any]:
+    ) -> TxParams:
         """
         Sell base tokens for quote tokens.
 
@@ -401,6 +381,13 @@ class Launchpad:
         tx = self.contract.functions.sell(
             token, recipient, amount_in_base, min_amount_out_quote
         ).build_transaction(
+            TxParams(
+                {
+                    "from": sender_address,
+                    "nonce": self.web3.eth.get_transaction_count(sender_address),
+                    **kwargs,
+                }
+            )
             {
                 "from": sender_address,
                 "nonce": self.web3.eth.get_transaction_count(sender_address),
@@ -410,8 +397,8 @@ class Launchpad:
         return tx
 
     def set_virtual_reserves(
-        self, virtual_base: int, virtual_quote: int, sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+        self, virtual_base: int, virtual_quote: int, sender_address: Address, **kwargs
+    ) -> TxParams:
         """
         Set virtual reserves for the bonding curve.
 
@@ -435,7 +422,7 @@ class Launchpad:
         )
         return tx
 
-    def transfer_ownership(self, new_owner: str, sender_address: str, **kwargs) -> dict[str, Any]:
+    def transfer_ownership(self, new_owner: str, sender_address: Address, **kwargs) -> TxParams:
         """
         Transfer ownership of the contract.
 
@@ -458,8 +445,8 @@ class Launchpad:
         return tx
 
     def update_bonding_curve(
-        self, new_bonding_curve: str, sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+        self, new_bonding_curve: str, sender_address: Address, **kwargs
+    ) -> TxParams:
         """
         Update the bonding curve address.
 
@@ -482,8 +469,8 @@ class Launchpad:
         return tx
 
     def update_init_code_hash(
-        self, new_hash: bytes, sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+        self, new_hash: bytes, sender_address: Address, **kwargs
+    ) -> TxParams:
         """
         Update the init code hash.
 
@@ -505,8 +492,8 @@ class Launchpad:
         return tx
 
     def update_quote_asset(
-        self, new_quote_asset: str, sender_address: str, **kwargs
-    ) -> dict[str, Any]:
+        self, new_quote_asset: str, sender_address: Address, **kwargs
+    ) -> TxParams:
         """
         Update the quote asset address.
 

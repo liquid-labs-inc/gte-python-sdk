@@ -8,7 +8,7 @@ from tabulate import tabulate  # pip install tabulate
 from web3 import Web3
 
 from gte_py import Client
-from gte_py.models import Market, MarketInfo
+from gte_py.models import Market
 
 # Load environment variables from .env file
 load_dotenv()
@@ -61,7 +61,7 @@ def format_market_table(markets: list[Market], title: str):
     print(f"Total: {len(markets)} markets")
 
 
-def format_chain_market_table(markets: list[MarketInfo], title: str):
+def format_chain_market_table(markets: list[Market], title: str):
     """Format and print a table of on-chain markets."""
     print_separator(title)
 

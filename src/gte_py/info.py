@@ -6,12 +6,12 @@ from web3 import Web3
 
 from .contracts.factory import CLOBFactory
 from .contracts.router import Router
-from .models import Market, MarketInfo
+from .models import Market
 
 logger = logging.getLogger(__name__)
 
 
-class MarketInfoService:
+class MarketService:
     """Service for retrieving market information from the blockchain."""
 
     def __init__(self, web3: Web3, router_address: str):
@@ -31,14 +31,14 @@ class MarketInfoService:
         self._clob_factory = CLOBFactory(web3=web3, contract_address=self._clob_factory_address)
 
         # Cache of discovered markets
-        self._markets: dict[str, MarketInfo] = {}
+        self._markets: dict[str, Market] = {}
 
     @property
     def factory_address(self) -> str:
         """Get the CLOB factory address from the router."""
         return self._clob_factory_address
 
-    def refresh_markets_from_chain(self) -> list[MarketInfo]:
+    def refresh_markets_from_chain(self) -> list[Market]:
         """
         Get all available markets registered with the router from chain.
 
@@ -64,10 +64,10 @@ class MarketInfoService:
 
                 # Get market config for additional details
                 market_config = clob.get_market_config()
-                token_config = clob.get_token_config()
+                token_config = clob.get_market_config()
 
                 # Create a market info object
-                market_info = MarketInfo(
+                market_info = Market(
                     address=f"market-{clob_address}",  # Generate a virtual market address
                     contract_address=clob_address,
                     base_token=base_token,
@@ -88,7 +88,7 @@ class MarketInfoService:
 
         return markets
 
-    def get_available_markets(self) -> list[MarketInfo]:
+    def get_available_markets(self) -> list[Market]:
         """
         Get all available markets from cache or by querying the chain.
 
@@ -99,7 +99,7 @@ class MarketInfoService:
             return self.refresh_markets_from_chain()
         return list(self._markets.values())
 
-    def add_market_info(self, market_info: MarketInfo) -> None:
+    def add_market_info(self, market_info: Market) -> None:
         """
         Add market information to the cache.
 
@@ -108,7 +108,7 @@ class MarketInfoService:
         """
         self._markets[market_info.address] = market_info
 
-    def get_market_info(self, market_address: str) -> MarketInfo | None:
+    def get_market_info(self, market_address: str) -> Market | None:
         """
         Get market information for a specific market.
 
@@ -142,5 +142,5 @@ class MarketInfoService:
         for market in api_markets:
             # Only cache markets that have a contract address
             if market.contract_address:
-                market_info = MarketInfo.from_market(market)
+                market_info = Market.from_market(market)
                 self._markets[market_info.address] = market_info

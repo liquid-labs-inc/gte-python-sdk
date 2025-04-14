@@ -21,8 +21,6 @@ class CLOBFactory:
         self,
         web3: Web3,
         contract_address: str,
-        abi_path: str | None = None,
-        abi: list[dict[str, Any]] | None = None,
     ):
         """
         Initialize the CLOBFactory wrapper.
@@ -36,14 +34,7 @@ class CLOBFactory:
         self.web3 = web3
         self.address = web3.to_checksum_address(contract_address)
 
-        # Use the provided ABI if given, otherwise load from path or use default
-        if abi is not None:
-            loaded_abi = abi
-        elif abi_path is not None:
-            loaded_abi = load_abi(abi_path)
-        else:
-            loaded_abi = load_abi("factory")
-
+        loaded_abi = load_abi("factory")
         self.contract = self.web3.eth.contract(address=self.address, abi=loaded_abi)
 
     def get_owner(self) -> ChecksumAddress:

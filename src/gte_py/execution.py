@@ -5,6 +5,7 @@ import time
 from typing import Any
 
 from web3 import Web3
+from web3.types import TxParams
 
 from .contracts.iclob import ICLOB
 from .contracts.router import Router
@@ -13,13 +14,13 @@ from .contracts.structs import (
     ICLOBCancelArgs,
     ICLOBPostFillOrderArgs,
     ICLOBPostLimitOrderArgs,
-    ICLOBReduceArgs,
     LimitOrderType,
     Settlement,
     Side,
 )
-from .info import MarketInfoService
-from .models import Market, MarketInfo, Order, OrderSide, OrderType, TimeInForce, Trade
+from .contracts.utils import get_current_timestamp
+from .info import MarketService
+from .models import Market, Order, OrderSide, OrderType, TimeInForce, Trade
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ class ExecutionClient:
         self._web3 = web3
         self._clob_clients: dict[str, ICLOB] = {}
         self._router: Router | None = None
-        self._market_info: MarketInfoService | None = None
+        self._market_info: MarketService | None = None
 
         if web3 and router_address:
             self.setup_contracts(web3, router_address)
@@ -56,7 +57,7 @@ class ExecutionClient:
 
         # Create router and market info service
         self._router = Router(web3=web3, contract_address=router_address)
-        self._market_info = MarketInfoService(web3=web3, router_address=router_address)
+        self._market_info = MarketService(web3=web3, router_address=router_address)
 
     def _get_clob(self, contract_address: str) -> ICLOB:
         """
@@ -85,7 +86,7 @@ class ExecutionClient:
 
     def _map_order_params_to_contract_args(
         self,
-        market: Market | MarketInfo,
+        market: Market | Market,
         side: OrderSide,
         order_type: OrderType,
         amount: float,
@@ -96,7 +97,7 @@ class ExecutionClient:
         Map order parameters to contract arguments.
 
         Args:
-            market: Market or MarketInfo object
+            market: Market or Market object
             side: Order side
             order_type: Order type
             amount: Order amount
@@ -145,7 +146,7 @@ class ExecutionClient:
 
     async def create_order(
         self,
-        market: Market | MarketInfo,
+        market: Market | Market,
         side: OrderSide,
         order_type: OrderType,
         amount: float,
@@ -155,7 +156,7 @@ class ExecutionClient:
         use_contract: bool = False,
         use_router: bool = True,
         **tx_kwargs,
-    ) -> Order | dict[str, Any]:
+    ) -> Order:
         """
         Create a new order.
 
@@ -214,8 +215,8 @@ class ExecutionClient:
             if order_type == OrderType.LIMIT:
                 # Create limit order arguments
                 limit_args = ICLOBPostLimitOrderArgs(
-                    amountInBaseLots=params["amount_in_base_lots"],
-                    priceInTicks=params["price_in_ticks"],
+                    amountInBase=params["amount_in_base_lots"],
+                    price=params["price_in_ticks"],
                     cancelTimestamp=0,
                     side=params["side_value"],
                     limitOrderType=params["limit_type"],
@@ -283,12 +284,12 @@ class ExecutionClient:
 
     def cancel_order(
         self,
-        market: Market | MarketInfo,
+        market: Market | Market,
         order_id: int,
         sender_address: str,
         use_router: bool = True,
         **tx_kwargs,
-    ) -> dict[str, Any]:
+    ) -> TxParams:
         """
         Cancel an order.
 
@@ -327,52 +328,52 @@ class ExecutionClient:
             clob = self._get_clob(contract_address)
             return clob.cancel(args=cancel_args, sender_address=sender_address, **tx_kwargs)
 
-    def modify_order(
-        self,
-        market: Market | MarketInfo,
-        order_id: int,
-        new_amount: float,
-        sender_address: str,
-        use_router: bool = True,
-        **tx_kwargs,
-    ) -> dict[str, Any]:
-        """
-        Modify an existing order's amount (reduce only).
-
-        Args:
-            market: Market object with details
-            order_id: ID of the order to modify
-            new_amount: New amount for the order (must be less than current)
-            sender_address: Address to send transaction from
-            use_router: Whether to use the router for modification (safer)
-            **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
-        Returns:
-            Transaction data
-
-        Raises:
-            ValueError: If Web3 is not configured or parameters are invalid
-        """
-        if not self._web3:
-            raise ValueError("Web3 provider not configured. Cannot modify on-chain orders.")
-
-        contract_address = getattr(market, "contract_address", None)
-        if not contract_address:
-            raise ValueError("Market has no contract address")
-
-        # Convert amount to base lots
-        base_decimals = getattr(market, "base_decimals", 18)
-        base_atoms_per_lot = getattr(market, "base_atoms_per_lot", 1)
-        amount_in_base_lots = int(new_amount * (10**base_decimals) / base_atoms_per_lot)
-
-        # Create reduce arguments
-        reduce_args = ICLOBReduceArgs(
-            orderId=order_id, amountInBaseLots=amount_in_base_lots, settlement=Settlement.INSTANT
-        )
-
-        # Use direct contract - router doesn't support reduce
-        clob = self._get_clob(contract_address)
-        return clob.reduce(args=reduce_args, sender_address=sender_address, **tx_kwargs)
+    # def modify_order(
+    #     self,
+    #     market: Market | Market,
+    #     order_id: int,
+    #     new_amount: float,
+    #     sender_address: str,
+    #     use_router: bool = True,
+    #     **tx_kwargs,
+    # ) -> dict[str, Any]:
+    #     """
+    #     Modify an existing order's amount (reduce only).
+    #
+    #     Args:
+    #         market: Market object with details
+    #         order_id: ID of the order to modify
+    #         new_amount: New amount for the order (must be less than current)
+    #         sender_address: Address to send transaction from
+    #         use_router: Whether to use the router for modification (safer)
+    #         **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+    #
+    #     Returns:
+    #         Transaction data
+    #
+    #     Raises:
+    #         ValueError: If Web3 is not configured or parameters are invalid
+    #     """
+    #     if not self._web3:
+    #         raise ValueError("Web3 provider not configured. Cannot modify on-chain orders.")
+    #
+    #     contract_address = getattr(market, "contract_address", None)
+    #     if not contract_address:
+    #         raise ValueError("Market has no contract address")
+    #
+    #     # Convert amount to base lots
+    #     base_decimals = getattr(market, "base_decimals", 18)
+    #     base_atoms_per_lot = getattr(market, "base_atoms_per_lot", 1)
+    #     amount_in_base_lots = int(new_amount * (10**base_decimals) / base_atoms_per_lot)
+    #
+    #     # Create reduce arguments
+    #     reduce_args = ICLOBReduceArgs(
+    #         orderId=order_id, amountInBaseLots=amount_in_base_lots, settlement=Settlement.INSTANT
+    #     )
+    #
+    #     # Use direct contract - router doesn't support reduce
+    #     clob = self._get_clob(contract_address)
+    #     return clob.reduce(args=reduce_args, sender_address=sender_address, **tx_kwargs)
 
     async def get_user_orders(
         self,
@@ -471,7 +472,7 @@ class ExecutionClient:
         return placeholder_trades
 
     async def get_order_book_snapshot(
-        self, market: Market | MarketInfo, depth: int = 10
+        self, market: Market | Market, depth: int = 10
     ) -> dict[str, Any]:
         """
         Get current order book snapshot from the chain.
@@ -534,12 +535,12 @@ class ExecutionClient:
             )
 
             # Move to next price level
-            current_ask = clob.get_next_biggest_tick(current_ask, Side.SELL)
+            current_ask = clob.get_next_biggest_price(current_ask, Side.SELL)
 
-        return {"bids": bids, "asks": asks, "timestamp": int(time.time() * 1000)}
+        return {"bids": bids, "asks": asks, "timestamp": get_current_timestamp()}
 
     async def get_user_balances(
-        self, user_address: str, market: Market | MarketInfo
+        self, user_address: str, market: Market | Market
     ) -> dict[str, int]:
         """
         Get user token balances in the CLOB.
@@ -563,7 +564,7 @@ class ExecutionClient:
 
         clob = self._get_clob(contract_address)
 
-        base_balance = clob.get_base_token_account_balance(user_address)
-        quote_balance = clob.get_quote_token_account_balance(user_address)
+        base_balance = clob.get_base_token_amount(user_address)
+        quote_balance = clob.get_quote_token_amount(user_address)
 
         return {"baseBalance": base_balance, "quoteBalance": quote_balance}

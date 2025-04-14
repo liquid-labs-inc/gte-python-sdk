@@ -4,7 +4,8 @@ import asyncio
 import json
 import logging
 import uuid
-from typing import Dict, List, Callable, Any
+from collections.abc import Callable
+from typing import Any
 
 import aiohttp
 
@@ -67,24 +68,24 @@ class WebSocketApi:
         finally:
             self.running = False
 
-    async def _handle_message(self, data: Dict):
+    async def _handle_message(self, data: dict):
         """Handle a message from the WebSocket.
 
         Args:
             data: Message data
         """
-        if 's' in data:  # Stream data
-            stream_type = data['s']
+        if "s" in data:  # Stream data
+            stream_type = data["s"]
             if stream_type in self.callbacks:
                 for callback in self.callbacks.get(stream_type, []):
                     try:
                         await callback(data)
                     except Exception as e:
                         logger.error(f"Error in callback: {e}")
-        elif 'id' in data:  # Response to a subscription request
+        elif "id" in data:  # Response to a subscription request
             logger.debug(f"Received response: {data}")
 
-    async def subscribe(self, method: str, params: Dict, callback: Callable[[Dict], Any]):
+    async def subscribe(self, method: str, params: dict, callback: Callable[[dict], Any]):
         """Subscribe to a topic.
 
         Args:
@@ -96,7 +97,7 @@ class WebSocketApi:
             await self.connect()
 
         # Extract the stream type from the method
-        stream_type = method.split('.')[0]
+        stream_type = method.split(".")[0]
 
         # Register callback
         if stream_type not in self.callbacks:
@@ -105,15 +106,11 @@ class WebSocketApi:
 
         # Send subscription request
         request_id = str(uuid.uuid4())
-        request = {
-            "id": request_id,
-            "method": method,
-            "params": params
-        }
+        request = {"id": request_id, "method": method, "params": params}
         await self.ws.send_json(request)
         logger.debug(f"Sent subscription request: {request}")
 
-    async def unsubscribe(self, method: str, params: Dict):
+    async def unsubscribe(self, method: str, params: dict):
         """Unsubscribe from a topic.
 
         Args:
@@ -124,21 +121,18 @@ class WebSocketApi:
             return
 
         # Send unsubscription request
-        request = {
-            "method": method,
-            "params": params
-        }
+        request = {"method": method, "params": params}
         await self.ws.send_json(request)
 
         # Clean up callbacks for this stream type
-        stream_type = method.split('.')[0]
+        stream_type = method.split(".")[0]
         if stream_type in self.callbacks:
             del self.callbacks[stream_type]
 
         logger.debug(f"Sent unsubscription request: {request}")
 
     # WebSocket API methods
-    async def subscribe_trades(self, markets: List[str], callback: Callable[[Dict], Any]):
+    async def subscribe_trades(self, markets: list[str], callback: Callable[[dict], Any]):
         """Subscribe to trades for specified markets.
 
         Args:
@@ -147,7 +141,7 @@ class WebSocketApi:
         """
         await self.subscribe("trades.subscribe", {"markets": markets}, callback)
 
-    async def unsubscribe_trades(self, markets: List[str]):
+    async def unsubscribe_trades(self, markets: list[str]):
         """Unsubscribe from trades for specified markets.
 
         Args:
@@ -155,7 +149,7 @@ class WebSocketApi:
         """
         await self.unsubscribe("trades.unsubscribe", {"markets": markets})
 
-    async def subscribe_candles(self, market: str, interval: str, callback: Callable[[Dict], Any]):
+    async def subscribe_candles(self, market: str, interval: str, callback: Callable[[dict], Any]):
         """Subscribe to candles for a market.
 
         Args:
@@ -163,7 +157,9 @@ class WebSocketApi:
             interval: Candle interval (1s, 30s, 1m, 3m, 5m, 15m, 30m, 1h, 4h, 6h, 8h, 12h, 1d, 1w)
             callback: Function to call when a candle is received
         """
-        await self.subscribe("candles.subscribe", {"market": market, "interval": interval}, callback)
+        await self.subscribe(
+            "candles.subscribe", {"market": market, "interval": interval}, callback
+        )
 
     async def unsubscribe_candles(self, market: str, interval: str):
         """Unsubscribe from candles for a market.
@@ -174,7 +170,9 @@ class WebSocketApi:
         """
         await self.unsubscribe("candles.unsubscribe", {"market": market, "interval": interval})
 
-    async def subscribe_orderbook(self, market: str, limit: int = 10, callback: Callable[[Dict], Any] | None = None):
+    async def subscribe_orderbook(
+        self, market: str, limit: int = 10, callback: Callable[[dict], Any] | None = None
+    ):
         """Subscribe to orderbook for a market.
 
         Args:
@@ -194,10 +192,7 @@ class WebSocketApi:
         request = {
             "id": request_id,
             "method": "book.subscribe",
-            "params": {
-                "market": market,
-                "limit": limit
-            }
+            "params": {"market": market, "limit": limit},
         }
 
         if self.ws:
@@ -214,13 +209,7 @@ class WebSocketApi:
             limit: Number of levels that was used for subscription
         """
         # Send unsubscription request using new format
-        request = {
-            "method": "book.unsubscribe",
-            "params": {
-                "market": market,
-                "limit": limit
-            }
-        }
+        request = {"method": "book.unsubscribe", "params": {"market": market, "limit": limit}}
 
         if self.ws:
             await self.ws.send_json(request)

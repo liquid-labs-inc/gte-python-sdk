@@ -8,13 +8,12 @@ from web3 import Web3
 
 from .api.rest_api import RestApi
 from .execution import ExecutionClient
-from .info import MarketInfoService
+from .info import MarketService
 from .market import MarketClient
 from .models import (
     Asset,
     Candle,
     Market,
-    MarketInfo,
     Order,
     OrderSide,
     OrderType,
@@ -64,9 +63,7 @@ class Client:
 
             # Initialize market info service if router address is provided
             if router_address:
-                self._market_info = MarketInfoService(
-                    web3=self._web3, router_address=router_address
-                )
+                self._market_info = MarketService(web3=self._web3, router_address=router_address)
 
         # Initialize execution client for trading operations
         self._execution_client = ExecutionClient(
@@ -338,7 +335,7 @@ class Client:
 
             # Update market info cache
             if self._market_info and market.contract_address:
-                self._market_info.add_market_info(MarketInfo.from_market(market))
+                self._market_info.add_market_info(Market.from_market(market))
         else:
             # Use market_info directly
             market = market_info
@@ -443,7 +440,7 @@ class Client:
             **tx_kwargs,
         )
 
-    def get_available_onchain_markets(self) -> list[MarketInfo]:
+    def get_available_onchain_markets(self) -> list[Market]:
         """
         Get available on-chain markets.
 
