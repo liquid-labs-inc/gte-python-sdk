@@ -1,9 +1,9 @@
 from typing import Any, cast
 
 from web3 import Web3
-from web3.types import ChecksumAddress, TxParams, Wei
+from web3.types import ChecksumAddress, HexBytes, TxParams, Wei
 
-from .utils import load_abi
+from .utils import TypedContractFunction, load_abi
 
 
 class Settlement:
@@ -90,7 +90,7 @@ class Router:
 
     def clob_cancel(
         self, clob_address: str, args: dict[str, Any], sender_address: str, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Cancel a CLOB order.
 
@@ -101,17 +101,17 @@ class Router:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction receipt
+            TypedContractFunction that can be executed
         """
         clob_address = self.web3.to_checksum_address(clob_address)
         tx_params = self._prepare_transaction(sender_address, **kwargs)
 
-        tx = self.contract.functions.clobCancel(clob_address, args).build_transaction(tx_params)
-        return cast(TxParams, tx)
+        func = self.contract.functions.clobCancel(clob_address, args)
+        return TypedContractFunction(func, tx_params)
 
     def clob_deposit(
         self, token_address: str, amount: int, from_router: bool, sender_address: str, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Deposit tokens into a CLOB.
 
@@ -123,19 +123,17 @@ class Router:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction receipt
+            TypedContractFunction that can be executed
         """
         token_address = self.web3.to_checksum_address(token_address)
         tx_params = self._prepare_transaction(sender_address, **kwargs)
 
-        tx = self.contract.functions.clobDeposit(
-            token_address, amount, from_router
-        ).build_transaction(tx_params)
-        return cast(TxParams, tx)
+        func = self.contract.functions.clobDeposit(token_address, amount, from_router)
+        return TypedContractFunction(func, tx_params)
 
     def clob_post_limit_order(
         self, clob_address: str, args: dict[str, Any], sender_address: str, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Post a limit order to a CLOB.
 
@@ -146,19 +144,17 @@ class Router:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction receipt
+            TypedContractFunction that can be executed
         """
         clob_address = self.web3.to_checksum_address(clob_address)
         tx_params = self._prepare_transaction(sender_address, **kwargs)
 
-        tx = self.contract.functions.clobPostLimitOrder(clob_address, args).build_transaction(
-            tx_params
-        )
-        return cast(TxParams, tx)
+        func = self.contract.functions.clobPostLimitOrder(clob_address, args)
+        return TypedContractFunction(func, tx_params)
 
     def clob_withdraw(
         self, token_address: str, amount: int, sender_address: str, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Withdraw tokens from a CLOB.
 
@@ -169,19 +165,17 @@ class Router:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction receipt
+            TypedContractFunction that can be executed
         """
         token_address = self.web3.to_checksum_address(token_address)
         tx_params = self._prepare_transaction(sender_address, **kwargs)
 
-        tx = self.contract.functions.clobWithdraw(token_address, amount).build_transaction(
-            tx_params
-        )
-        return cast(TxParams, tx)
+        func = self.contract.functions.clobWithdraw(token_address, amount)
+        return TypedContractFunction(func, tx_params)
 
     def execute_clob_post_fill_order(
         self, clob_address: str, args: dict[str, Any], sender_address: str, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Execute a fill order on a CLOB.
 
@@ -192,15 +186,13 @@ class Router:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction receipt
+            TypedContractFunction that can be executed
         """
         clob_address = self.web3.to_checksum_address(clob_address)
         tx_params = self._prepare_transaction(sender_address, **kwargs)
 
-        tx = self.contract.functions.executeClobPostFillOrder(
-            clob_address, args
-        ).build_transaction(tx_params)
-        return cast(TxParams, tx)
+        func = self.contract.functions.executeClobPostFillOrder(clob_address, args)
+        return TypedContractFunction(func, tx_params)
 
     def execute_route(
         self,
@@ -213,7 +205,7 @@ class Router:
         sender_address: str,
         value: int = 0,
         **kwargs,
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Execute a multi-hop route.
 
@@ -229,19 +221,19 @@ class Router:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction receipt
+            TypedContractFunction that can be executed
         """
         token_in = self.web3.to_checksum_address(token_in)
         tx_params = self._prepare_transaction(sender_address, value=value, **kwargs)
 
-        tx = self.contract.functions.executeRoute(
+        func = self.contract.functions.executeRoute(
             token_in, amount_in, amount_out_min, deadline, hops, settlement
-        ).build_transaction(tx_params)
-        return cast(TxParams, tx)
+        )
+        return TypedContractFunction(func, tx_params)
 
     def execute_univ2_swap_exact_tokens_for_tokens(
         self, amount_in: int, amount_out_min: int, path: list[str], sender_address: str, **kwargs
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Execute a UniswapV2 swap.
 
@@ -253,15 +245,15 @@ class Router:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction receipt
+            TypedContractFunction that can be executed
         """
         path = [self.web3.to_checksum_address(addr) for addr in path]
         tx_params = self._prepare_transaction(sender_address, **kwargs)
 
-        tx = self.contract.functions.executeUniV2SwapExactTokensForTokens(
+        func = self.contract.functions.executeUniV2SwapExactTokensForTokens(
             amount_in, amount_out_min, path
-        ).build_transaction(tx_params)
-        return cast(TxParams, tx)
+        )
+        return TypedContractFunction(func, tx_params)
 
     def launchpad_buy(
         self,
@@ -272,7 +264,7 @@ class Router:
         sender_address: str,
         value: int = 0,
         **kwargs,
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Buy tokens from a launchpad.
 
@@ -286,16 +278,16 @@ class Router:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction receipt
+            TypedContractFunction that can be executed
         """
         launch_token = self.web3.to_checksum_address(launch_token)
         quote_token = self.web3.to_checksum_address(quote_token)
         tx_params = self._prepare_transaction(sender_address, value=value, **kwargs)
 
-        tx = self.contract.functions.launchpadBuy(
+        func = self.contract.functions.launchpadBuy(
             launch_token, amount_out_base, quote_token, worst_amount_in_quote
-        ).build_transaction(tx_params)
-        return cast(TxParams, tx)
+        )
+        return TypedContractFunction(func, tx_params)
 
     def launchpad_buy_permit2(
         self,
@@ -307,7 +299,7 @@ class Router:
         signature: bytes,
         sender_address: str,
         **kwargs,
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Buy tokens from a launchpad using Permit2.
 
@@ -322,21 +314,21 @@ class Router:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction receipt
+            TypedContractFunction that can be executed
         """
         launch_token = self.web3.to_checksum_address(launch_token)
         quote_token = self.web3.to_checksum_address(quote_token)
         tx_params = self._prepare_transaction(sender_address, **kwargs)
 
-        tx = self.contract.functions.launchpadBuyPermit2(
+        func = self.contract.functions.launchpadBuyPermit2(
             launch_token,
             amount_out_base,
             quote_token,
             worst_amount_in_quote,
             permit_single,
             signature,
-        ).build_transaction(tx_params)
-        return cast(TxParams, tx)
+        )
+        return TypedContractFunction(func, tx_params)
 
     def launchpad_sell(
         self,
@@ -346,7 +338,7 @@ class Router:
         unwrap_eth: bool,
         sender_address: str,
         **kwargs,
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Sell tokens on a launchpad.
 
@@ -359,15 +351,15 @@ class Router:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction receipt
+            TypedContractFunction that can be executed
         """
         launch_token = self.web3.to_checksum_address(launch_token)
         tx_params = self._prepare_transaction(sender_address, **kwargs)
 
-        tx = self.contract.functions.launchpadSell(
+        func = self.contract.functions.launchpadSell(
             launch_token, amount_in_base, worst_amount_out_quote, unwrap_eth
-        ).build_transaction(tx_params)
-        return cast(TxParams, tx)
+        )
+        return TypedContractFunction(func, tx_params)
 
     def launchpad_sell_permit2(
         self,
@@ -378,7 +370,7 @@ class Router:
         signature: bytes,
         sender_address: str,
         **kwargs,
-    ) -> TxParams:
+    ) -> TypedContractFunction[HexBytes]:
         """
         Sell tokens on a launchpad using Permit2.
 
@@ -392,12 +384,12 @@ class Router:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction receipt
+            TypedContractFunction that can be executed
         """
         token = self.web3.to_checksum_address(token)
         tx_params = self._prepare_transaction(sender_address, **kwargs)
 
-        tx = self.contract.functions.launchpadSellPermit2(
+        func = self.contract.functions.launchpadSellPermit2(
             token, amount_in_base, worst_amount_out_quote, permit_single, signature
-        ).build_transaction(tx_params)
-        return cast(TxParams, tx)
+        )
+        return TypedContractFunction(func, tx_params)
