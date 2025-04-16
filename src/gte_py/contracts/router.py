@@ -3,7 +3,6 @@ from typing import Any
 from eth_typing import Address, ChecksumAddress
 from hexbytes import HexBytes
 from web3 import Web3
-from web3.types import TxParams
 
 from .structs import ICLOBCancelArgs, ICLOBPostLimitOrderArgs
 from .utils import TypedContractFunction, load_abi

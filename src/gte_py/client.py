@@ -31,7 +31,9 @@ class Client:
 
     def __init__(
         self,
+        # TODO: Do we favor async Web3?
         web3_provider: str | Web3,
+        # TODO: make this optional because we might not need it
         sender_address: ChecksumAddress,
         api_url: str = "https://api.gte.io",
         ws_url: str = "wss://ws.gte.io/v1",
@@ -64,6 +66,7 @@ class Client:
 
             # Initialize market info service if router address is provided
         router_address = "0x1234567890abcdef1234567890abcdef12345678"  # Example router address
+        router_address = self._web3.to_checksum_address(router_address)
         self._market_info = MarketService(web3=self._web3, router_address=router_address)
 
         # Initialize execution client for trading operations

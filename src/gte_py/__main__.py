@@ -5,6 +5,7 @@ import json
 from datetime import datetime, timedelta
 
 import typer
+from web3 import Web3
 
 from . import Client
 
@@ -309,8 +310,12 @@ def user_assets(user_address: str, limit: int = 100):
 def user_positions(user_address: str):
     """Get LP positions for a user."""
 
+
     async def _user_positions():
-        async with Client() as client:
+        nonlocal user_address
+        w3 = Web3(Web3.HTTPProvider("https://rpc.gte.network"))
+        user_address = w3.to_checksum_address(user_address)
+        async with Client(w3, user_address) as client:
             positions = await client.get_positions(user_address)
             # Convert to dict for JSON serialization
             positions_data = [
