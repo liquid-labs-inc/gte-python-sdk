@@ -1,33 +1,192 @@
 """Order execution functionality for the GTE client."""
 
+import asyncio
 import logging
-import time
-from typing import Any, cast
+from collections.abc import Callable
+from typing import Any
 
 from eth_typing import AnyAddress, ChecksumAddress
 from web3 import Web3
-from web3.types import TxReceipt
+from web3.exceptions import LogTopicError
+from web3.providers import WebSocketProvider
+from web3.types import EventData
 
 from .contracts.iclob import ICLOB
 from .contracts.router import Router
-from .contracts.structs import (
-    FillOrderType,
-    ICLOBCancelArgs,
-    ICLOBPostFillOrderArgs,
-    ICLOBPostLimitOrderArgs,
-    LimitOrderType,
-    Settlement,
-    Side,
-)
+from .contracts.structs import Side
 from .contracts.utils import get_current_timestamp
 from .info import MarketService
-from .models import Market, Order, OrderSide, OrderStatus, OrderType, TimeInForce, Trade
+from .models import Market, Order, OrderStatus, Trade
 
 logger = logging.getLogger(__name__)
 
 
+class SubscriptionManager:
+    """Manages event subscriptions for streaming data."""
+
+    def __init__(self, web3: Web3):
+        """
+        Initialize the subscription manager.
+
+        Args:
+            web3: Web3 instance with WebsocketProvider
+        """
+        self._web3 = web3
+        self._subscriptions: dict[str, dict[str, Any]] = {}
+        self._running_tasks: dict[str, asyncio.Task] = {}
+
+        # Check if websocket provider
+        if not isinstance(web3.provider, WebSocketProvider):
+            logger.warning(
+                "Web3 provider is not a WebsocketProvider. Streaming functionality will be limited."
+            )
+
+    async def subscribe(
+        self,
+        subscription_id: str,
+        contract: ICLOB,
+        event_name: str,
+        callback: Callable[[EventData], None],
+        argument_filters: dict[str, Any] = None,
+        polling_interval: float = 2.0,
+    ) -> str:
+        """
+        Subscribe to contract events.
+
+        Args:
+            subscription_id: Unique identifier for this subscription
+            contract: Contract to subscribe to
+            event_name: Name of the event to subscribe to
+            callback: Function to call with each event
+            argument_filters: Filters to apply to events
+            polling_interval: Polling interval for non-websocket providers
+
+        Returns:
+            Subscription ID
+        """
+        if subscription_id in self._subscriptions:
+            # Unsubscribe existing subscription with this ID
+            await self.unsubscribe(subscription_id)
+
+        self._subscriptions[subscription_id] = {
+            "contract": contract,
+            "event_name": event_name,
+            "callback": callback,
+            "argument_filters": argument_filters or {},
+            "polling_interval": polling_interval,
+            "last_block": self._web3.eth.block_number,
+        }
+
+        # Start event listener
+        if isinstance(self._web3.provider, WebSocketProvider):
+            task = asyncio.create_task(self._ws_listen_for_events(subscription_id))
+        else:
+            task = asyncio.create_task(self._poll_for_events(subscription_id))
+
+        self._running_tasks[subscription_id] = task
+        return subscription_id
+
+    async def unsubscribe(self, subscription_id: str) -> None:
+        """
+        Unsubscribe from events.
+
+        Args:
+            subscription_id: ID of the subscription to cancel
+        """
+        if subscription_id in self._running_tasks:
+            task = self._running_tasks[subscription_id]
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            del self._running_tasks[subscription_id]
+
+        if subscription_id in self._subscriptions:
+            del self._subscriptions[subscription_id]
+
+    async def _ws_listen_for_events(self, subscription_id: str) -> None:
+        """
+        Listen for events using websocket subscription.
+
+        Args:
+            subscription_id: ID of the subscription
+        """
+        if subscription_id not in self._subscriptions:
+            return
+
+        sub_info = self._subscriptions[subscription_id]
+        contract = sub_info["contract"]
+        event_name = sub_info["event_name"]
+        callback = sub_info["callback"]
+        filters = sub_info["argument_filters"]
+
+        event = getattr(contract.contract.events, event_name)
+        event_filter = None
+        try:
+            event_filter = await event.create_filter(fromBlock="latest", argument_filters=filters)
+
+            while True:
+                try:
+                    for event in event_filter.get_new_entries():
+                        asyncio.create_task(callback(event))
+                except LogTopicError as e:
+                    logger.error(f"Error processing events: {e}")
+
+                await asyncio.sleep(0.1)
+        except asyncio.CancelledError:
+            # Clean up the filter when cancelled
+            await event_filter.uninstall()
+            raise
+
+    async def _poll_for_events(self, subscription_id: str) -> None:
+        """
+        Poll for events using eth_getLogs for non-websocket providers.
+
+        Args:
+            subscription_id: ID of the subscription
+        """
+        if subscription_id not in self._subscriptions:
+            return
+
+        sub_info = self._subscriptions[subscription_id]
+        contract = sub_info["contract"]
+        event_name = sub_info["event_name"]
+        callback = sub_info["callback"]
+        filters = sub_info["argument_filters"]
+        interval = sub_info["polling_interval"]
+
+        event = getattr(contract.contract.events, event_name)
+
+        try:
+            while True:
+                current_block = self._web3.eth.block_number
+                from_block = sub_info["last_block"] + 1
+
+                if current_block >= from_block:
+                    events = event.get_logs(
+                        fromBlock=from_block, toBlock=current_block, argument_filters=filters
+                    )
+
+                    for event_data in events:
+                        asyncio.create_task(callback(event_data))
+
+                    # Update last processed block
+                    sub_info["last_block"] = current_block
+
+                await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            raise
+
+
 class ExecutionClient:
     """Client for executing orders on the GTE exchange."""
+
+    # Event signature constants
+    EVENT_ORDER_POSTED = "OrderPosted"
+    EVENT_ORDER_FILLED = "OrderFilled"
+    EVENT_ORDER_CANCELLED = "OrderCancelled"
+    EVENT_ORDER_AMENDED = "OrderAmended"
 
     def __init__(self, web3: Web3, sender_address: AnyAddress, router_address: str | None = None):
         """
@@ -43,6 +202,7 @@ class ExecutionClient:
         self._router: Router | None = None
         self._market_info: MarketService | None = None
         self._sender_address: ChecksumAddress = self._web3.to_checksum_address(sender_address)
+        self._subscription_manager: SubscriptionManager | None = None
 
         if web3 and router_address:
             self.setup_contracts(web3, router_address)
@@ -84,370 +244,332 @@ class ExecutionClient:
             self._clob_clients[contract_address] = ICLOB(
                 web3=self._web3, contract_address=contract_address
             )
-
         return self._clob_clients[contract_address]
 
-    def _map_order_params_to_contract_args(
-        self,
-        market: Market,
-        side: OrderSide,
-        order_type: OrderType,
-        amount: float,
-        price: float,
-        time_in_force: TimeInForce,
-    ) -> dict[str, Any]:
-        """
-        Map order parameters to contract arguments.
-
-        Args:
-            market: Market object
-            side: Order side
-            order_type: Order type
-            amount: Order amount
-            price: Order price
-            time_in_force: Time in force
-
-        Returns:
-            Dictionary with contract arguments
-        """
-        # Get market parameters with proper defaults
-        base_decimals = 18 if market.base_decimals is None else market.base_decimals
-        tick_size_in_decimals = (
-            6 if market.tick_size_in_decimals is None else market.tick_size_in_decimals
-        )
-        base_atoms_per_lot = 1 if market.base_atoms_per_lot is None else market.base_atoms_per_lot
-
-        # Map order side
-        side_value = Side.BUY if side == OrderSide.BUY else Side.SELL
-
-        # Convert amount to base lots
-        amount_in_base_lots = int(amount * (10**base_decimals) / base_atoms_per_lot)
-
-        # Convert price to ticks
-        price_in_ticks = int(price * (10**tick_size_in_decimals))
-
-        # Map time in force
-        if order_type == OrderType.LIMIT:
-            # Map time_in_force to LimitOrderType
-            limit_type = LimitOrderType.GOOD_TILL_CANCELLED  # Default
-            if time_in_force == TimeInForce.IOC:
-                limit_type = LimitOrderType.IMMEDIATE_OR_CANCEL
-            elif time_in_force == TimeInForce.FOK:
-                limit_type = LimitOrderType.FILL_OR_KILL
-
-            return {
-                "amount_in_base_lots": amount_in_base_lots,
-                "price_in_ticks": price_in_ticks,
-                "side_value": side_value,
-                "limit_type": limit_type,
-            }
-        else:  # Market order
-            return {
-                "amount_in_base_lots": amount_in_base_lots,
-                "price_in_ticks": price_in_ticks,
-                "side_value": side_value,
-                "fill_type": FillOrderType.IMMEDIATE_OR_CANCEL,
-            }
-
-    def _convert_receipt_to_order(
-        self,
-        receipt: TxReceipt,
-        market: Market,
-        side: OrderSide,
-        order_type: OrderType,
-        amount: float,
-        price: float | None,
-        time_in_force: TimeInForce,
-    ) -> Order:
-        """
-        Convert transaction receipt to Order model.
-
-        Args:
-            receipt: Transaction receipt
-            market: Market object
-            side: Order side
-            order_type: Order type
-            amount: Order amount
-            price: Order price
-            time_in_force: Time in force
-
-        Returns:
-            Order model
-        """
-        # In a real implementation, you would parse the logs from the receipt
-        # to extract the order ID and other details
-        # For now, create a placeholder order with the transaction hash as ID
-
-        order_id = f"tx-{receipt['transactionHash'].hex()}"
-        market_address = market.address
-
-        order = Order(
-            id=order_id,
-            market_address=market_address,
-            side=side,
-            order_type=order_type,
-            amount=amount,
-            price=price if price is not None else 0.0,
-            time_in_force=time_in_force,
-            status=OrderStatus.OPEN,
-            filled_amount=0.0,
-            filled_price=0.0,
-            created_at=int(time.time() * 1000),
-        )
-        return order
-
-    async def create_order(
-        self,
-        market: Market,
-        side: OrderSide,
-        order_type: OrderType,
-        amount: float,
-        price: float | None = None,
-        time_in_force: TimeInForce = TimeInForce.GTC,
-        use_router: bool = True,
-        **tx_kwargs,
-    ) -> Order:
-        """
-        Create a new order.
-
-        Args:
-            market: Market object with details
-            side: Order side
-            order_type: Order type
-            amount: Order amount
-            price: Order price (required for limit orders)
-            time_in_force: Time in force
-            use_router: Whether to use the router for creating orders (safer)
-            **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
-        Returns:
-            Created order information
-
-        Raises:
-            ValueError: For missing required parameters or invalid input
-        """
-        logger.info(
-            f"Creating {order_type.value} {side.value} order for {amount} at price {price}"
-        )
-
-        if not self._web3:
-            raise ValueError("Web3 provider not configured. Cannot create on-chain orders.")
-
-        if not self._sender_address:
-            raise ValueError(
-                "sender_address is required for on-chain orders. Set it during client initialization."
-            )
-
-        if not price and order_type == OrderType.LIMIT:
-            raise ValueError("Price is required for limit orders")
-
-        if not price:
-            raise ValueError("Price is required for on-chain orders")
-
-        # Get contract address
-        contract_address = market.address
-
-        # Get mapped contract parameters
-        params = self._map_order_params_to_contract_args(
-            market=market,
-            side=side,
-            order_type=order_type,
-            amount=amount,
-            price=price,
-            time_in_force=time_in_force,
-        )
-
-        tx_fn = None
-
-        # Create the appropriate order based on type and use router or direct contract
-        if order_type == OrderType.LIMIT:
-            # Create limit order arguments
-            limit_args = ICLOBPostLimitOrderArgs(
-                amountInBase=params["amount_in_base_lots"],
-                price=params["price_in_ticks"],
-                cancelTimestamp=0,
-                side=params["side_value"],
-                limitOrderType=params["limit_type"],
-                settlement=Settlement.INSTANT,
-            )
-
-            # Use router or direct CLOB contract
-            if use_router and self._router:
-                tx_fn = self._router.clob_post_limit_order(
-                    clob_address=contract_address,
-                    args=limit_args,
-                    sender_address=self._sender_address,
-                    **tx_kwargs,
-                )
-            else:
-                # Use direct CLOB contract
-                clob = self._get_clob(contract_address)
-                tx_fn = clob.post_limit_order(
-                    args=limit_args, sender_address=self._sender_address, **tx_kwargs
-                )
-        else:  # Market order
-            # Create fill order arguments
-            fill_args = ICLOBPostFillOrderArgs(
-                amountInBaseLots=params["amount_in_base_lots"],
-                priceInTicks=params["price_in_ticks"],
-                side=params["side_value"],
-                fillOrderType=params["fill_type"],
-                settlement=Settlement.INSTANT,
-            )
-
-            # Use router or direct CLOB contract
-            if use_router and self._router:
-                raise NotImplementedError("onchain Router does not support fill orders yet")
-                # tx_fn = self._router.clob_post_fill_order(
-                #     clob_address=contract_address,
-                #     args=fill_args,
-                #     sender_address=self._sender_address,
-                #     **tx_kwargs,
-                # )
-            else:
-                # Use direct CLOB contract
-                clob = self._get_clob(contract_address)
-                tx_fn = clob.post_fill_order(
-                    args=fill_args, sender_address=self._sender_address, **tx_kwargs
-                )
-
-        # Execute the transaction and get the receipt
-        _tx_hash = tx_fn.send()
-        receipt = cast(TxReceipt, tx_fn.retrieve())
-
-        # Convert receipt to Order model
-        return self._convert_receipt_to_order(
-            receipt=receipt,
-            market=market,
-            side=side,
-            order_type=order_type,
-            amount=amount,
-            price=price,
-            time_in_force=time_in_force,
-        )
-
-    def cancel_order(
-        self,
-        market: Market,
-        order_id: int,
-        use_router: bool = True,
-        **tx_kwargs,
-    ) -> Order:
-        """
-        Cancel an order.
-
-        Args:
-            market: Market object with details
-            order_id: ID of the order to cancel
-            use_router: Whether to use the router for cancellation (safer)
-            **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
-        Returns:
-            Order object with updated status
-
-        Raises:
-            ValueError: If Web3 is not configured or parameters are invalid
-        """
-        if not self._web3:
-            raise ValueError("Web3 provider not configured. Cannot cancel on-chain orders.")
-
-        if not self._sender_address:
-            raise ValueError(
-                "sender_address is required for on-chain orders. Set it during client initialization."
-            )
-
-        contract_address = market.address
-
-        # Create cancel arguments
-        cancel_args = ICLOBCancelArgs(orderIds=[order_id], settlement=Settlement.INSTANT)
-
-        # Use router or direct contract
-        if use_router and self._router:
-            _tx_fn = self._router.clob_cancel(
-                clob_address=contract_address,
-                args=cancel_args,
-                sender_address=self._sender_address,
-                **tx_kwargs,
-            )
-        else:
-            clob = self._get_clob(contract_address)
-            _tx_fn = clob.cancel(
-                args=cancel_args, sender_address=self._sender_address, **tx_kwargs
-            )
-
-        # Execute transaction and get receipt
-        # tx_hash = tx_fn.send()
-        # receipt = cast(TxReceipt, tx_fn.retrieve())
-
-        # Return a cancelled order model
-        market_address = market.address if market.address else contract_address
-
-        return Order.from_api(
-            {
-                "id": str(order_id),
-                "marketAddress": market_address,
-                "side": "buy",  # We don't know the side, so this is a placeholder
-                "type": "limit",  # We don't know the type, so this is a placeholder
-                "amount": 0.0,  # We don't know the amount, so this is a placeholder
-                "price": 0.0,  # We don't know the price, so this is a placeholder
-                "timeInForce": "GTC",  # We don't know the time in force, so this is a placeholder
-                "status": OrderStatus.CANCELLED.value,
-                "filledAmount": 0.0,
-                "filledPrice": 0.0,
-                "createdAt": int(time.time() * 1000),
-            }
-        )
-
-    async def get_user_orders(
+    async def stream_user_orders(
         self,
         user_address: str,
         market_address: str | None = None,
-        status: str | None = None,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> list[Order]:
+        callback: Callable[[Order, str], None] | None = None,
+    ) -> str:
         """
-        Fetch orders for a specific user.
+        Stream order updates for a specific user.
 
         Args:
             user_address: Address of the user
             market_address: Optional market address to filter by
-            status: Optional status to filter by (open, filled, cancelled)
-            limit: Maximum number of orders to return
-            offset: Offset for pagination
+            callback: Function to call with each order update and event type
 
         Returns:
-            List of user orders
+            Subscription ID that can be used to unsubscribe
         """
-        # This would make a call to the API in a real implementation
-        # For now we'll return a placeholder
+        if not self._web3:
+            raise ValueError("Web3 provider not configured. Cannot stream blockchain events.")
 
-        placeholder_orders = []
-        for i in range(3):  # Create 3 placeholder orders
-            order_id = f"order-{int(time.time())}-{i}"
-            side = OrderSide.BUY if i % 2 == 0 else OrderSide.SELL
-            order_type = OrderType.LIMIT
-            status_val = "open" if i < 2 else "filled"
+        if not self._subscription_manager:
+            raise ValueError("Subscription manager not initialized.")
 
-            placeholder_orders.append(
-                Order.from_api(
-                    {
-                        "id": order_id,
-                        "marketAddress": market_address or f"0x123456789abcdef{i}",
-                        "side": side.value,
-                        "type": order_type.value,
-                        "amount": 1.0 + i,
-                        "price": 100.0 * (1 + 0.01 * i),
-                        "timeInForce": TimeInForce.GTC.value,
-                        "status": status_val,
-                        "filledAmount": 0.0 if status_val == "open" else 1.0 + i,
-                        "filledPrice": 0.0 if status_val == "open" else 100.0 * (1 + 0.01 * i),
-                        "createdAt": int(time.time() * 1000) - i * 60000,
-                    }
+        user_address = self._web3.to_checksum_address(user_address)
+        subscription_id = f"user_orders_{user_address}_{market_address or 'all'}"
+
+        # Keep track of orders to update them as events come in
+        orders_by_id: dict[int, Order] = {}
+
+        # Get market CLOB contract
+        clob = None
+        if market_address:
+            clob = self._get_clob(market_address)
+            contracts_to_subscribe = [clob]
+        else:
+            # If we don't have a market address, we need to get all markets
+            # For now, use existing CLOB clients, but in a real implementation
+            # we would need to discover all markets
+            contracts_to_subscribe = list(self._clob_clients.values())
+            if not contracts_to_subscribe:
+                raise ValueError(
+                    "No CLOB contracts available. Subscribe to specific markets first."
+                )
+
+        async def handle_post_event(event: EventData) -> None:
+            if event.args.get("account") != user_address:
+                return
+
+            contract_address = event.address
+            order = self._convert_post_event_to_order(event, contract_address)
+            orders_by_id[order.id] = order
+            callback(order, "posted")
+
+        async def handle_fill_event(event: EventData) -> None:
+            args = event['args']
+            if args.get("maker") != user_address and args.get("taker") != user_address:
+                return
+
+            contract_address = event['address']
+            order_id = args.get("orderId")
+
+            # If this is a maker order and we have it cached
+            if args.get("maker") == user_address and order_id in orders_by_id:
+                order = orders_by_id[order_id]
+                self._update_order_from_fill_event(order, event)
+                callback(order, "filled")
+            else:
+                # We don't have the order, try to fetch it
+                try:
+                    # Find the contract that emitted this event
+                    contract = None
+                    for c in contracts_to_subscribe:
+                        if c.address.lower() == contract_address.lower():
+                            contract = c
+                            break
+
+                    if contract:
+                        order_data = contract.get_order(order_id)
+                        order = self._convert_contract_order_to_model(order_data, contract_address)
+                        orders_by_id[order_id] = order
+                        self._update_order_from_fill_event(order, event)
+                        callback(order, "filled")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch order {order_id}: {e}")
+
+        async def handle_cancel_event(event: EventData) -> None:
+            args = event['args']
+            if args.get("account") != user_address:
+                return
+
+            order_id = args.get("orderId")
+            if order_id in orders_by_id:
+                order = orders_by_id[order_id]
+                order.status = OrderStatus.CANCELLED
+                callback(order, "cancelled")
+
+        async def handle_amend_event(event: EventData) -> None:
+            args = event['args']
+            if args.get("account") != user_address:
+                return
+
+            order_id = args.get("orderId")
+            if order_id in orders_by_id:
+                order = orders_by_id[order_id]
+                self._update_order_from_amend_event(order, event)
+                callback(order, "amended")
+
+        # Start with existing orders
+        existing_orders = await self.get_user_orders_from_events(
+            user_address=user_address,
+            market_address=market_address,
+            from_block=self._web3.eth.block_number - 10000,  # Last ~10000 blocks
+            to_block="latest",
+        )
+
+        # Initialize the cache with existing orders
+        for order in existing_orders:
+            orders_by_id[int(order.id)] = order
+            callback(order, "initial")
+
+        # Set up subscriptions for each event type
+        tasks = []
+        for contract in contracts_to_subscribe:
+            # Subscribe to post events
+            tasks.append(
+                self._subscription_manager.subscribe(
+                    f"{subscription_id}_post_{contract.address}",
+                    contract,
+                    self.EVENT_ORDER_POSTED,
+                    handle_post_event,
+                    {"account": user_address},
                 )
             )
 
-        return placeholder_orders
+            # Subscribe to fill events (as maker)
+            tasks.append(
+                self._subscription_manager.subscribe(
+                    f"{subscription_id}_fill_maker_{contract.address}",
+                    contract,
+                    self.EVENT_ORDER_FILLED,
+                    handle_fill_event,
+                    {"maker": user_address},
+                )
+            )
+
+            # Subscribe to fill events (as taker)
+            tasks.append(
+                self._subscription_manager.subscribe(
+                    f"{subscription_id}_fill_taker_{contract.address}",
+                    contract,
+                    self.EVENT_ORDER_FILLED,
+                    handle_fill_event,
+                    {"taker": user_address},
+                )
+            )
+
+            # Subscribe to cancel events
+            tasks.append(
+                self._subscription_manager.subscribe(
+                    f"{subscription_id}_cancel_{contract.address}",
+                    contract,
+                    self.EVENT_ORDER_CANCELLED,
+                    handle_cancel_event,
+                    {"account": user_address},
+                )
+            )
+
+            # Subscribe to amend events
+            tasks.append(
+                self._subscription_manager.subscribe(
+                    f"{subscription_id}_amend_{contract.address}",
+                    contract,
+                    self.EVENT_ORDER_AMENDED,
+                    handle_amend_event,
+                    {"account": user_address},
+                )
+            )
+
+        await asyncio.gather(*tasks)
+        return subscription_id
+
+    async def stream_market_trades(
+        self,
+        market_address: str,
+        callback: Callable[[Trade], None],
+    ) -> str:
+        """
+        Stream trades for a specific market.
+
+        Args:
+            market_address: Market address to filter by
+            callback: Function to call with each trade
+
+        Returns:
+            Subscription ID that can be used to unsubscribe
+        """
+        if not self._web3:
+            raise ValueError("Web3 provider not configured. Cannot stream blockchain events.")
+
+        if not self._subscription_manager:
+            raise ValueError("Subscription manager not initialized.")
+
+        market_address = self._web3.to_checksum_address(market_address)
+        subscription_id = f"market_trades_{market_address}"
+
+        clob = self._get_clob(market_address)
+
+        async def handle_fill_event(event: EventData) -> None:
+            trade = self._convert_fill_event_to_trade(event, market_address)
+            callback(trade)
+
+        # Start with recent trades
+        recent_trades = await self.get_market_trades_from_events(
+            market_address=market_address,
+            from_block=self._web3.eth.block_number - 1000,  # Last ~1000 blocks
+            to_block="latest",
+            limit=50,
+        )
+
+        # Send existing trades to callback
+        for trade in recent_trades:
+            callback(trade)
+
+        # Subscribe to new trades
+        await self._subscription_manager.subscribe(
+            subscription_id, clob, self.EVENT_ORDER_FILLED, handle_fill_event
+        )
+
+        return subscription_id
+
+    async def stream_user_trades(
+        self,
+        user_address: str,
+        market_address: str | None = None,
+        callback: Callable[[Trade], None] | None = None,
+    ) -> str:
+        """
+        Stream trades for a specific user.
+
+        Args:
+            user_address: Address of the user
+            market_address: Optional market address to filter by
+            callback: Function to call with each trade
+
+        Returns:
+            Subscription ID that can be used to unsubscribe
+        """
+        if not self._web3:
+            raise ValueError("Web3 provider not configured. Cannot stream blockchain events.")
+
+        if not self._subscription_manager:
+            raise ValueError("Subscription manager not initialized.")
+
+        user_address = self._web3.to_checksum_address(user_address)
+        subscription_id = f"user_trades_{user_address}_{market_address or 'all'}"
+
+        # Get market CLOB contract
+        clob = None
+        if market_address:
+            clob = self._get_clob(market_address)
+            contracts_to_subscribe = [clob]
+        else:
+            # If we don't have a market address, we need to get all markets
+            contracts_to_subscribe = list(self._clob_clients.values())
+            if not contracts_to_subscribe:
+                raise ValueError(
+                    "No CLOB contracts available. Subscribe to specific markets first."
+                )
+
+        async def handle_maker_fill_event(event: EventData) -> None:
+            if event.args.get("maker") != user_address:
+                return
+
+            contract_address = event.address
+            trade = self._convert_fill_event_to_trade(event, contract_address, is_maker=True)
+            callback(trade)
+
+        async def handle_taker_fill_event(event: EventData) -> None:
+            if event.args.get("taker") != user_address:
+                return
+
+            contract_address = event.address
+            trade = self._convert_fill_event_to_trade(event, contract_address, is_maker=False)
+            callback(trade)
+
+        # Start with existing trades
+        existing_trades = await self.get_user_trades_from_events(
+            user_address=user_address,
+            market_address=market_address,
+            from_block=self._web3.eth.block_number - 10000,  # Last ~10000 blocks
+            to_block="latest",
+        )
+
+        # Send existing trades to callback
+        for trade in existing_trades:
+            callback(trade)
+
+        # Set up subscriptions for each contract
+        tasks = []
+        for contract in contracts_to_subscribe:
+            # Subscribe to fill events (as maker)
+            tasks.append(
+                self._subscription_manager.subscribe(
+                    f"{subscription_id}_maker_{contract.address}",
+                    contract,
+                    self.EVENT_ORDER_FILLED,
+                    handle_maker_fill_event,
+                    {"maker": user_address},
+                )
+            )
+
+            # Subscribe to fill events (as taker)
+            tasks.append(
+                self._subscription_manager.subscribe(
+                    f"{subscription_id}_taker_{contract.address}",
+                    contract,
+                    self.EVENT_ORDER_FILLED,
+                    handle_taker_fill_event,
+                    {"taker": user_address},
+                )
+            )
+
+        await asyncio.gather(*tasks)
+        return subscription_id
 
     async def get_user_trades(
         self,
@@ -468,31 +590,7 @@ class ExecutionClient:
         Returns:
             List of user trades
         """
-        # This would make a call to the API in a real implementation
-        # For now we'll return placeholders
-
-        placeholder_trades = []
-        for i in range(5):  # Create 5 placeholder trades
-            side = OrderSide.BUY if i % 2 == 0 else OrderSide.SELL
-
-            placeholder_trades.append(
-                Trade.from_api(
-                    {
-                        "m": market_address or f"0x123456789abcdef{i}",
-                        "timestamp": int(time.time() * 1000)
-                        - i * 3600000,  # Each trade 1 hour apart
-                        "price": 100.0 + i,
-                        "size": 0.5 + 0.1 * i,
-                        "side": side.value,
-                        "transactionHash": f"0xabcdef1234567890{i}",
-                        "maker": f"0xmaker{i}",
-                        "taker": user_address,
-                        "id": 1000 + i,
-                    }
-                )
-            )
-
-        return placeholder_trades
+        raise NotImplementedError
 
     async def get_order_book_snapshot(self, market: Market, depth: int = 10) -> dict[str, Any]:
         """
@@ -558,30 +656,87 @@ class ExecutionClient:
 
         return {"bids": bids, "asks": asks, "timestamp": get_current_timestamp()}
 
-    async def get_user_balances(
-        self, user_address: ChecksumAddress, market: Market
-    ) -> dict[str, int]:
+    async def stream_order_book(
+        self,
+        market_address: str,
+        callback: Callable[[dict], None],
+        depth: int = 10,
+        update_interval: float = 1.0,
+    ) -> str:
         """
-        Get user token balances in the CLOB.
+        Stream order book updates for a specific market.
 
         Args:
-            user_address: Address of the user
-            market: Market object with details
+            market_address: Market address to filter by
+            callback: Function to call with each order book update
+            depth: Number of price levels to fetch on each side
+            update_interval: Interval between order book refreshes
 
         Returns:
-            Dictionary with base and quote token balances
-
-        Raises:
-            ValueError: If Web3 is not configured or market has no contract address
+            Subscription ID that can be used to unsubscribe
         """
         if not self._web3:
-            raise ValueError("Web3 provider not configured. Cannot fetch on-chain balances.")
+            raise ValueError("Web3 provider not configured. Cannot stream blockchain events.")
 
-        contract_address = market.address
+        market_address = self._web3.to_checksum_address(market_address)
+        subscription_id = f"orderbook_{market_address}"
 
-        clob = self._get_clob(contract_address)
+        # Create a task to poll the order book
+        task = asyncio.create_task(
+            self._poll_order_book(market_address, callback, depth, update_interval)
+        )
 
-        base_balance = clob.get_base_token_account_balance(user_address)
-        quote_balance = clob.get_quote_token_account_balance(user_address)
+        # Store the task so we can cancel it later
+        if self._subscription_manager:
+            self._subscription_manager._running_tasks[subscription_id] = task
 
-        return {"baseBalance": base_balance, "quoteBalance": quote_balance}
+        return subscription_id
+
+    async def _poll_order_book(
+        self,
+        market: Market,
+        callback: Callable[[dict], None],
+        depth: int,
+        update_interval: float,
+    ) -> None:
+        """
+        Poll the order book at regular intervals.
+
+        Args:
+            market_address: Market address
+            callback: Function to call with each update
+            depth: Depth of the order book
+            update_interval: Interval between updates
+        """
+
+        try:
+            while True:
+                try:
+                    # Get the current order book
+                    order_book = await self.get_order_book_snapshot(market, depth)
+
+                    # Call the callback
+                    callback(order_book)
+
+                except Exception as e:
+                    logger.error(f"Error polling order book: {e}")
+
+                # Wait for next update
+                await asyncio.sleep(update_interval)
+        except asyncio.CancelledError:
+            # Clean up when cancelled
+            raise
+
+    async def unsubscribe(self, subscription_id: str) -> None:
+        """
+        Unsubscribe from a streaming subscription.
+
+        Args:
+            subscription_id: ID of the subscription to cancel
+        """
+        if not self._subscription_manager:
+            raise ValueError("Subscription manager not initialized.")
+
+        await self._subscription_manager.unsubscribe(subscription_id)
+
+    # ...existing code...
