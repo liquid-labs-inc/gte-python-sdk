@@ -15,6 +15,7 @@ from .contracts.iclob import ICLOB
 from .contracts.factory import CLOBFactory
 from .contracts.erc20 import ERC20
 from .contracts.router import Router
+from .contracts.weth import WETH  # Add import for WETH class
 from .contracts.structs import (
     Side, 
     Settlement, 
@@ -214,6 +215,7 @@ class ExecutionClient:
         self._web3 = web3
         self._clob_clients: Dict[ChecksumAddress, ICLOB] = {}
         self._token_clients: Dict[ChecksumAddress, ERC20] = {}
+        self._weth_clients: Dict[ChecksumAddress, WETH] = {}
         self._factory: Optional[CLOBFactory] = None
         self._sender_address = sender_address
         self._subscription_manager: Optional[SubscriptionManager] = None
@@ -265,6 +267,65 @@ class ExecutionClient:
                 web3=self._web3, contract_address=token_address
             )
         return self._token_clients[token_address]
+
+    def _get_weth(self, weth_address: ChecksumAddress) -> WETH:
+        """
+        Get or create a WETH contract instance.
+        
+        Args:
+            weth_address: WETH token contract address
+            
+        Returns:
+            WETH contract instance
+        """
+        if not self._web3:
+            raise ValueError("Web3 provider not configured. Cannot interact with contracts.")
+            
+        if weth_address not in self._weth_clients:
+            self._weth_clients[weth_address] = WETH(
+                web3=self._web3, contract_address=weth_address
+            )
+        return self._weth_clients[weth_address]
+
+    async def wrap_eth(
+        self,
+        weth_address: ChecksumAddress,
+        amount_eth: float,
+        **kwargs
+    ) -> TypedContractFunction:
+        """
+        Wrap ETH to get WETH.
+        
+        Args:
+            weth_address: Address of the WETH contract
+            amount_eth: Amount of ETH to wrap (as a float, e.g., 1.5 ETH)
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+            
+        Returns:
+            TypedContractFunction that can be used to execute the transaction
+        """
+        weth = self._get_weth(weth_address)
+        return weth.deposit_eth(amount_eth, self._sender_address, **kwargs)
+
+    async def unwrap_eth(
+        self,
+        weth_address: ChecksumAddress,
+        amount_eth: float,
+        **kwargs
+    ) -> TypedContractFunction:
+        """
+        Unwrap WETH to get ETH.
+        
+        Args:
+            weth_address: Address of the WETH contract
+            amount_eth: Amount of WETH to unwrap (as a float, e.g., 1.5 ETH)
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+            
+        Returns:
+            TypedContractFunction that can be used to execute the transaction
+        """
+        weth = self._get_weth(weth_address)
+        return weth.withdraw_eth(amount_eth, self._sender_address, **kwargs)
 
     async def place_limit_order(
         self, 

@@ -2,15 +2,13 @@
 
 import asyncio
 import os
-from decimal import Decimal
 
 from dotenv import load_dotenv
-from eth_typing import ChecksumAddress
 from web3 import Web3
 
 from gte_py import Client
 from gte_py.config import TESTNET_CONFIG
-from gte_py.models import OrderSide, OrderType, TimeInForce
+from gte_py.models import OrderSide, TimeInForce
 
 # Load environment variables from .env file
 load_dotenv()
@@ -32,30 +30,18 @@ async def get_market_info(client, market_address):
     """Get market information."""
     if not market_address:
         raise ValueError("No market address provided. Set MARKET_ADDRESS in .env file.")
-    
+
     print(f"Using configured market: {market_address}")
     market = client.get_market(market_address)
-    
+
     print(f"Market: {market.pair}")
     print(f"Base token: {market.base_asset.symbol} ({market.base_token_address})")
     print(f"Quote token: {market.quote_asset.symbol} ({market.quote_token_address})")
     print(f"Tick size: {market.tick_size}")
-    
+
     return market
 
 
-async def sign_and_send_tx(web3, tx, private_key):
-    """Sign and send a transaction."""
-    signed_tx = web3.eth.account.sign_transaction(tx, private_key)
-    tx_hash = web3.eth.send_raw_transaction(signed_tx.rawTransaction)
-    print(f"Transaction sent: {web3.to_hex(tx_hash)}")
-    
-    # Wait for transaction receipt
-    receipt = await wait_for_transaction(web3, tx_hash)
-    print(f"Transaction confirmed in block {receipt['blockNumber']}")
-    print(f"Gas used: {receipt['gasUsed']}")
-    
-    return receipt
 
 
 async def wait_for_transaction(web3, tx_hash, timeout=120):
@@ -68,14 +54,43 @@ async def wait_for_transaction(web3, tx_hash, timeout=120):
                 return receipt
         except Exception:
             pass
-        
+
         if asyncio.get_event_loop().time() - start_time > timeout:
             raise TimeoutError(f"Transaction not mined after {timeout} seconds")
-        
+
         await asyncio.sleep(2)
 
 
-async def limit_order_example(client, web3, market, send_tx=False):
+async def approve_and_deposit_example(client, web3, market, amount=0.01, send_tx=False):
+    """Example of approving and depositing WETH to the exchange."""
+    print_separator("Approve and Deposit WETH Example")
+    
+    # Get the quote token address (assuming it's WETH for this example)
+    token_address = market.quote_token_address
+    print(f"Creating transaction to approve and deposit {amount} {market.quote_asset.symbol}...")
+    
+    # Get deposit transactions - this returns a list containing [approve_tx, deposit_tx]
+    tx_funcs = await client.deposit_to_market(
+        token_address=token_address,
+        amount=amount,
+        gas=100000,
+    )
+
+    if send_tx and WALLET_PRIVATE_KEY:
+        print("\nSending approval transaction...")
+        approve_receipt = tx_funcs[0].send(WALLET_ADDRESS, WALLET_PRIVATE_KEY)
+        
+        print("\nSending deposit transaction...")
+        deposit_receipt = tx_funcs[1].send(WALLET_ADDRESS, WALLET_PRIVATE_KEY)
+        
+        return approve_receipt, deposit_receipt
+    else:
+        print("\nNOTE: This is a demonstration only. No transactions were sent.")
+        print("Set send_tx=True and provide WALLET_PRIVATE_KEY to send transactions.")
+        return None
+
+
+async def limit_order_example(client: Client, web3, market, send_tx=False):
     """Example of creating a limit order."""
     print_separator("Limit Order Example")
 
@@ -83,7 +98,7 @@ async def limit_order_example(client, web3, market, send_tx=False):
     price = market.price or 100.0
     # Place a bid 5% below current price
     bid_price = price * 0.95
-    
+
     print(f"Current market price: {price}")
     print(f"Creating limit buy order at price: {bid_price}")
 
@@ -98,7 +113,7 @@ async def limit_order_example(client, web3, market, send_tx=False):
 
     # Convert to transaction dictionary
     tx = tx_func.build_transaction()
-    
+
     print("Transaction created:")
     print(f"To: {tx.get('to')}")
     print(f"Data length: {len(tx.get('data', ''))}")
@@ -114,13 +129,13 @@ async def limit_order_example(client, web3, market, send_tx=False):
         return None
 
 
-async def market_order_example(client, web3, market, send_tx=False):
+async def market_order_example(client: Client, web3, market, send_tx=False):
     """Example of creating a market order."""
     print_separator("Market Order Example")
 
     # Current market price (or estimate)
     price = market.price or 100.0
-    
+
     print(f"Current market price: {price}")
     print(f"Creating market buy order")
 
@@ -134,7 +149,7 @@ async def market_order_example(client, web3, market, send_tx=False):
 
     # Convert to transaction dictionary
     tx = tx_func.build_transaction()
-    
+
     print("Transaction created:")
     print(f"To: {tx.get('to')}")
     print(f"Data length: {len(tx.get('data', ''))}")
@@ -167,7 +182,7 @@ async def cancel_order_example(client, web3, market, order_id=None, send_tx=Fals
 
     # Convert to transaction dictionary
     tx = tx_func.build_transaction()
-    
+
     print("Transaction created:")
     print(f"To: {tx.get('to')}")
     print(f"Data length: {len(tx.get('data', ''))}")
@@ -183,23 +198,23 @@ async def cancel_order_example(client, web3, market, order_id=None, send_tx=Fals
         return None
 
 
-async def show_balances_example(client, market):
+async def show_balances_example(client: Client, market):
     """Example of getting token balances."""
     print_separator("Token Balances Example")
 
     # Get balances for base and quote tokens
     base_token = market.base_token_address
     quote_token = market.quote_token_address
-    
+
     print(f"Getting balances for {market.base_asset.symbol} and {market.quote_asset.symbol}...")
-    
+
     base_wallet, base_exchange = await client.get_balance(base_token)
     quote_wallet, quote_exchange = await client.get_balance(quote_token)
-    
+
     print(f"{market.base_asset.symbol} balances:")
     print(f"  Wallet: {base_wallet:.6f}")
     print(f"  Exchange: {base_exchange:.6f}")
-    
+
     print(f"{market.quote_asset.symbol} balances:")
     print(f"  Wallet: {quote_wallet:.6f}")
     print(f"  Exchange: {quote_exchange:.6f}")
@@ -231,18 +246,15 @@ async def main():
     # Run the examples (set send_tx=True to actually send transactions)
     send_tx = False  # Safety default - change to True to send transactions
     
-    # Example: Place a limit order
-    limit_receipt = await limit_order_example(client, web3, market, send_tx)
+    print("\nNOTE: For WETH wrapping and unwrapping examples, see wrap_weth.py")
     
-    # If the limit order was sent and mined, we'll have the receipt with the order ID
-    # For now, we'll continue with the examples
+    # Deposit tokens example
+    await approve_and_deposit_example(client, web3, market, amount=0.01, send_tx=send_tx)
     
-    # Example: Place a market order
-    market_receipt = await market_order_example(client, web3, market, send_tx)
-    
-    # Example: Cancel an order
-    # We could extract the order ID from the limit order receipt if we had it
-    cancel_receipt = await cancel_order_example(client, web3, market, order_id=None, send_tx=send_tx)
+    # Order examples
+    await limit_order_example(client, web3, market, send_tx)
+    await market_order_example(client, web3, market, send_tx)
+    await cancel_order_example(client, web3, market, order_id=None, send_tx=send_tx)
 
 
 if __name__ == "__main__":

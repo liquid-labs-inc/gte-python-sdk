@@ -3,9 +3,11 @@ import json
 import time
 from typing import Any, Generic, TypeVar
 
+from eth_account.types import PrivateKeyType
+from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
 from web3.contract.contract import ContractFunction
-from web3.types import TxParams
+from web3.types import TxParams, Wei
 
 
 def get_current_timestamp() -> int:
@@ -37,7 +39,7 @@ def to_wei(amount: float, decimals: int = 18) -> int:
     Returns:
         Integer amount in wei
     """
-    return int(amount * (10**decimals))
+    return int(amount * (10 ** decimals))
 
 
 def from_wei(amount: int, decimals: int = 18) -> float:
@@ -51,7 +53,7 @@ def from_wei(amount: int, decimals: int = 18) -> float:
     Returns:
         Decimal amount
     """
-    return amount / (10**decimals)
+    return amount / (10 ** decimals)
 
 
 # Fix for the Traversable issue
@@ -98,10 +100,20 @@ class TypedContractFunction(Generic[T]):
         self.result = self.func.call(self.params)
         return self.result
 
-    def send(self) -> HexBytes:
+    def send(self, address: ChecksumAddress, private_key: PrivateKeyType) -> HexBytes:
         """Synchronous write operation"""
-        self.tx_hash = self.func.transact(self.params)
+        nonce = self.func.w3.eth.get_transaction_count(address)
+        self.params.update({
+            'nonce': nonce,
+        })
+        tx = self.func.build_transaction(self.params)
+        # Sign and send the transaction
+        signed = self.func.w3.eth.account.sign_transaction(tx, private_key)
+        self.tx_hash = self.func.w3.eth.send_raw_transaction(signed.raw_transaction)
         return self.tx_hash
+
+    def build_transaction(self) -> TxParams:
+        return self.func.build_transaction()
 
     def retrieve(self) -> T:
         """

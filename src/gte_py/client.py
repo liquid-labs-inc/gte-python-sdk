@@ -32,10 +32,10 @@ class Client:
     """User-friendly client for interacting with GTE."""
 
     def __init__(
-        self,
-        web3: Web3,
-        config: NetworkConfig,
-        sender_address: ChecksumAddress | None = None,
+            self,
+            web3: Web3,
+            config: NetworkConfig,
+            sender_address: ChecksumAddress | None = None,
     ):
         """
         Initialize the client.
@@ -53,7 +53,7 @@ class Client:
 
         # Initialize market service for fetching market information
         self._market_info = MarketService(web3=self._web3, router_address=config.router_address)
-        
+
         if not sender_address:
             self._execution_client = None
         else:
@@ -61,9 +61,9 @@ class Client:
             self._execution_client = ExecutionClient(
                 web3=self._web3,
                 sender_address=sender_address,
-                factory_address=config.factory_address,
+                factory_address=config.clob_manager_address,
             )
-        
+
         self._sender_address = sender_address
 
     async def __aenter__(self):
@@ -274,14 +274,14 @@ class Client:
 
     # Trading methods
     async def place_limit_order(
-        self,
-        market: Market,
-        side: OrderSide,
-        amount: float,
-        price: float,
-        time_in_force: TimeInForce = TimeInForce.GTC,
-        client_order_id: int = 0,
-        **kwargs,
+            self,
+            market: Market,
+            side: OrderSide,
+            amount: float,
+            price: float,
+            time_in_force: TimeInForce = TimeInForce.GTC,
+            client_order_id: int = 0,
+            **kwargs,
     ) -> TypedContractFunction:
         """
         Place a limit order on the market.
@@ -315,12 +315,12 @@ class Client:
         )
 
     async def place_market_order(
-        self,
-        market: Market,
-        side: OrderSide,
-        amount: float,
-        amount_is_base: bool = True,
-        **kwargs,
+            self,
+            market: Market,
+            side: OrderSide,
+            amount: float,
+            amount_is_base: bool = True,
+            **kwargs,
     ) -> TypedContractFunction:
         """
         Place a market order on the market.
@@ -350,10 +350,10 @@ class Client:
         )
 
     async def cancel_order(
-        self,
-        market: Market,
-        order_id: int,
-        **kwargs,
+            self,
+            market: Market,
+            order_id: int,
+            **kwargs,
     ) -> TypedContractFunction:
         """
         Cancel an order.
@@ -379,9 +379,9 @@ class Client:
         )
 
     async def cancel_all_orders(
-        self,
-        market: Market,
-        **kwargs,
+            self,
+            market: Market,
+            **kwargs,
     ) -> TypedContractFunction:
         """
         Cancel all open orders on a market.
@@ -405,12 +405,12 @@ class Client:
         )
 
     async def amend_order(
-        self,
-        market: Market,
-        order_id: int,
-        new_amount: Optional[float] = None,
-        new_price: Optional[float] = None,
-        **kwargs,
+            self,
+            market: Market,
+            order_id: int,
+            new_amount: Optional[float] = None,
+            new_price: Optional[float] = None,
+            **kwargs,
     ) -> TypedContractFunction:
         """
         Amend an existing order.
@@ -440,10 +440,10 @@ class Client:
         )
 
     async def deposit_to_market(
-        self,
-        token_address: ChecksumAddress,
-        amount: float,
-        **kwargs,
+            self,
+            token_address: ChecksumAddress,
+            amount: float,
+            **kwargs,
     ) -> List[TypedContractFunction]:
         """
         Deposit tokens to the exchange for trading.
@@ -469,10 +469,10 @@ class Client:
         )
 
     async def withdraw_from_market(
-        self,
-        token_address: ChecksumAddress,
-        amount: float,
-        **kwargs,
+            self,
+            token_address: ChecksumAddress,
+            amount: float,
+            **kwargs,
     ) -> TypedContractFunction:
         """
         Withdraw tokens from the exchange.
@@ -498,9 +498,9 @@ class Client:
         )
 
     async def get_balance(
-        self,
-        token_address: ChecksumAddress,
-        account: Optional[ChecksumAddress] = None,
+            self,
+            token_address: ChecksumAddress,
+            account: Optional[ChecksumAddress] = None,
     ) -> Tuple[float, float]:
         """
         Get token balance for an account both on-chain and in the exchange.
@@ -523,12 +523,70 @@ class Client:
             account=account or self._sender_address,
         )
 
+    async def wrap_eth(
+            self,
+            weth_address: ChecksumAddress,
+            amount_eth: float,
+            **kwargs,
+    ) -> TypedContractFunction:
+        """
+        Wrap ETH to get WETH.
+
+        Args:
+            weth_address: Address of the WETH contract
+            amount_eth: Amount of ETH to wrap (as a float, e.g., 1.5 ETH)
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+
+        Returns:
+            TypedContractFunction that can be used to execute the transaction
+
+        Raises:
+            ValueError: If execution client is not initialized
+        """
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
+
+        return await self._execution_client.wrap_eth(
+            weth_address=weth_address,
+            amount_eth=amount_eth,
+            **kwargs,
+        )
+
+    async def unwrap_eth(
+            self,
+            weth_address: ChecksumAddress,
+            amount_eth: float,
+            **kwargs,
+    ) -> TypedContractFunction:
+        """
+        Unwrap WETH to get ETH.
+
+        Args:
+            weth_address: Address of the WETH contract
+            amount_eth: Amount of WETH to unwrap (as a float, e.g., 1.5 ETH)
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+
+        Returns:
+            TypedContractFunction that can be used to execute the transaction
+
+        Raises:
+            ValueError: If execution client is not initialized
+        """
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
+
+        return await self._execution_client.unwrap_eth(
+            weth_address=weth_address,
+            amount_eth=amount_eth,
+            **kwargs,
+        )
+
     # Streaming methods
     async def stream_user_orders(
-        self,
-        user_address: Optional[ChecksumAddress] = None,
-        market_address: Optional[ChecksumAddress] = None,
-        callback: Callable[[Order, str], None] = None,
+            self,
+            user_address: Optional[ChecksumAddress] = None,
+            market_address: Optional[ChecksumAddress] = None,
+            callback: Callable[[Order, str], None] = None,
     ) -> str:
         """
         Stream order updates for a specific user.
@@ -554,9 +612,9 @@ class Client:
         )
 
     async def stream_market_trades(
-        self,
-        market: Market,
-        callback: Callable[[Trade], None],
+            self,
+            market: Market,
+            callback: Callable[[Trade], None],
     ) -> str:
         """
         Stream trades for a specific market.
@@ -580,10 +638,10 @@ class Client:
         )
 
     async def stream_user_trades(
-        self,
-        user_address: Optional[ChecksumAddress] = None,
-        market: Optional[Market] = None,
-        callback: Callable[[Trade], None] = None,
+            self,
+            user_address: Optional[ChecksumAddress] = None,
+            market: Optional[Market] = None,
+            callback: Callable[[Trade], None] = None,
     ) -> str:
         """
         Stream trades for a specific user.
@@ -625,9 +683,9 @@ class Client:
         await self._execution_client.unsubscribe(subscription_id)
 
     async def get_order_book_snapshot(
-        self, 
-        market: Market, 
-        depth: int = 10
+            self,
+            market: Market,
+            depth: int = 10
     ) -> dict[str, Any]:
         """
         Get current order book snapshot from the chain.

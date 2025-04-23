@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from eth_typing import ChecksumAddress
 from eth_utils import to_checksum_address
 
+
 @dataclass
 class NetworkConfig:
     """
@@ -45,6 +46,7 @@ class NetworkConfig:
     router_address: ChecksumAddress
     launchpad_address: ChecksumAddress
     clob_manager_address: ChecksumAddress
+    weth_address: ChecksumAddress = None
 
 
 TESTNET_CONFIG = NetworkConfig(
@@ -64,5 +66,6 @@ TESTNET_CONFIG = NetworkConfig(
     block_time="10ms for mini blocks, 1s for EVM blocks",
     router_address=to_checksum_address('0x86470efcEa37e50F94E74649463b737C87ada367'),
     launchpad_address=to_checksum_address('0x0B6cD1DefCe3189Df60A210326E315383fbC14Ed'),
-    clob_manager_address=to_checksum_address('0xD7310f8A0D569Dd0803D28BB29f4E0A471fA84F6')
+    clob_manager_address=to_checksum_address('0xD7310f8A0D569Dd0803D28BB29f4E0A471fA84F6'),
+    weth_address=to_checksum_address('0x776401b9BC8aAe31A685731B7147D4445fD9FB19')
 )
