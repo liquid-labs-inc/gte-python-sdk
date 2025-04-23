@@ -4,6 +4,7 @@ import asyncio
 import os
 
 from dotenv import load_dotenv
+from eth_typing import HexStr
 from web3 import Web3
 
 from gte_py import Client
@@ -15,7 +16,7 @@ load_dotenv()
 
 # Configure these variables through environment or directly
 WALLET_ADDRESS = Web3.to_checksum_address(os.getenv("WALLET_ADDRESS"))
-WALLET_PRIVATE_KEY = os.getenv("WALLET_PRIVATE_KEY")
+WALLET_PRIVATE_KEY = HexStr(os.getenv("WALLET_PRIVATE_KEY"))
 MARKET_ADDRESS = os.getenv("MARKET_ADDRESS", "0xfaf0BB6F2f4690CA4319e489F6Dc742167B9fB10")  # MEOW/WETH
 
 
@@ -42,8 +43,6 @@ async def get_market_info(client, market_address):
     return market
 
 
-
-
 async def wait_for_transaction(web3, tx_hash, timeout=120):
     """Wait for a transaction to be mined."""
     start_time = asyncio.get_event_loop().time()
@@ -61,14 +60,14 @@ async def wait_for_transaction(web3, tx_hash, timeout=120):
         await asyncio.sleep(2)
 
 
-async def approve_and_deposit_example(client, web3, market, amount=0.01, send_tx=False):
+async def approve_and_deposit_example(client: Client, web3, market, amount=0.01, send_tx=False):
     """Example of approving and depositing WETH to the exchange."""
     print_separator("Approve and Deposit WETH Example")
-    
+
     # Get the quote token address (assuming it's WETH for this example)
     token_address = market.quote_token_address
     print(f"Creating transaction to approve and deposit {amount} {market.quote_asset.symbol}...")
-    
+
     # Get deposit transactions - this returns a list containing [approve_tx, deposit_tx]
     tx_funcs = await client.deposit_to_market(
         token_address=token_address,
@@ -78,11 +77,11 @@ async def approve_and_deposit_example(client, web3, market, amount=0.01, send_tx
 
     if send_tx and WALLET_PRIVATE_KEY:
         print("\nSending approval transaction...")
-        approve_receipt = tx_funcs[0].send(WALLET_ADDRESS, WALLET_PRIVATE_KEY)
-        
+        approve_receipt = tx_funcs[0].send(WALLET_PRIVATE_KEY)
+
         print("\nSending deposit transaction...")
-        deposit_receipt = tx_funcs[1].send(WALLET_ADDRESS, WALLET_PRIVATE_KEY)
-        
+        deposit_receipt = tx_funcs[1].send(WALLET_PRIVATE_KEY)
+
         return approve_receipt, deposit_receipt
     else:
         print("\nNOTE: This is a demonstration only. No transactions were sent.")
@@ -111,17 +110,9 @@ async def limit_order_example(client: Client, web3, market, send_tx=False):
         gas=300000,
     )
 
-    # Convert to transaction dictionary
-    tx = tx_func.build_transaction()
-
-    print("Transaction created:")
-    print(f"To: {tx.get('to')}")
-    print(f"Data length: {len(tx.get('data', ''))}")
-    print(f"Gas: {tx.get('gas')}")
-
     if send_tx and WALLET_PRIVATE_KEY:
         print("\nSending transaction...")
-        receipt = await sign_and_send_tx(web3, tx, WALLET_PRIVATE_KEY)
+        receipt = tx_func.send(WALLET_PRIVATE_KEY)
         return receipt
     else:
         print("\nNOTE: This is a demonstration only. No transaction was sent.")
@@ -147,17 +138,9 @@ async def market_order_example(client: Client, web3, market, send_tx=False):
         gas=300000,
     )
 
-    # Convert to transaction dictionary
-    tx = tx_func.build_transaction()
-
-    print("Transaction created:")
-    print(f"To: {tx.get('to')}")
-    print(f"Data length: {len(tx.get('data', ''))}")
-    print(f"Gas: {tx.get('gas')}")
-
     if send_tx and WALLET_PRIVATE_KEY:
         print("\nSending transaction...")
-        receipt = await sign_and_send_tx(web3, tx, WALLET_PRIVATE_KEY)
+        receipt = tx_func.send(WALLET_PRIVATE_KEY)
         return receipt
     else:
         print("\nNOTE: This is a demonstration only. No transaction was sent.")
@@ -180,17 +163,9 @@ async def cancel_order_example(client, web3, market, order_id=None, send_tx=Fals
         gas=200000,
     )
 
-    # Convert to transaction dictionary
-    tx = tx_func.build_transaction()
-
-    print("Transaction created:")
-    print(f"To: {tx.get('to')}")
-    print(f"Data length: {len(tx.get('data', ''))}")
-    print(f"Gas: {tx.get('gas')}")
-
     if send_tx and WALLET_PRIVATE_KEY:
         print("\nSending transaction...")
-        receipt = await sign_and_send_tx(web3, tx, WALLET_PRIVATE_KEY)
+        receipt = tx_func.send(WALLET_PRIVATE_KEY)
         return receipt
     else:
         print("\nNOTE: This is a demonstration only. No transaction was sent.")
@@ -227,8 +202,6 @@ async def main():
     print("Initializing Web3...")
     web3 = Web3(Web3.HTTPProvider(network.rpc_http))
 
-    if not web3.is_connected():
-        raise ConnectionError(f"Failed to connect to RPC node at {network.rpc_http}")
 
     print("Connected to blockchain:")
     print(f"Chain ID: {web3.eth.chain_id}")
@@ -244,13 +217,13 @@ async def main():
     await show_balances_example(client, market)
 
     # Run the examples (set send_tx=True to actually send transactions)
-    send_tx = False  # Safety default - change to True to send transactions
-    
+    send_tx = True  # Safety default - change to True to send transactions
+
     print("\nNOTE: For WETH wrapping and unwrapping examples, see wrap_weth.py")
-    
+
     # Deposit tokens example
     await approve_and_deposit_example(client, web3, market, amount=0.01, send_tx=send_tx)
-    
+
     # Order examples
     await limit_order_example(client, web3, market, send_tx)
     await market_order_example(client, web3, market, send_tx)

@@ -20,9 +20,9 @@ class CLOBFactory:
     """
 
     def __init__(
-        self,
-        web3: Web3,
-        contract_address: str,
+            self,
+            web3: Web3,
+            contract_address: ChecksumAddress,
     ):
         """
         Initialize the CLOBFactory wrapper.
@@ -32,7 +32,7 @@ class CLOBFactory:
             contract_address: Address of the CLOBFactory contract
         """
         self.web3 = web3
-        self.address = web3.to_checksum_address(contract_address)
+        self.address = contract_address
 
         loaded_abi = load_abi("factory")
         self.contract = self.web3.eth.contract(address=self.address, abi=loaded_abi)
@@ -149,12 +149,12 @@ class CLOBFactory:
     # ================= WRITE METHODS =================
 
     def create_market(
-        self,
-        base_token: ChecksumAddress,
-        quote_token: ChecksumAddress,
-        settings: dict,
-        sender_address: ChecksumAddress,
-        **kwargs,
+            self,
+            base_token: ChecksumAddress,
+            quote_token: ChecksumAddress,
+            settings: dict,
+            sender_address: ChecksumAddress,
+            **kwargs,
     ) -> TypedContractFunction[ChecksumAddress]:
         """
         Create a new market.
@@ -179,7 +179,7 @@ class CLOBFactory:
         return TypedContractFunction(func, params)
 
     def approve_operator(
-        self, operator: ChecksumAddress, sender_address: ChecksumAddress, **kwargs
+            self, operator: ChecksumAddress, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Approve an operator for the sender's account.
@@ -201,7 +201,7 @@ class CLOBFactory:
         return TypedContractFunction(func, params)
 
     def disapprove_operator(
-        self, operator: ChecksumAddress, sender_address: ChecksumAddress, **kwargs
+            self, operator: ChecksumAddress, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Disapprove an operator for the sender's account.
@@ -223,13 +223,13 @@ class CLOBFactory:
         return TypedContractFunction(func, params)
 
     def deposit(
-        self,
-        account: ChecksumAddress,
-        token: ChecksumAddress,
-        amount: int,
-        from_operator: bool,
-        sender_address: ChecksumAddress,
-        **kwargs,
+            self,
+            account: ChecksumAddress,
+            token: ChecksumAddress,
+            amount: int,
+            from_operator: bool,
+            sender_address: ChecksumAddress,
+            **kwargs,
     ) -> TypedContractFunction[None]:
         """
         Deposit tokens for an account.
@@ -254,13 +254,13 @@ class CLOBFactory:
         return TypedContractFunction(func, params)
 
     def withdraw(
-        self,
-        account: ChecksumAddress,
-        token: ChecksumAddress,
-        amount: int,
-        to_operator: bool,
-        sender_address: ChecksumAddress,
-        **kwargs,
+            self,
+            account: ChecksumAddress,
+            token: ChecksumAddress,
+            amount: int,
+            to_operator: bool,
+            sender_address: ChecksumAddress,
+            **kwargs,
     ) -> TypedContractFunction[None]:
         """
         Withdraw tokens for an account.
@@ -285,7 +285,7 @@ class CLOBFactory:
         return TypedContractFunction(func, params)
 
     def set_fee_recipient(
-        self, new_fee_recipient: ChecksumAddress, sender_address: ChecksumAddress, **kwargs
+            self, new_fee_recipient: ChecksumAddress, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Set a new fee recipient.
@@ -307,11 +307,11 @@ class CLOBFactory:
         return TypedContractFunction(func, params)
 
     def set_account_fee_tiers(
-        self,
-        accounts: List[ChecksumAddress],
-        fee_tiers: List[int],
-        sender_address: ChecksumAddress,
-        **kwargs,
+            self,
+            accounts: List[ChecksumAddress],
+            fee_tiers: List[int],
+            sender_address: ChecksumAddress,
+            **kwargs,
     ) -> TypedContractFunction[None]:
         """
         Set fee tiers for multiple accounts.
@@ -334,7 +334,7 @@ class CLOBFactory:
         return TypedContractFunction(func, params)
 
     def collect_fees(
-        self, token: ChecksumAddress, sender_address: ChecksumAddress, **kwargs
+            self, token: ChecksumAddress, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[int]:
         """
         Collect accumulated fees for a token.
@@ -356,7 +356,7 @@ class CLOBFactory:
         return TypedContractFunction(func, params)
 
     def transfer_ownership(
-        self, new_owner: ChecksumAddress, sender_address: ChecksumAddress, **kwargs
+            self, new_owner: ChecksumAddress, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Transfer ownership of the factory.
@@ -378,7 +378,7 @@ class CLOBFactory:
         return TypedContractFunction(func, params)
 
     def renounce_ownership(
-        self, sender_address: ChecksumAddress, **kwargs
+            self, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Renounce ownership of the factory.
@@ -401,7 +401,8 @@ class CLOBFactory:
     # ================= ADVANCED OPERATION METHODS =================
 
     def credit_account(
-        self, account: ChecksumAddress, token: ChecksumAddress, amount: int, sender_address: ChecksumAddress, **kwargs
+            self, account: ChecksumAddress, token: ChecksumAddress, amount: int, sender_address: ChecksumAddress,
+            **kwargs
     ) -> TypedContractFunction[None]:
         """
         Credit an account with tokens (admin operation).
@@ -425,7 +426,8 @@ class CLOBFactory:
         return TypedContractFunction(func, params)
 
     def debit_account(
-        self, account: ChecksumAddress, token: ChecksumAddress, amount: int, sender_address: ChecksumAddress, **kwargs
+            self, account: ChecksumAddress, token: ChecksumAddress, amount: int, sender_address: ChecksumAddress,
+            **kwargs
     ) -> TypedContractFunction[None]:
         """
         Debit an account with tokens (admin operation).
@@ -449,7 +451,8 @@ class CLOBFactory:
         return TypedContractFunction(func, params)
 
     def pull_from_account(
-        self, account: ChecksumAddress, token: ChecksumAddress, amount: int, sender_address: ChecksumAddress, **kwargs
+            self, account: ChecksumAddress, token: ChecksumAddress, amount: int, sender_address: ChecksumAddress,
+            **kwargs
     ) -> TypedContractFunction[None]:
         """
         Pull tokens from an account (admin operation).
@@ -473,7 +476,8 @@ class CLOBFactory:
         return TypedContractFunction(func, params)
 
     def push_to_account(
-        self, account: ChecksumAddress, token: ChecksumAddress, amount: int, sender_address: ChecksumAddress, **kwargs
+            self, account: ChecksumAddress, token: ChecksumAddress, amount: int, sender_address: ChecksumAddress,
+            **kwargs
     ) -> TypedContractFunction[None]:
         """
         Push tokens to an account (admin operation).
@@ -497,7 +501,7 @@ class CLOBFactory:
         return TypedContractFunction(func, params)
 
     def settle_incoming_order(
-        self, params: dict, sender_address: ChecksumAddress, **kwargs
+            self, params: dict, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[int]:
         """
         Settle an incoming order (admin operation).
@@ -534,11 +538,11 @@ class CLOBFactory:
     # ================= HELPER METHODS =================
 
     def create_market_settings(
-        self, 
-        owner: ChecksumAddress,
-        max_limits_per_tx: int,
-        min_limit_order_amount_in_base: int,
-        tick_size: int
+            self,
+            owner: ChecksumAddress,
+            max_limits_per_tx: int,
+            min_limit_order_amount_in_base: int,
+            tick_size: int
     ) -> dict:
         """
         Create a settings dictionary for use with create_market.
@@ -560,15 +564,15 @@ class CLOBFactory:
         }
 
     def create_settle_params(
-        self,
-        taker: ChecksumAddress,
-        quote_token: ChecksumAddress,
-        base_token: ChecksumAddress,
-        side: int,
-        settlement: int,
-        taker_quote_amount: int,
-        taker_base_amount: int,
-        maker_credits: List[dict] = None
+            self,
+            taker: ChecksumAddress,
+            quote_token: ChecksumAddress,
+            base_token: ChecksumAddress,
+            side: int,
+            settlement: int,
+            taker_quote_amount: int,
+            taker_base_amount: int,
+            maker_credits: List[dict] = None
     ) -> dict:
         """
         Create parameters for settle_incoming_order.
@@ -590,11 +594,12 @@ class CLOBFactory:
         if maker_credits:
             for credit in maker_credits:
                 formatted_maker_credits.append({
-                    "maker": self.web3.to_checksum_address(credit["maker"]) if isinstance(credit["maker"], str) else credit["maker"],
+                    "maker": self.web3.to_checksum_address(credit["maker"]) if isinstance(credit["maker"], str) else
+                    credit["maker"],
                     "quoteAmount": credit["quoteAmount"],
                     "baseAmount": credit["baseAmount"]
                 })
-        
+
         return {
             "taker": taker,
             "quoteToken": quote_token,

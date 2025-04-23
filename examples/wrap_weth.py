@@ -63,7 +63,7 @@ async def wrap_eth_example(client: Client, web3, amount_eth=0.01, send_tx=False)
 
         if send_tx and WALLET_PRIVATE_KEY:
             print("\nSending transaction...")
-            receipt = tx_func.send(WALLET_ADDRESS, WALLET_PRIVATE_KEY)
+            receipt = tx_func.send(WALLET_PRIVATE_KEY)
             return receipt
         else:
             print("\nNOTE: This is a demonstration only. No transaction was sent.")
@@ -95,7 +95,7 @@ async def unwrap_eth_example(client: Client, web3, amount_eth=0.01, send_tx=Fals
 
         if send_tx and WALLET_PRIVATE_KEY:
             print("\nSending transaction...")
-            receipt = tx_func.send(WALLET_ADDRESS, WALLET_PRIVATE_KEY)
+            receipt = tx_func.send(WALLET_PRIVATE_KEY)
             return receipt
         else:
             print("\nNOTE: This is a demonstration only. No transaction was sent.")

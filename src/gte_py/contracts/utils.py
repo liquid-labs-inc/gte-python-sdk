@@ -3,6 +3,7 @@ import json
 import time
 from typing import Any, Generic, TypeVar
 
+from eth_account import Account
 from eth_account.types import PrivateKeyType
 from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
@@ -100,20 +101,23 @@ class TypedContractFunction(Generic[T]):
         self.result = self.func.call(self.params)
         return self.result
 
-    def send(self, address: ChecksumAddress, private_key: PrivateKeyType) -> HexBytes:
+    def send(self, private_key: PrivateKeyType | None = None) -> HexBytes:
         """Synchronous write operation"""
-        nonce = self.func.w3.eth.get_transaction_count(address)
-        self.params.update({
-            'nonce': nonce,
-        })
         tx = self.func.build_transaction(self.params)
-        # Sign and send the transaction
-        signed = self.func.w3.eth.account.sign_transaction(tx, private_key)
-        self.tx_hash = self.func.w3.eth.send_raw_transaction(signed.raw_transaction)
+        if private_key:
+            local_account = Account.from_key(private_key)
+            tx['nonce'] = self.params['nonce'] = self.func.w3.eth.get_transaction_count(local_account.address)
+            # Sign and send the transaction
+            signed = self.func.w3.eth.account.sign_transaction(tx, private_key)
+            self.tx_hash = self.func.w3.eth.send_raw_transaction(signed.raw_transaction)
+        else:
+            # Send the transaction with default account
+            self.tx_hash = self.func.w3.eth.send_transaction(tx)
+
         return self.tx_hash
 
     def build_transaction(self) -> TxParams:
-        return self.func.build_transaction()
+        return self.func.build_transaction(self.params)
 
     def retrieve(self) -> T:
         """
