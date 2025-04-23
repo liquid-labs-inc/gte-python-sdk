@@ -94,7 +94,7 @@ async def limit_order_example(client: Client, web3, market, send_tx=False):
     print_separator("Limit Order Example")
 
     # Current market price (or estimate)
-    price = market.price or 8.867345
+    price = market.price or 0.0280
 
     print(f"Limit order price: {price}")
 

@@ -358,42 +358,64 @@ class ExecutionClient:
         # Convert model types to contract types
         contract_side = Side.BUY if side == OrderSide.BUY else Side.SELL
 
-        # Convert time in force to limit order type
-        if time_in_force == TimeInForce.GTC:
-            limit_order_type = LimitOrderType.GOOD_TILL_CANCELLED
-        elif time_in_force == TimeInForce.IOC:
-            limit_order_type = LimitOrderType.IMMEDIATE_OR_CANCEL
-        elif time_in_force == TimeInForce.FOK:
-            limit_order_type = LimitOrderType.FILL_OR_KILL
-        else:
-            raise ValueError(f"Unsupported time in force: {time_in_force}")
-
-        # Convert amount to base token atoms
+        # Get token instances
         base_token = self._get_token(market.base_token_address)
-        amount_in_base = base_token.format_amount(amount)
 
         # Convert price to ticks
         tick_size = market.tick_size
         price_in_ticks = int(price / tick_size)
-
-        # Create post limit order args
-        args = clob.create_post_limit_order_args(
-            amount_in_base=amount_in_base,
-            price=price_in_ticks,
-            side=contract_side,
-            cancel_timestamp=0,  # No expiration
-            client_order_id=client_order_id,
-            limit_order_type=limit_order_type,
-            settlement=Settlement.INSTANT
-        )
-
-        # Return the transaction
-        return clob.post_limit_order(
-            account=self._sender_address,
-            args=args,
-            sender_address=self._sender_address,
-            **kwargs
-        )
+        
+        # For IOC and FOK orders, we use the fill order API which has different behavior
+        if time_in_force in [TimeInForce.IOC, TimeInForce.FOK]:
+            # Convert amount to base token atoms
+            amount_in_base = base_token.convert_amount_to_int(amount)
+            
+            # Map time_in_force to fill_order_type
+            fill_order_type = (
+                FillOrderType.IMMEDIATE_OR_CANCEL if time_in_force == TimeInForce.IOC
+                else FillOrderType.FILL_OR_KILL
+            )
+            
+            # Create post fill order args
+            args = clob.create_post_fill_order_args(
+                amount=amount_in_base,
+                price_limit=price_in_ticks,
+                side=contract_side,
+                amount_is_base=True,  # Since amount is in base tokens
+                fill_order_type=fill_order_type,
+                settlement=Settlement.INSTANT
+            )
+            
+            # Return the transaction
+            return clob.post_fill_order(
+                account=self._sender_address,
+                args=args,
+                sender_address=self._sender_address,
+                **kwargs
+            )
+        else:
+            # For GTC orders, use the limit order API
+            # Convert amount to base token atoms
+            amount_in_base = base_token.convert_amount_to_int(amount)
+            
+            # Create post limit order args
+            args = clob.create_post_limit_order_args(
+                amount_in_base=amount_in_base,
+                price=price_in_ticks,
+                side=contract_side,
+                cancel_timestamp=0,  # No expiration
+                client_order_id=client_order_id,
+                limit_order_type=LimitOrderType.GOOD_TILL_CANCELLED,
+                settlement=Settlement.INSTANT
+            )
+            
+            # Return the transaction
+            return clob.post_limit_order(
+                account=self._sender_address,
+                args=args,
+                sender_address=self._sender_address,
+                **kwargs
+            )
 
     async def place_market_order(
             self,
