@@ -5,6 +5,7 @@ import logging
 from eth_typing import ChecksumAddress
 from web3 import Web3
 
+from .contracts.erc20 import ERC20
 from .contracts.factory import CLOBFactory
 from .contracts.iclob import ICLOB
 from .contracts.router import Router
@@ -41,26 +42,25 @@ class MarketService:
         return self._clob_factory_address
 
     def get_market_info(self, clob: ICLOB) -> Market:
-        base_token_address: ChecksumAddress = clob.get_base_token()
-        quote_token_address: ChecksumAddress = clob.get_quote_token()
-
         # Get market config for additional details
         factory, mask, quote, base, tick_size, lot_size = clob.get_market_config()
 
-        # TODO: use ERC20 to get decimals, name, symbol
-        # Create basic asset objects with addresses
+        base_contract = ERC20(self._web3, base)
+        quote_contract = ERC20(self._web3, quote)
+
+
         base_asset = Asset(
             address=base,
-            decimals=18,
-            name="",  # To be filled later
-            symbol="",  # To be filled later
+            decimals=base_contract.decimals(),
+            name=base_contract.name(),
+            symbol=base_contract.symbol(),
         )
 
         quote_asset = Asset(
             address=quote,
-            decimals=18,
-            name="",  # To be filled later
-            symbol="",  # To be filled later
+            decimals=quote_contract.decimals(),
+            name=quote_contract.name(),
+            symbol=quote_contract.symbol(),
         )
 
         # Create a market info object
@@ -69,10 +69,10 @@ class MarketService:
             market_type=MarketType.CLOB,
             base_asset=base_asset,
             quote_asset=quote_asset,
-            base_token_address=base_token_address,
-            quote_token_address=quote_token_address,
-            base_decimals=18,
-            quote_decimals=18,
+            base_token_address=base,
+            quote_token_address=quote,
+            base_decimals=base_asset.decimals,
+            quote_decimals=quote_asset.decimals,
             tick_size=tick_size,
             lot_size=lot_size,
         )
