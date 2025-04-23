@@ -277,7 +277,7 @@ class Client:
             self,
             market: Market,
             side: OrderSide,
-            quantity: float,
+            amount: float,
             price: float,
             time_in_force: TimeInForce = TimeInForce.GTC,
             client_order_id: int = 0,
@@ -289,7 +289,7 @@ class Client:
         Args:
             market: Market to place order on
             side: Order side (buy, sell)
-            quantity: Order amount in base tokens
+            amount: Order amount in base tokens
             price: Order price
             time_in_force: Time in force (GTC, IOC, FOK)
             client_order_id: Optional client-side order ID
@@ -307,8 +307,8 @@ class Client:
         return await self._execution_client.place_limit_order(
             market=market,
             side=side,
-            amount=quantity,
-            price=price,
+            amount=amount,
+            price_in_quote=price,
             time_in_force=time_in_force,
             client_order_id=client_order_id,
             **kwargs,

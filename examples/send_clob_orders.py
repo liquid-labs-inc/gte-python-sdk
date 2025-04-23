@@ -38,7 +38,7 @@ async def get_market_info(client, market_address):
     print(f"Market: {market.pair}")
     print(f"Base token: {market.base_asset.symbol} ({market.base_token_address})")
     print(f"Quote token: {market.quote_asset.symbol} ({market.quote_token_address})")
-    print(f"Tick size: {market.tick_size}")
+    print(f"Tick size: {market.tick_size_in_quote}")
 
     return market
 
@@ -94,15 +94,15 @@ async def limit_order_example(client: Client, web3, market, send_tx=False):
     print_separator("Limit Order Example")
 
     # Current market price (or estimate)
-    price = market.price or 0.0280
+    price = market.price or market.tick_size
+    amount = market.lot_size
 
     print(f"Limit order price: {price}")
-
 
     tx_func = await client.place_limit_order(
         market=market,
         side=OrderSide.BUY,
-        quantity=0.0001,  # Small amount for testing
+        amount=amount,
         price=price,
         time_in_force=TimeInForce.GTC,
     )

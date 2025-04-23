@@ -35,6 +35,7 @@ class TimeInForce(Enum):
     """Time in force for orders."""
 
     GTC = "GTC"  # Good till cancelled
+    PostOnly = "PostOnly"  # Post only
     IOC = "IOC"  # Immediate or cancel
     FOK = "FOK"  # Fill or kill
 
@@ -94,8 +95,10 @@ class Market:
     market_type: MarketType
     base_asset: Asset
     quote_asset: Asset
+    tick_size_in_quote: int
     tick_size: float
-    lot_size: int
+    lot_size_in_base: int
+    lot_size: float
     base_decimals: int = 18
     quote_decimals: int = 18
     price: float | None = None
@@ -119,9 +122,8 @@ class Market:
             quote_token_address=quote_token_address,
             base_decimals=data.get("baseDecimals", 18),
             quote_decimals=data.get("quoteDecimals", 18),
-            tick_size=data.get("tickSize", 0.01),
-            tick_size_in_decimals=data.get("tickSizeInDecimals", 2),
-            lot_size=data.get("baseAtomsPerLot", 1),
+            tick_size_in_quote=data.get("tickSize", 0.01),
+            lot_size_in_base=data.get("baseAtomsPerLot", 1),
             price=data.get("price"),
             volume_24h=data.get("volume24hr"),
         )

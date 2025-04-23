@@ -73,8 +73,10 @@ class MarketService:
             quote_token_address=quote,
             base_decimals=base_asset.decimals,
             quote_decimals=quote_asset.decimals,
-            tick_size=tick_size,
-            lot_size=lot_size,
+            tick_size_in_quote=tick_size,
+            tick_size=quote_contract.convert_amount_to_float(tick_size),
+            lot_size_in_base=lot_size,
+            lot_size=base_contract.convert_amount_to_float(lot_size),
         )
 
         return market_info

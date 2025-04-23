@@ -76,7 +76,7 @@ def format_chain_market_table(markets: list[Market], title: str):
                 f"{market.quote_token[:10]}...",
                 market.base_decimals,
                 market.quote_decimals,
-                market.tick_size,
+                market.tick_size_in_quote,
             ]
         )
 
@@ -148,8 +148,8 @@ async def query_market_details(client: Client, market: Market):
         print(f"  Contract: {market.address}")
         print(f"  Base Token: {market.base_token_address}")
         print(f"  Quote Token: {market.quote_token_address}")
-        print(f"  Tick Size: {market.tick_size}")
-        print(f"  Lot Size: {market.lot_size}")
+        print(f"  Tick Size: {market.tick_size_in_quote}")
+        print(f"  Lot Size: {market.lot_size_in_base}")
 
 
 async def main():

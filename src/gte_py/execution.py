@@ -332,7 +332,7 @@ class ExecutionClient:
             market: Market,
             side: OrderSide,
             amount: float,
-            price: float,
+            price_in_quote: float,
             time_in_force: TimeInForce = TimeInForce.GTC,
             client_order_id: int = 0,
             **kwargs
@@ -344,7 +344,7 @@ class ExecutionClient:
             market: Market to place the order on
             side: Order side (BUY or SELL)
             amount: Order amount in base tokens
-            price: Order price
+            price_in_quote: Order price
             time_in_force: Time in force (GTC, IOC, FOK)
             client_order_id: Optional client order ID for tracking
             **kwargs: Additional transaction parameters
@@ -360,32 +360,38 @@ class ExecutionClient:
 
         # Get token instances
         base_token = self._get_token(market.base_token_address)
+        quote_token = self._get_token(market.quote_token_address)
 
+        amount_in_base = base_token.convert_amount_to_int(amount)
+        amount_in_base = amount_in_base // market.lot_size_in_base * market.lot_size_in_base
+        if amount_in_base <= 0:
+            raise ValueError(f"Amount must be greater than zero: {amount_in_base}")
         # Convert price to ticks
-        tick_size = market.tick_size
-        price_in_ticks = int(price / tick_size)
-        
+        price_in_quote = quote_token.convert_amount_to_int(price_in_quote)
+        price_in_quote = price_in_quote // market.tick_size_in_quote * market.tick_size_in_quote
+        if price_in_quote <= 0:
+            raise ValueError(f"Price must be greater than zero: {price_in_quote}")
+
         # For IOC and FOK orders, we use the fill order API which has different behavior
         if time_in_force in [TimeInForce.IOC, TimeInForce.FOK]:
             # Convert amount to base token atoms
-            amount_in_base = base_token.convert_amount_to_int(amount)
-            
+
             # Map time_in_force to fill_order_type
             fill_order_type = (
                 FillOrderType.IMMEDIATE_OR_CANCEL if time_in_force == TimeInForce.IOC
                 else FillOrderType.FILL_OR_KILL
             )
-            
+
             # Create post fill order args
             args = clob.create_post_fill_order_args(
                 amount=amount_in_base,
-                price_limit=price_in_ticks,
+                price_limit=price_in_quote,
                 side=contract_side,
                 amount_is_base=True,  # Since amount is in base tokens
                 fill_order_type=fill_order_type,
                 settlement=Settlement.INSTANT
             )
-            
+
             # Return the transaction
             return clob.post_fill_order(
                 account=self._sender_address,
@@ -394,21 +400,22 @@ class ExecutionClient:
                 **kwargs
             )
         else:
-            # For GTC orders, use the limit order API
-            # Convert amount to base token atoms
-            amount_in_base = base_token.convert_amount_to_int(amount)
-            
+            # if time_in_force == TimeInForce.GTC:
+            #     tif = LimitOrderType.GOOD_TILL_CANCELLED
+            # elif time_in_force == TimeInForce.PostOnly:
+            #     tif = LimitOrderType
+
             # Create post limit order args
             args = clob.create_post_limit_order_args(
                 amount_in_base=amount_in_base,
-                price=price_in_ticks,
+                price=price_in_quote,
                 side=contract_side,
                 cancel_timestamp=0,  # No expiration
                 client_order_id=client_order_id,
                 limit_order_type=LimitOrderType.GOOD_TILL_CANCELLED,
                 settlement=Settlement.INSTANT
             )
-            
+            print(args)
             # Return the transaction
             return clob.post_limit_order(
                 account=self._sender_address,
@@ -515,7 +522,7 @@ class ExecutionClient:
         base_token = self._get_token(market.base_token_address)
         amount_in_base = base_token.convert_amount_to_int(new_amount) if new_amount is not None else current_amount
 
-        tick_size = market.tick_size
+        tick_size = market.tick_size_in_quote
         price_in_ticks = int(new_price / tick_size) if new_price is not None else current_price
 
         # Create amend args
