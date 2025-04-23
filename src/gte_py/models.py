@@ -94,15 +94,14 @@ class Market:
     market_type: MarketType
     base_asset: Asset
     quote_asset: Asset
-    base_token_address: ChecksumAddress | None = None
-    quote_token_address: ChecksumAddress | None = None
+    tick_size: float
+    lot_size: int
     base_decimals: int = 18
     quote_decimals: int = 18
-    tick_size: float = 0.01
-    tick_size_in_decimals: int = 2
-    base_atoms_per_lot: int = 1
     price: float | None = None
     volume_24h: float | None = None
+    base_token_address: ChecksumAddress | None = None
+    quote_token_address: ChecksumAddress | None = None
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Market":
@@ -122,7 +121,7 @@ class Market:
             quote_decimals=data.get("quoteDecimals", 18),
             tick_size=data.get("tickSize", 0.01),
             tick_size_in_decimals=data.get("tickSizeInDecimals", 2),
-            base_atoms_per_lot=data.get("baseAtomsPerLot", 1),
+            lot_size=data.get("baseAtomsPerLot", 1),
             price=data.get("price"),
             volume_24h=data.get("volume24hr"),
         )

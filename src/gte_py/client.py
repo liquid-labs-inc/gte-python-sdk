@@ -141,13 +141,9 @@ class Client:
 
         markets = [Market.from_api(market_data) for market_data in response.get("markets", [])]
 
-        # Update market info cache with discovered markets
-        if self._market_info:
-            self._market_info.update_market_cache(markets)
-
         return markets
 
-    async def get_market(self, address: str) -> Market:
+    def get_market(self, address: ChecksumAddress) -> Market:
         """
         Get market by address.
 
@@ -157,8 +153,7 @@ class Client:
         Returns:
             Market
         """
-        response = await self._rest_client.get_market(address)
-        return Market.from_api(response)
+        return self._market_info.get_market_info_by_address(address)
 
     async def get_market_client(self, market_address: ChecksumAddress) -> MarketClient:
         """
@@ -434,24 +429,6 @@ class Client:
     #         sender_address=sender_address,
     #         **tx_kwargs,
     #     )
-
-    def get_available_onchain_markets(self) -> list[Market]:
-        """
-        Get available on-chain markets.
-
-        Returns:
-            List of market information from the blockchain
-
-        Raises:
-            ValueError: If Web3 or router not configured
-        """
-        if not self._market_info:
-            raise ValueError(
-                "Market info service not configured. "
-                + "Initialize with web3_provider and router_address."
-            )
-
-        return self._market_info.get_available_markets()
 
     # User order and trade methods
     async def get_user_orders(
