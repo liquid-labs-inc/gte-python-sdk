@@ -17,9 +17,9 @@ from .contracts.erc20 import ERC20
 from .contracts.router import Router
 from .contracts.weth import WETH  # Add import for WETH class
 from .contracts.structs import (
-    Side, 
-    Settlement, 
-    LimitOrderType, 
+    Side,
+    Settlement,
+    LimitOrderType,
     FillOrderType,
     ICLOBPostLimitOrderArgs,
     ICLOBPostFillOrderArgs,
@@ -222,7 +222,7 @@ class ExecutionClient:
 
         # Create factory client
         self._factory = CLOBFactory(web3=web3, contract_address=factory_address)
-        
+
         # Initialize subscription manager if using websocket provider
         if isinstance(web3.provider, WebSocketProvider):
             self._subscription_manager = SubscriptionManager(web3)
@@ -248,7 +248,7 @@ class ExecutionClient:
                 web3=self._web3, contract_address=contract_address
             )
         return self._clob_clients[contract_address]
-    
+
     def _get_token(self, token_address: ChecksumAddress) -> ERC20:
         """
         Get or create an ERC20 token contract instance.
@@ -261,7 +261,7 @@ class ExecutionClient:
         """
         if not self._web3:
             raise ValueError("Web3 provider not configured. Cannot interact with contracts.")
-            
+
         if token_address not in self._token_clients:
             self._token_clients[token_address] = ERC20(
                 web3=self._web3, contract_address=token_address
@@ -280,7 +280,7 @@ class ExecutionClient:
         """
         if not self._web3:
             raise ValueError("Web3 provider not configured. Cannot interact with contracts.")
-            
+
         if weth_address not in self._weth_clients:
             self._weth_clients[weth_address] = WETH(
                 web3=self._web3, contract_address=weth_address
@@ -288,10 +288,10 @@ class ExecutionClient:
         return self._weth_clients[weth_address]
 
     async def wrap_eth(
-        self,
-        weth_address: ChecksumAddress,
-        amount_eth: float,
-        **kwargs
+            self,
+            weth_address: ChecksumAddress,
+            amount_eth: float,
+            **kwargs
     ) -> TypedContractFunction:
         """
         Wrap ETH to get WETH.
@@ -308,10 +308,10 @@ class ExecutionClient:
         return weth.deposit_eth(amount_eth, self._sender_address, **kwargs)
 
     async def unwrap_eth(
-        self,
-        weth_address: ChecksumAddress,
-        amount_eth: float,
-        **kwargs
+            self,
+            weth_address: ChecksumAddress,
+            amount_eth: float,
+            **kwargs
     ) -> TypedContractFunction:
         """
         Unwrap WETH to get ETH.
@@ -328,14 +328,14 @@ class ExecutionClient:
         return weth.withdraw_eth(amount_eth, self._sender_address, **kwargs)
 
     async def place_limit_order(
-        self, 
-        market: Market,
-        side: OrderSide,
-        amount: float,
-        price: float,
-        time_in_force: TimeInForce = TimeInForce.GTC,
-        client_order_id: int = 0,
-        **kwargs
+            self,
+            market: Market,
+            side: OrderSide,
+            amount: float,
+            price: float,
+            time_in_force: TimeInForce = TimeInForce.GTC,
+            client_order_id: int = 0,
+            **kwargs
     ) -> TypedContractFunction:
         """
         Place a limit order on the CLOB.
@@ -354,10 +354,10 @@ class ExecutionClient:
         """
         # Get the CLOB contract
         clob = self._get_clob(market.address)
-        
+
         # Convert model types to contract types
         contract_side = Side.BUY if side == OrderSide.BUY else Side.SELL
-        
+
         # Convert time in force to limit order type
         if time_in_force == TimeInForce.GTC:
             limit_order_type = LimitOrderType.GOOD_TILL_CANCELLED
@@ -367,15 +367,15 @@ class ExecutionClient:
             limit_order_type = LimitOrderType.FILL_OR_KILL
         else:
             raise ValueError(f"Unsupported time in force: {time_in_force}")
-        
+
         # Convert amount to base token atoms
         base_token = self._get_token(market.base_token_address)
         amount_in_base = base_token.format_amount(amount)
-        
+
         # Convert price to ticks
         tick_size = market.tick_size
         price_in_ticks = int(price / tick_size)
-        
+
         # Create post limit order args
         args = clob.create_post_limit_order_args(
             amount_in_base=amount_in_base,
@@ -386,7 +386,7 @@ class ExecutionClient:
             limit_order_type=limit_order_type,
             settlement=Settlement.INSTANT
         )
-        
+
         # Return the transaction
         return clob.post_limit_order(
             account=self._sender_address,
@@ -396,12 +396,13 @@ class ExecutionClient:
         )
 
     async def place_market_order(
-        self, 
-        market: Market,
-        side: OrderSide,
-        amount: float,
-        amount_is_base: bool = True,
-        **kwargs
+            self,
+            market: Market,
+            side: OrderSide,
+            amount: float,
+            amount_is_base: bool = True,
+            slippage: float = 0.01,
+            **kwargs
     ) -> TypedContractFunction:
         """
         Place a market order on the CLOB.
@@ -418,26 +419,26 @@ class ExecutionClient:
         """
         # Get the CLOB contract
         clob = self._get_clob(market.address)
-        
+
         # Convert model types to contract types
         contract_side = Side.BUY if side == OrderSide.BUY else Side.SELL
-        
+
         # Convert amount to atoms
+        quote_token = self._get_token(market.quote_token_address)
         if amount_is_base:
             base_token = self._get_token(market.base_token_address)
-            amount_in_atoms = base_token.format_amount(amount)
+            amount_in_atoms = base_token.convert_amount_to_int(amount)
         else:
-            quote_token = self._get_token(market.quote_token_address)
-            amount_in_atoms = quote_token.format_amount(amount)
-        
+            amount_in_atoms = quote_token.convert_amount_to_int(amount)
+
         # For market orders, use a very aggressive price limit to ensure execution
         # For buy orders: high price, for sell orders: low price
         highest_bid, lowest_ask = clob.get_tob()
         if contract_side == Side.BUY:
-            price_limit = lowest_ask * 2 if lowest_ask > 0 else 2**128  # Very high price for buy
+            price_limit = lowest_ask * (1 + slippage)
         else:
-            price_limit = highest_bid // 2 if highest_bid > 0 else 1  # Very low price for sell
-        
+            price_limit = highest_bid * (1 - slippage)
+        price_limit = quote_token.convert_amount_to_int(price_limit)
         # Create post fill order args
         args = clob.create_post_fill_order_args(
             amount=amount_in_atoms,
@@ -447,7 +448,7 @@ class ExecutionClient:
             fill_order_type=FillOrderType.IMMEDIATE_OR_CANCEL,
             settlement=Settlement.INSTANT
         )
-        
+
         # Return the transaction
         return clob.post_fill_order(
             account=self._sender_address,
@@ -457,12 +458,12 @@ class ExecutionClient:
         )
 
     async def amend_order(
-        self, 
-        market: Market,
-        order_id: int,
-        new_amount: Optional[float] = None,
-        new_price: Optional[float] = None,
-        **kwargs
+            self,
+            market: Market,
+            order_id: int,
+            new_amount: Optional[float] = None,
+            new_price: Optional[float] = None,
+            **kwargs
     ) -> TypedContractFunction:
         """
         Amend an existing order.
@@ -479,22 +480,22 @@ class ExecutionClient:
         """
         # Get the CLOB contract
         clob = self._get_clob(market.address)
-        
+
         # Get the current order
         order = clob.get_order(order_id)
-        
+
         # Extract order details
         side = order['side']
         current_amount = order['amount']
         current_price = order['price']
-        
+
         # Convert new values to contract format
         base_token = self._get_token(market.base_token_address)
-        amount_in_base = base_token.format_amount(new_amount) if new_amount is not None else current_amount
-        
+        amount_in_base = base_token.convert_amount_to_int(new_amount) if new_amount is not None else current_amount
+
         tick_size = market.tick_size
         price_in_ticks = int(new_price / tick_size) if new_price is not None else current_price
-        
+
         # Create amend args
         args = clob.create_amend_args(
             order_id=order_id,
@@ -505,7 +506,7 @@ class ExecutionClient:
             limit_order_type=LimitOrderType.GOOD_TILL_CANCELLED,
             settlement=Settlement.INSTANT
         )
-        
+
         # Return the transaction
         return clob.amend(
             account=self._sender_address,
@@ -515,10 +516,10 @@ class ExecutionClient:
         )
 
     async def cancel_order(
-        self, 
-        market: Market,
-        order_id: int,
-        **kwargs
+            self,
+            market: Market,
+            order_id: int,
+            **kwargs
     ) -> TypedContractFunction:
         """
         Cancel an existing order.
@@ -533,13 +534,13 @@ class ExecutionClient:
         """
         # Get the CLOB contract
         clob = self._get_clob(market.address)
-        
+
         # Create cancel args
         args = clob.create_cancel_args(
             order_ids=[order_id],
             settlement=Settlement.INSTANT
         )
-        
+
         # Return the transaction
         return clob.cancel(
             account=self._sender_address,
@@ -547,11 +548,11 @@ class ExecutionClient:
             sender_address=self._sender_address,
             **kwargs
         )
-    
+
     async def cancel_all_orders(
-        self, 
-        market: Market,
-        **kwargs
+            self,
+            market: Market,
+            **kwargs
     ) -> TypedContractFunction:
         """
         Cancel all orders for the current user on a specific market.
@@ -565,7 +566,7 @@ class ExecutionClient:
         """
         # Get the CLOB contract
         clob = self._get_clob(market.address)
-        
+
         # Get all active orders for the user
         next_order_id = clob.get_next_order_id()
         orders = await self.get_user_orders_from_events(
@@ -574,20 +575,20 @@ class ExecutionClient:
             from_block=self._web3.eth.block_number - 10000,  # Last 10000 blocks
             to_block="latest"
         )
-        
+
         # Filter for open orders
         open_order_ids = [int(order.id) for order in orders if order.status == OrderStatus.OPEN]
-        
+
         if not open_order_ids:
             # No orders to cancel
             raise ValueError("No open orders to cancel")
-        
+
         # Create cancel args
         args = clob.create_cancel_args(
             order_ids=open_order_ids,
             settlement=Settlement.INSTANT
         )
-        
+
         # Return the transaction
         return clob.cancel(
             account=self._sender_address,
@@ -595,12 +596,12 @@ class ExecutionClient:
             sender_address=self._sender_address,
             **kwargs
         )
-    
+
     async def deposit_to_market(
-        self,
-        token_address: ChecksumAddress,
-        amount: float,
-        **kwargs
+            self,
+            token_address: ChecksumAddress,
+            amount: float,
+            **kwargs
     ) -> List[TypedContractFunction]:
         """
         Deposit tokens to the exchange for trading.
@@ -615,10 +616,10 @@ class ExecutionClient:
         """
         if not self._factory:
             raise ValueError("Factory not initialized")
-        
+
         token = self._get_token(token_address)
-        amount_in_atoms = token.format_amount(amount)
-        
+        amount_in_atoms = token.convert_amount_to_int(amount)
+
         # First approve the factory to spend tokens
         approve_tx = token.approve(
             spender=self._factory.address,
@@ -626,7 +627,7 @@ class ExecutionClient:
             sender_address=self._sender_address,
             **kwargs
         )
-        
+
         # Then deposit the tokens
         deposit_tx = self._factory.deposit(
             account=self._sender_address,
@@ -636,14 +637,14 @@ class ExecutionClient:
             sender_address=self._sender_address,
             **kwargs
         )
-        
+
         return [approve_tx, deposit_tx]
-    
+
     async def withdraw_from_market(
-        self,
-        token_address: ChecksumAddress,
-        amount: float,
-        **kwargs
+            self,
+            token_address: ChecksumAddress,
+            amount: float,
+            **kwargs
     ) -> TypedContractFunction:
         """
         Withdraw tokens from the exchange.
@@ -658,10 +659,10 @@ class ExecutionClient:
         """
         if not self._factory:
             raise ValueError("Factory not initialized")
-        
+
         token = self._get_token(token_address)
-        amount_in_atoms = token.format_amount(amount)
-        
+        amount_in_atoms = token.convert_amount_to_int(amount)
+
         # Withdraw the tokens
         return self._factory.withdraw(
             account=self._sender_address,
@@ -671,11 +672,11 @@ class ExecutionClient:
             sender_address=self._sender_address,
             **kwargs
         )
-    
+
     async def get_balance(
-        self,
-        token_address: ChecksumAddress,
-        account: Optional[ChecksumAddress] = None
+            self,
+            token_address: ChecksumAddress,
+            account: Optional[ChecksumAddress] = None
     ) -> Tuple[float, float]:
         """
         Get token balance for an account both on-chain and in the exchange.
@@ -689,24 +690,24 @@ class ExecutionClient:
         """
         if not self._factory:
             raise ValueError("Factory not initialized")
-        
+
         account = account or self._sender_address
         token = self._get_token(token_address)
-        
+
         # Get wallet balance
         wallet_balance_raw = token.balance_of(account)
-        wallet_balance = token.format_amount_readable(wallet_balance_raw)
-        
+        wallet_balance = token.convert_amount_to_float(wallet_balance_raw)
+
         # Get exchange balance
         exchange_balance_raw = self._factory.get_account_balance(account, token_address)
-        exchange_balance = token.format_amount_readable(exchange_balance_raw)
-        
+        exchange_balance = token.convert_amount_to_float(exchange_balance_raw)
+
         return (wallet_balance, exchange_balance)
 
     async def _convert_contract_order_to_model(
-        self, 
-        order_data: Dict[str, Any], 
-        market_address: ChecksumAddress
+            self,
+            order_data: Dict[str, Any],
+            market_address: ChecksumAddress
     ) -> Order:
         """
         Convert contract order data to Order model.
@@ -720,14 +721,15 @@ class ExecutionClient:
         """
         # Map contract side to model side
         side = OrderSide.BUY if order_data.get('side', 0) == Side.BUY else OrderSide.SELL
-        
+
         # Determine order status
         status = OrderStatus.OPEN
         if order_data.get('amount', 0) == 0:
             status = OrderStatus.FILLED
-        elif order_data.get('cancelTimestamp', 0) > 0 and order_data.get('cancelTimestamp', 0) < get_current_timestamp():
+        elif order_data.get('cancelTimestamp', 0) > 0 and order_data.get('cancelTimestamp',
+                                                                         0) < get_current_timestamp():
             status = OrderStatus.EXPIRED
-            
+
         # Create Order model
         return Order(
             id=str(order_data.get('id', 0)),
@@ -744,10 +746,10 @@ class ExecutionClient:
         )
 
     async def _convert_fill_event_to_trade(
-        self, 
-        event: EventData, 
-        market_address: ChecksumAddress, 
-        is_maker: bool = False
+            self,
+            event: EventData,
+            market_address: ChecksumAddress,
+            is_maker: bool = False
     ) -> Trade:
         """
         Convert fill event to Trade model.
@@ -762,14 +764,14 @@ class ExecutionClient:
         """
         # Access args using dictionary syntax since EventData is a TypedDict
         args = event['args']
-        
+
         # Determine side from event data
         side = OrderSide.BUY if args.get('side', 0) == Side.BUY else OrderSide.SELL
-        
+
         # For takers, the side is opposite of the maker's side
         if not is_maker:
             side = OrderSide.BUY if side == OrderSide.SELL else OrderSide.SELL
-            
+
         # Create Trade model
         return Trade(
             market_address=market_address,
@@ -782,137 +784,3 @@ class ExecutionClient:
             taker=args.get('taker'),
             trade_id=args.get('orderId', 0)
         )
-
-    async def stream_user_orders(
-            self,
-            user_address: ChecksumAddress,
-            market_address: Optional[ChecksumAddress] = None,
-            callback: Callable[[Order, str], None] | None = None,
-    ) -> str:
-        """
-        Stream order updates for a specific user.
-
-        Args:
-            user_address: Address of the user
-            market_address: Optional market address to filter by
-            callback: Function to call with each order update and event type
-
-        Returns:
-            Subscription ID that can be used to unsubscribe
-        """
-        # ...existing code...
-
-        async def handle_post_event(event: EventData) -> None:
-            # Use dictionary access for EventData
-            if event['args'].get("account") != user_address:
-                return
-
-            contract_address = event['address']
-            order = self._convert_post_event_to_order(event, contract_address)
-            orders_by_id[order.id] = order
-            callback(order, "posted")
-
-        async def handle_fill_event(event: EventData) -> None:
-            # Use dictionary access for EventData
-            args = event['args']
-            if args.get("maker") != user_address and args.get("taker") != user_address:
-                return
-
-            contract_address = event['address']
-            order_id = args.get("orderId")
-
-            # If this is a maker order and we have it cached
-            if args.get("maker") == user_address and order_id in orders_by_id:
-                order = orders_by_id[order_id]
-                self._update_order_from_fill_event(order, event)
-                callback(order, "filled")
-            # ...rest of the method...
-
-        async def handle_cancel_event(event: EventData) -> None:
-            # Use dictionary access for EventData
-            args = event['args']
-            if args.get("account") != user_address:
-                return
-
-            order_id = args.get("orderId")
-            if order_id in orders_by_id:
-                order = orders_by_id[order_id]
-                order.status = OrderStatus.CANCELLED
-                callback(order, "cancelled")
-
-        async def handle_amend_event(event: EventData) -> None:
-            # Use dictionary access for EventData
-            args = event['args']
-            if args.get("account") != user_address:
-                return
-
-            order_id = args.get("orderId")
-            if order_id in orders_by_id:
-                order = orders_by_id[order_id]
-                self._update_order_from_amend_event(order, event)
-                callback(order, "amended")
-
-        # ...rest of the method...
-
-    async def stream_market_trades(
-            self,
-            market_address: ChecksumAddress,
-            callback: Callable[[Trade], None],
-    ) -> str:
-        """
-        Stream trades for a specific market.
-
-        Args:
-            market_address: Market address to filter by
-            callback: Function to call with each trade
-
-        Returns:
-            Subscription ID that can be used to unsubscribe
-        """
-        # ...existing code...
-
-        async def handle_fill_event(event: EventData) -> None:
-            # Use dictionary access for EventData
-            trade = self._convert_fill_event_to_trade(event, market_address)
-            callback(trade)
-
-        # ...rest of the method...
-
-    async def stream_user_trades(
-            self,
-            user_address: ChecksumAddress,
-            market_address: Optional[ChecksumAddress] = None,
-            callback: Callable[[Trade], None] | None = None,
-    ) -> str:
-        """
-        Stream trades for a specific user.
-
-        Args:
-            user_address: Address of the user
-            market_address: Optional market address to filter by
-            callback: Function to call with each trade
-
-        Returns:
-            Subscription ID that can be used to unsubscribe
-        """
-        # ...existing code...
-
-        async def handle_maker_fill_event(event: EventData) -> None:
-            # Use dictionary access for EventData
-            if event['args'].get("maker") != user_address:
-                return
-
-            contract_address = event['address']
-            trade = self._convert_fill_event_to_trade(event, contract_address, is_maker=True)
-            callback(trade)
-
-        async def handle_taker_fill_event(event: EventData) -> None:
-            # Use dictionary access for EventData
-            if event['args'].get("taker") != user_address:
-                return
-
-            contract_address = event['address']
-            trade = self._convert_fill_event_to_trade(event, contract_address, is_maker=False)
-            callback(trade)
-
-        # ...rest of the method...

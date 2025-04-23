@@ -77,10 +77,10 @@ async def approve_and_deposit_example(client: Client, web3, market, amount=0.01,
 
     if send_tx and WALLET_PRIVATE_KEY:
         print("\nSending approval transaction...")
-        approve_receipt = tx_funcs[0].send(WALLET_PRIVATE_KEY)
+        approve_receipt = tx_funcs[0].send_wait(WALLET_PRIVATE_KEY)
 
         print("\nSending deposit transaction...")
-        deposit_receipt = tx_funcs[1].send(WALLET_PRIVATE_KEY)
+        deposit_receipt = tx_funcs[1].send_wait(WALLET_PRIVATE_KEY)
 
         return approve_receipt, deposit_receipt
     else:
@@ -94,25 +94,22 @@ async def limit_order_example(client: Client, web3, market, send_tx=False):
     print_separator("Limit Order Example")
 
     # Current market price (or estimate)
-    price = market.price or 100.0
-    # Place a bid 5% below current price
-    bid_price = price * 0.95
+    price = market.price or 8.867345
 
-    print(f"Current market price: {price}")
-    print(f"Creating limit buy order at price: {bid_price}")
+    print(f"Limit order price: {price}")
+
 
     tx_func = await client.place_limit_order(
         market=market,
         side=OrderSide.BUY,
-        amount=0.01,  # Small amount for testing
-        price=bid_price,
+        quantity=0.0001,  # Small amount for testing
+        price=price,
         time_in_force=TimeInForce.GTC,
-        gas=300000,
     )
 
     if send_tx and WALLET_PRIVATE_KEY:
         print("\nSending transaction...")
-        receipt = tx_func.send(WALLET_PRIVATE_KEY)
+        receipt = tx_func.send_wait(WALLET_PRIVATE_KEY)
         return receipt
     else:
         print("\nNOTE: This is a demonstration only. No transaction was sent.")
@@ -165,7 +162,7 @@ async def cancel_order_example(client, web3, market, order_id=None, send_tx=Fals
 
     if send_tx and WALLET_PRIVATE_KEY:
         print("\nSending transaction...")
-        receipt = tx_func.send(WALLET_PRIVATE_KEY)
+        receipt = tx_func.send_wait(WALLET_PRIVATE_KEY)
         return receipt
     else:
         print("\nNOTE: This is a demonstration only. No transaction was sent.")
@@ -201,7 +198,6 @@ async def main():
 
     print("Initializing Web3...")
     web3 = Web3(Web3.HTTPProvider(network.rpc_http))
-
 
     print("Connected to blockchain:")
     print(f"Chain ID: {web3.eth.chain_id}")

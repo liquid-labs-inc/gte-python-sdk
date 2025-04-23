@@ -81,7 +81,7 @@ class ICLOB:
         """
         return self.contract.functions.getOpenInterest().call()
 
-    def get_order(self, order_id: int) -> TxParams:
+    def get_order(self, order_id: int) -> dict:
         """
         Get the details of a specific order.
 

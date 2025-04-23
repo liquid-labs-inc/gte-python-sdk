@@ -227,7 +227,7 @@ class ERC20:
 
     # ================= HELPER METHODS =================
 
-    def format_amount(self, amount: float) -> int:
+    def convert_amount_to_int(self, amount: float) -> int:
         """
         Convert a float amount to the token's base units.
 
@@ -240,7 +240,7 @@ class ERC20:
         decimals = self.decimals()
         return int(amount * (10 ** decimals))
 
-    def format_amount_readable(self, amount: int) -> float:
+    def convert_amount_to_float(self, amount: int) -> float:
         """
         Convert an amount in token base units to a human-readable float.
 

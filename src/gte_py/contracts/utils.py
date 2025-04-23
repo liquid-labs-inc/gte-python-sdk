@@ -119,7 +119,8 @@ class TypedContractFunction(Generic[T]):
     def build_transaction(self) -> TxParams:
         return self.func.build_transaction(self.params)
 
-    def retrieve(self) -> T:
+    # def retrieve(self) -> T:
+    def retrieve(self):
         """
         Retrieves the result of a transaction.
 
@@ -142,5 +143,8 @@ class TypedContractFunction(Generic[T]):
         # Wait for the transaction to be mined
         web3 = self.func.w3
         self.receipt = web3.eth.wait_for_transaction_receipt(self.tx_hash)
+        return None
 
-        raise NotImplementedError
+    def send_wait(self, private_key: PrivateKeyType | None = None) -> HexBytes:
+        self.send(private_key)
+        return self.retrieve()
