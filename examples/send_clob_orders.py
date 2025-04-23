@@ -9,7 +9,7 @@ from web3 import Web3
 
 from gte_py import Client
 from gte_py.config import TESTNET_CONFIG
-from gte_py.models import OrderSide, TimeInForce
+from gte_py.models import OrderSide, TimeInForce, Market
 
 # Load environment variables from .env file
 load_dotenv()
@@ -38,29 +38,14 @@ async def get_market_info(client, market_address):
     print(f"Market: {market.pair}")
     print(f"Base token: {market.base_asset.symbol} ({market.base_token_address})")
     print(f"Quote token: {market.quote_asset.symbol} ({market.quote_token_address})")
-    print(f"Tick size: {market.tick_size_in_quote}")
+    print(f"Tick size: {market.tick_size} {market.tick_size_in_quote}")
+    print(f"Lot size: {market.lot_size} {market.lot_size_in_base}")
 
     return market
 
 
-async def wait_for_transaction(web3, tx_hash, timeout=120):
-    """Wait for a transaction to be mined."""
-    start_time = asyncio.get_event_loop().time()
-    while True:
-        try:
-            receipt = web3.eth.get_transaction_receipt(tx_hash)
-            if receipt is not None:
-                return receipt
-        except Exception:
-            pass
 
-        if asyncio.get_event_loop().time() - start_time > timeout:
-            raise TimeoutError(f"Transaction not mined after {timeout} seconds")
-
-        await asyncio.sleep(2)
-
-
-async def approve_and_deposit_example(client: Client, web3, market, amount=0.01, send_tx=False):
+async def approve_and_deposit_example(client: Client, web3, market, amount, send_tx=False):
     """Example of approving and depositing WETH to the exchange."""
     print_separator("Approve and Deposit WETH Example")
 
@@ -170,7 +155,7 @@ async def cancel_order_example(client, web3, market, order_id=None, send_tx=Fals
         return None
 
 
-async def show_balances_example(client: Client, market):
+async def show_balances(client: Client, market: Market):
     """Example of getting token balances."""
     print_separator("Token Balances Example")
 
@@ -210,7 +195,7 @@ async def main():
     market = await get_market_info(client, MARKET_ADDRESS)
 
     # Show balances
-    await show_balances_example(client, market)
+    await show_balances(client, market)
 
     # Run the examples (set send_tx=True to actually send transactions)
     send_tx = True  # Safety default - change to True to send transactions
@@ -218,8 +203,9 @@ async def main():
     print("\nNOTE: For WETH wrapping and unwrapping examples, see wrap_weth.py")
 
     # Deposit tokens example
-    await approve_and_deposit_example(client, web3, market, amount=0.01, send_tx=send_tx)
+    await approve_and_deposit_example(client, web3, market, amount=1, send_tx=send_tx)
 
+    await show_balances(client, market)
     # Order examples
     await limit_order_example(client, web3, market, send_tx)
     await market_order_example(client, web3, market, send_tx)

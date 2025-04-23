@@ -158,7 +158,7 @@ async def main():
     send_tx = True  # Set to True to send actual transactions
 
     # WETH examples
-    amount_to_wrap = 0.001  # Small amount for testing
+    amount_to_wrap = 1  # Small amount for testing
     await wrap_eth_example(client, web3, amount_eth=amount_to_wrap, send_tx=send_tx)
 
     # Show balances before operations
