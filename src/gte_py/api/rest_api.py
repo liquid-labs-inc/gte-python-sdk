@@ -1,5 +1,5 @@
 """REST API client for GTE."""
-
+import json
 import logging
 
 import aiohttp
@@ -58,13 +58,13 @@ class RestApi:
         try:
             async with self.session.request(method, url, params=params, json=data,
                                             headers=self.default_headers) as response:
-                response_data = await response.json()
-                if response.status >= 400:
-                    logger.error(f"API error: {response.status} - {response_data}")
-                    raise ValueError(f"API error: {response.status} - {response_data}")
-                return response_data
+                response_data = await response.text()
+                response.raise_for_status()
+
+                data = json.loads(response_data)
+                return data
         except aiohttp.ClientError as e:
-            logger.error(f"Request error: {e}")
+            logger.error(f"Request error: {e} url={url} params={params} data={data}")
             raise
 
     # Health endpoint
@@ -74,7 +74,7 @@ class RestApi:
         Returns:
             Dict: Health status information
         """
-        return await self._request("GET", "/health")
+        return await self._request("GET", "/v1/health")
 
     # Assets endpoints
     async def get_assets(
@@ -93,7 +93,7 @@ class RestApi:
         params: dict = {"limit": limit, "offset": offset}
         if creator:
             params["creator"] = creator
-        return await self._request("GET", "/assets", params=params)
+        return await self._request("GET", "/v1/assets", params=params)
 
     async def get_asset(self, asset_address: str) -> dict:
         """Get asset by address.
@@ -104,7 +104,7 @@ class RestApi:
         Returns:
             Dict: Asset information
         """
-        return await self._request("GET", f"/assets/{asset_address}")
+        return await self._request("GET", f"/v1/assets/{asset_address}")
 
     # Markets endpoints
     async def get_markets(
@@ -134,7 +134,7 @@ class RestApi:
             params["asset"] = asset
         if price is not None:
             params["price"] = price
-        return await self._request("GET", "/markets", params=params)
+        return await self._request("GET", "/v1/markets", params=params)
 
     async def get_market(self, market_address: str) -> dict:
         """Get market by address.
@@ -145,7 +145,7 @@ class RestApi:
         Returns:
             Dict: Market information
         """
-        return await self._request("GET", f"/markets/{market_address}")
+        return await self._request("GET", f"/v1/markets/{market_address}")
 
     async def get_candles(
             self,
@@ -170,7 +170,7 @@ class RestApi:
         params: dict = {"interval": interval, "startTime": start_time, "limit": limit}
         if end_time:
             params["endTime"] = end_time
-        return await self._request("GET", f"/markets/{market_address}/candles", params=params)
+        return await self._request("GET", f"/v1/markets/{market_address}/candles", params=params)
 
     async def get_trades(self, market_address: str, limit: int = 100, offset: int = 0) -> dict:
         """Get trades for a market.
@@ -184,7 +184,7 @@ class RestApi:
             Dict: List of trades
         """
         params = {"limit": limit, "offset": offset}
-        return await self._request("GET", f"/markets/{market_address}/trades", params=params)
+        return await self._request("GET", f"/v1/markets/{market_address}/trades", params=params)
 
     # Users endpoints
     async def get_user_positions(self, user_address: str) -> dict:
@@ -196,7 +196,7 @@ class RestApi:
         Returns:
             Dict: List of LP positions
         """
-        return await self._request("GET", f"/users/{user_address}/positions")
+        return await self._request("GET", f"/v1/users/{user_address}/positions")
 
     async def get_user_assets(self, user_address: str, limit: int = 100, offset: int = 0) -> dict:
         """Get assets held by a user.
@@ -210,4 +210,4 @@ class RestApi:
             Dict: List of assets held by the user
         """
         params = {"limit": limit, "offset": offset}
-        return await self._request("GET", f"/users/{user_address}/assets", params=params)
+        return await self._request("GET", f"/v1/users/{user_address}/assets", params=params)
