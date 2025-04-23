@@ -14,6 +14,7 @@ dependencies = [
 dev-dependencies = [
     "rich>=14.0.0",
     "dotenv>=0.9.9",
+    "tabulate"
 ]
 [tool.container]
 base_image = "python:3.10-slim"

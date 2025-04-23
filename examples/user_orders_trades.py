@@ -151,7 +151,7 @@ async def main():
             print(f"Couldn't initialize Web3: {e}")
             web3 = None
 
-    client = Client(web3_provider=web3, router_address=ROUTER_ADDRESS)
+    client = Client(web3=web3, router_address=ROUTER_ADDRESS)
 
     try:
         # Get a market for examples

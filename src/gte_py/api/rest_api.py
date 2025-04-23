@@ -17,7 +17,10 @@ class RestApi:
             base_url: Base URL for the API
         """
         self.base_url = base_url.rstrip("/")
-        self.session = None
+        self.default_headers = {
+            'Content-Type': 'application/json',
+        }
+        self.session: aiohttp.ClientSession | None = None
 
     async def __aenter__(self):
         """Enter the async context."""
@@ -28,14 +31,13 @@ class RestApi:
         """Exit the async context."""
         if self.session:
             await self.session.close()
-            self.session = None
 
     async def _request(
-        self,
-        method: str,
-        endpoint: str,
-        params: dict | None = None,
-        data: dict | None = None,
+            self,
+            method: str,
+            endpoint: str,
+            params: dict | None = None,
+            data: dict | None = None,
     ) -> dict:
         """Make a request to the API.
 
@@ -49,12 +51,13 @@ class RestApi:
             Dict: API response
         """
         if self.session is None:
-            self.session = aiohttp.ClientSession()
+            await self.__aenter__()
 
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
 
         try:
-            async with self.session.request(method, url, params=params, json=data) as response:
+            async with self.session.request(method, url, params=params, json=data,
+                                            headers=self.default_headers) as response:
                 response_data = await response.json()
                 if response.status >= 400:
                     logger.error(f"API error: {response.status} - {response_data}")
@@ -75,7 +78,7 @@ class RestApi:
 
     # Assets endpoints
     async def get_assets(
-        self, creator: str | None = None, limit: int = 100, offset: int = 0
+            self, creator: str | None = None, limit: int = 100, offset: int = 0
     ) -> dict:
         """Get list of assets.
 
@@ -105,12 +108,12 @@ class RestApi:
 
     # Markets endpoints
     async def get_markets(
-        self,
-        limit: int = 100,
-        offset: int = 0,
-        market_type: str | None = None,
-        asset: str | None = None,
-        price: float | None = None,
+            self,
+            limit: int = 100,
+            offset: int = 0,
+            market_type: str | None = None,
+            asset: str | None = None,
+            price: float | None = None,
     ) -> dict:
         """Get list of markets.
 
@@ -145,12 +148,12 @@ class RestApi:
         return await self._request("GET", f"/markets/{market_address}")
 
     async def get_candles(
-        self,
-        market_address: str,
-        interval: str,
-        start_time: int,
-        end_time: int | None = None,
-        limit: int = 500,
+            self,
+            market_address: str,
+            interval: str,
+            start_time: int,
+            end_time: int | None = None,
+            limit: int = 500,
     ) -> dict:
         """Get candles for a market.
 

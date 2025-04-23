@@ -251,7 +251,7 @@ async def main():
 
     # Initialize client with Web3
     print("Initializing GTE client...")
-    client = Client(web3_provider=web3, router_address=ROUTER_ADDRESS)
+    client = Client(web3=web3, router_address=ROUTER_ADDRESS)
 
     try:
         # Get a market to work with

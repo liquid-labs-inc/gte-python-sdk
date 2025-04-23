@@ -117,7 +117,7 @@ class MarketService:
             return self.refresh_markets_from_chain()
         return list(self._markets.values())
 
-    def add_market_info(self, market_info: Market) -> None:
+    def add_market(self, market_info: Market) -> None:
         """
         Add market information to the cache.
 
@@ -126,7 +126,7 @@ class MarketService:
         """
         self._markets[market_info.address] = market_info
 
-    def get_market_info(self, market_address: ChecksumAddress) -> Market | None:
+    def get_market(self, market_address: ChecksumAddress) -> Market | None:
         """
         Get market information for a specific market.
 

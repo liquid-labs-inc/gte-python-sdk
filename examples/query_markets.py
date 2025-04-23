@@ -8,14 +8,11 @@ from tabulate import tabulate  # pip install tabulate
 from web3 import Web3
 
 from gte_py import Client
+from gte_py.config import TESTNET_CONFIG
 from gte_py.models import Market
 
-# Load environment variables from .env file
-load_dotenv()
 
 # Configure these variables through environment or directly
-RPC_URL = os.getenv("RPC_URL", "https://rpc-testnet.example.com")
-ROUTER_ADDRESS = os.getenv("ROUTER_ADDRESS")
 
 
 def print_separator(title):
@@ -185,9 +182,9 @@ async def query_market_details(client: Client):
     print(f"  Decimals: {market.quote_asset.decimals}")
 
     # On-chain details if available
-    if market.contract_address:
+    if market.address:
         print("\nOn-chain Details:")
-        print(f"  Contract: {market.contract_address}")
+        print(f"  Contract: {market.address}")
         print(f"  Base Token: {market.base_token_address}")
         print(f"  Quote Token: {market.quote_token_address}")
         print(f"  Tick Size: {market.tick_size}")
@@ -199,17 +196,12 @@ async def main():
     print("GTE Market Query Example")
 
     # Initialize Web3 if configuration is available
-    web3 = None
-    if RPC_URL and RPC_URL != "https://rpc-testnet.example.com":
-        try:
-            web3 = Web3(Web3.HTTPProvider(RPC_URL))
-            print(f"Web3 Connected: {web3.is_connected()}")
-        except Exception as e:
-            print(f"Couldn't initialize Web3: {e}")
+    web3 = Web3(Web3.HTTPProvider(TESTNET_CONFIG.rpc_http))
 
     # Initialize client
     client = Client(
-        web3_provider=web3, router_address=ROUTER_ADDRESS if web3 and web3.is_connected() else None
+        web3=web3,
+        config=TESTNET_CONFIG
     )
 
     try:

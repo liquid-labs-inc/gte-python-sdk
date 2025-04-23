@@ -125,6 +125,7 @@ exclude_lines = [
 dev = [
     "rich>=14.0.0",
     "dotenv>=0.9.9",
+    "tabulate",
     "pytest>=7.0",
     "coverage>=7.5",
     "pyright>=1.1",

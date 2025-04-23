@@ -42,13 +42,13 @@ class SubscriptionManager:
             )
 
     async def subscribe(
-        self,
-        subscription_id: str,
-        contract: ICLOB,
-        event_name: str,
-        callback: Callable[[EventData], None],
-        argument_filters: dict[str, Any] = None,
-        polling_interval: float = 2.0,
+            self,
+            subscription_id: str,
+            contract: ICLOB,
+            event_name: str,
+            callback: Callable[[EventData], None],
+            argument_filters: dict[str, Any] = None,
+            polling_interval: float = 2.0,
     ) -> str:
         """
         Subscribe to contract events.
@@ -188,7 +188,7 @@ class ExecutionClient:
     EVENT_ORDER_CANCELLED = "OrderCancelled"
     EVENT_ORDER_AMENDED = "OrderAmended"
 
-    def __init__(self, web3: Web3, sender_address: AnyAddress, router_address: str | None = None):
+    def __init__(self, web3: Web3, sender_address: ChecksumAddress, router_address: ChecksumAddress):
         """
         Initialize the execution client.
 
@@ -201,22 +201,8 @@ class ExecutionClient:
         self._clob_clients: dict[str, ICLOB] = {}
         self._router: Router | None = None
         self._market_info: MarketService | None = None
-        self._sender_address: ChecksumAddress = self._web3.to_checksum_address(sender_address)
+        self._sender_address = sender_address
         self._subscription_manager: SubscriptionManager | None = None
-
-        if web3 and router_address:
-            self.setup_contracts(web3, router_address)
-
-    def setup_contracts(self, web3: Web3, router_address: str) -> None:
-        """
-        Set up the contracts.
-
-        Args:
-            web3: Web3 instance
-            router_address: Address of the GTE Router contract
-        """
-        self._web3 = web3
-        router_address = web3.to_checksum_address(router_address)
 
         # Create router and market info service
         self._router = Router(web3=web3, contract_address=router_address)
@@ -247,10 +233,10 @@ class ExecutionClient:
         return self._clob_clients[contract_address]
 
     async def stream_user_orders(
-        self,
-        user_address: str,
-        market_address: str | None = None,
-        callback: Callable[[Order, str], None] | None = None,
+            self,
+            user_address: str,
+            market_address: str | None = None,
+            callback: Callable[[Order, str], None] | None = None,
     ) -> str:
         """
         Stream order updates for a specific user.
@@ -428,9 +414,9 @@ class ExecutionClient:
         return subscription_id
 
     async def stream_market_trades(
-        self,
-        market_address: str,
-        callback: Callable[[Trade], None],
+            self,
+            market_address: str,
+            callback: Callable[[Trade], None],
     ) -> str:
         """
         Stream trades for a specific market.
@@ -477,10 +463,10 @@ class ExecutionClient:
         return subscription_id
 
     async def stream_user_trades(
-        self,
-        user_address: str,
-        market_address: str | None = None,
-        callback: Callable[[Trade], None] | None = None,
+            self,
+            user_address: str,
+            market_address: str | None = None,
+            callback: Callable[[Trade], None] | None = None,
     ) -> str:
         """
         Stream trades for a specific user.
@@ -572,11 +558,11 @@ class ExecutionClient:
         return subscription_id
 
     async def get_user_trades(
-        self,
-        user_address: str,
-        market_address: str | None = None,
-        limit: int = 100,
-        offset: int = 0,
+            self,
+            user_address: str,
+            market_address: str | None = None,
+            limit: int = 100,
+            offset: int = 0,
     ) -> list[Trade]:
         """
         Fetch historical trades for a specific user.
@@ -657,11 +643,11 @@ class ExecutionClient:
         return {"bids": bids, "asks": asks, "timestamp": get_current_timestamp()}
 
     async def stream_order_book(
-        self,
-        market_address: str,
-        callback: Callable[[dict], None],
-        depth: int = 10,
-        update_interval: float = 1.0,
+            self,
+            market_address: str,
+            callback: Callable[[dict], None],
+            depth: int = 10,
+            update_interval: float = 1.0,
     ) -> str:
         """
         Stream order book updates for a specific market.
@@ -679,11 +665,12 @@ class ExecutionClient:
             raise ValueError("Web3 provider not configured. Cannot stream blockchain events.")
 
         market_address = self._web3.to_checksum_address(market_address)
+        market = self._market_info.get_market(market_address)
         subscription_id = f"orderbook_{market_address}"
 
         # Create a task to poll the order book
         task = asyncio.create_task(
-            self._poll_order_book(market_address, callback, depth, update_interval)
+            self._poll_order_book(market, callback, depth, update_interval)
         )
 
         # Store the task so we can cancel it later
@@ -693,11 +680,11 @@ class ExecutionClient:
         return subscription_id
 
     async def _poll_order_book(
-        self,
-        market: Market,
-        callback: Callable[[dict], None],
-        depth: int,
-        update_interval: float,
+            self,
+            market: Market,
+            callback: Callable[[dict], None],
+            depth: int,
+            update_interval: float,
     ) -> None:
         """
         Poll the order book at regular intervals.
