@@ -172,21 +172,19 @@ class CLOBFactory:
         """
         func = self.contract.functions.createMarket(base_token, quote_token, settings)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def approve_operator(
-            self, operator: ChecksumAddress, sender_address: ChecksumAddress, **kwargs
+            self, operator: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Approve an operator for the sender's account.
 
         Args:
             operator: Address of the operator to approve
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -194,21 +192,19 @@ class CLOBFactory:
         """
         func = self.contract.functions.approveOperator(operator)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def disapprove_operator(
-            self, operator: ChecksumAddress, sender_address: ChecksumAddress, **kwargs
+            self, operator: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Disapprove an operator for the sender's account.
 
         Args:
             operator: Address of the operator to disapprove
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -216,8 +212,7 @@ class CLOBFactory:
         """
         func = self.contract.functions.disapproveOperator(operator)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -228,7 +223,6 @@ class CLOBFactory:
             token: ChecksumAddress,
             amount: int,
             from_operator: bool,
-            sender_address: ChecksumAddress,
             **kwargs,
     ) -> TypedContractFunction[None]:
         """
@@ -239,7 +233,6 @@ class CLOBFactory:
             token: Address of the token to deposit
             amount: Amount to deposit
             from_operator: Whether the deposit is from an operator
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -247,8 +240,7 @@ class CLOBFactory:
         """
         func = self.contract.functions.deposit(account, token, amount, from_operator)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -259,7 +251,6 @@ class CLOBFactory:
             token: ChecksumAddress,
             amount: int,
             to_operator: bool,
-            sender_address: ChecksumAddress,
             **kwargs,
     ) -> TypedContractFunction[None]:
         """
@@ -270,7 +261,6 @@ class CLOBFactory:
             token: Address of the token to withdraw
             amount: Amount to withdraw
             to_operator: Whether the withdrawal is to an operator
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -278,21 +268,19 @@ class CLOBFactory:
         """
         func = self.contract.functions.withdraw(account, token, amount, to_operator)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def set_fee_recipient(
-            self, new_fee_recipient: ChecksumAddress, sender_address: ChecksumAddress, **kwargs
+            self, new_fee_recipient: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Set a new fee recipient.
 
         Args:
             new_fee_recipient: Address of the new fee recipient
-            sender_address: Address of the transaction sender (must be owner)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -300,8 +288,7 @@ class CLOBFactory:
         """
         func = self.contract.functions.setFeeRecipient(new_fee_recipient)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -310,7 +297,6 @@ class CLOBFactory:
             self,
             accounts: List[ChecksumAddress],
             fee_tiers: List[int],
-            sender_address: ChecksumAddress,
             **kwargs,
     ) -> TypedContractFunction[None]:
         """
@@ -319,7 +305,6 @@ class CLOBFactory:
         Args:
             accounts: List of account addresses
             fee_tiers: List of fee tier enum values
-            sender_address: Address of the transaction sender (must be owner)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -327,21 +312,19 @@ class CLOBFactory:
         """
         func = self.contract.functions.setAccountFeeTiers(accounts, fee_tiers)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def collect_fees(
-            self, token: ChecksumAddress, sender_address: ChecksumAddress, **kwargs
+            self, token: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[int]:
         """
         Collect accumulated fees for a token.
 
         Args:
             token: Address of the token to collect fees for
-            sender_address: Address of the transaction sender (must be owner)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -349,21 +332,19 @@ class CLOBFactory:
         """
         func = self.contract.functions.collectFees(token)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def transfer_ownership(
-            self, new_owner: ChecksumAddress, sender_address: ChecksumAddress, **kwargs
+            self, new_owner: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Transfer ownership of the factory.
 
         Args:
             new_owner: Address of the new owner
-            sender_address: Address of the transaction sender (must be current owner)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -371,20 +352,18 @@ class CLOBFactory:
         """
         func = self.contract.functions.transferOwnership(new_owner)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def renounce_ownership(
-            self, sender_address: ChecksumAddress, **kwargs
+            self, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Renounce ownership of the factory.
 
         Args:
-            sender_address: Address of the transaction sender (must be current owner)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -392,8 +371,7 @@ class CLOBFactory:
         """
         func = self.contract.functions.renounceOwnership()
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -401,8 +379,7 @@ class CLOBFactory:
     # ================= ADVANCED OPERATION METHODS =================
 
     def credit_account(
-            self, account: ChecksumAddress, token: ChecksumAddress, amount: int, sender_address: ChecksumAddress,
-            **kwargs
+            self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Credit an account with tokens (admin operation).
@@ -411,7 +388,6 @@ class CLOBFactory:
             account: Address of the account to credit
             token: Address of the token to credit
             amount: Amount to credit
-            sender_address: Address of the transaction sender (must be a market)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -419,15 +395,13 @@ class CLOBFactory:
         """
         func = self.contract.functions.creditAccount(account, token, amount)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def debit_account(
-            self, account: ChecksumAddress, token: ChecksumAddress, amount: int, sender_address: ChecksumAddress,
-            **kwargs
+            self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Debit an account with tokens (admin operation).
@@ -436,7 +410,6 @@ class CLOBFactory:
             account: Address of the account to debit
             token: Address of the token to debit
             amount: Amount to debit
-            sender_address: Address of the transaction sender (must be a market)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -444,15 +417,13 @@ class CLOBFactory:
         """
         func = self.contract.functions.debitAccount(account, token, amount)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def pull_from_account(
-            self, account: ChecksumAddress, token: ChecksumAddress, amount: int, sender_address: ChecksumAddress,
-            **kwargs
+            self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Pull tokens from an account (admin operation).
@@ -461,7 +432,6 @@ class CLOBFactory:
             account: Address of the account to pull from
             token: Address of the token to pull
             amount: Amount to pull
-            sender_address: Address of the transaction sender (must be a market)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -469,15 +439,13 @@ class CLOBFactory:
         """
         func = self.contract.functions.pullFromAccount(account, token, amount)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def push_to_account(
-            self, account: ChecksumAddress, token: ChecksumAddress, amount: int, sender_address: ChecksumAddress,
-            **kwargs
+            self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Push tokens to an account (admin operation).
@@ -486,7 +454,6 @@ class CLOBFactory:
             account: Address of the account to push to
             token: Address of the token to push
             amount: Amount to push
-            sender_address: Address of the transaction sender (must be a market)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -494,21 +461,19 @@ class CLOBFactory:
         """
         func = self.contract.functions.pushToAccount(account, token, amount)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def settle_incoming_order(
-            self, params: dict, sender_address: ChecksumAddress, **kwargs
+            self, params: dict, **kwargs
     ) -> TypedContractFunction[int]:
         """
         Settle an incoming order (admin operation).
 
         Args:
             params: Settlement parameters
-            sender_address: Address of the transaction sender (must be a market)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -529,8 +494,7 @@ class CLOBFactory:
 
         func = self.contract.functions.settleIncomingOrder(params)
         tx_params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+
             **kwargs,
         }
         return TypedContractFunction(func, tx_params)

@@ -1,6 +1,5 @@
 """Python wrapper for ERC20 token contracts."""
-from decimal import Decimal
-from typing import TypeVar, Optional, Dict, Any
+from typing import TypeVar, Dict, Any
 
 from eth_typing import ChecksumAddress
 from web3 import Web3
@@ -27,7 +26,6 @@ class ERC20:
         Args:
             web3: Web3 instance connected to a provider
             contract_address: Address of the ERC20 token contract
-            abi_path: Path to a custom ABI JSON file (optional, defaults to standard ERC20 ABI)
         """
         self.web3 = web3
         self.address = contract_address
@@ -109,8 +107,7 @@ class ERC20:
         """
         func = self.contract.functions.transfer(recipient, amount)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -119,7 +116,6 @@ class ERC20:
             self,
             spender: ChecksumAddress,
             amount: int,
-            sender_address: ChecksumAddress,
             **kwargs
     ) -> TypedContractFunction[bool]:
         """
@@ -128,7 +124,6 @@ class ERC20:
         Args:
             spender: Address which will spend the funds
             amount: Amount of tokens to approve in token base units
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -136,8 +131,7 @@ class ERC20:
         """
         func = self.contract.functions.approve(spender, amount)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -165,8 +159,7 @@ class ERC20:
         """
         func = self.contract.functions.transferFrom(sender, recipient, amount)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -192,8 +185,7 @@ class ERC20:
         """
         func = self.contract.functions.increaseAllowance(spender, added_value)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -219,8 +211,7 @@ class ERC20:
         """
         func = self.contract.functions.decreaseAllowance(spender, subtracted_value)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
+            
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -273,7 +264,7 @@ class ERC20:
         """
         # 2^256 - 1, the maximum uint256 value
         max_uint256 = 2 ** 256 - 1
-        return self.approve(spender, max_uint256, sender_address, **kwargs)
+        return self.approve(spender, max_uint256, **kwargs)
 
     def has_sufficient_allowance(
             self,

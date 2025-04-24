@@ -35,6 +35,7 @@ class TimeInForce(Enum):
     """Time in force for orders."""
 
     GTC = "GTC"  # Good till cancelled
+    GTT = "GTT"  # Good till time
     PostOnly = "PostOnly"  # Post only
     IOC = "IOC"  # Immediate or cancel
     FOK = "FOK"  # Fill or kill

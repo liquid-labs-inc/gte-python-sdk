@@ -36,9 +36,9 @@ class ICLOB:
     """
 
     def __init__(
-        self,
-        web3: Web3,
-        contract_address: str,
+            self,
+            web3: Web3,
+            contract_address: ChecksumAddress,
     ):
         """
         Initialize the ICLOB wrapper.
@@ -46,11 +46,9 @@ class ICLOB:
         Args:
             web3: Web3 instance connected to a provider
             contract_address: Address of the CLOB contract
-            abi_path: Path to the ABI JSON file (optional)
-            abi: The contract ABI as a Python dictionary (optional)
         """
         self.web3 = web3
-        self.address = web3.to_checksum_address(contract_address)
+        self.address = contract_address
         loaded_abi = load_abi("iclob")
         self.contract = self.web3.eth.contract(address=self.address, abi=loaded_abi)
 
@@ -63,6 +61,7 @@ class ICLOB:
     def get_base_token(self) -> ChecksumAddress:
         """Get the base token used in the CLOB."""
         return self.contract.functions.getBaseToken().call()
+
     # factory, mask?, quote, base, tick_size?, lot_size?
     def get_market_config(self) -> tuple[ChecksumAddress, int, ChecksumAddress, ChecksumAddress, int, int]:
         """Get the market configuration settings for the CLOB."""
@@ -247,11 +246,10 @@ class ICLOB:
     # ================= WRITE METHODS =================
 
     def post_limit_order(
-        self,
-        account: ChecksumAddress,
-        args: ICLOBPostLimitOrderArgs,
-        sender_address: ChecksumAddress,
-        **kwargs,
+            self,
+            account: ChecksumAddress,
+            args: ICLOBPostLimitOrderArgs,
+            **kwargs,
     ) -> TypedContractFunction[dict]:
         """
         Post a limit order to the CLOB.
@@ -266,19 +264,14 @@ class ICLOB:
             TypedContractFunction that can be used to execute the transaction
         """
         func = self.contract.functions.postLimitOrder(account, args)
-        params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
-            **kwargs,
-        }
-        return TypedContractFunction(func, params)
+        params = {**kwargs}
+        return TypedContractFunction(func, params).with_event(self.contract.events.LimitOrderProcessed)
 
     def post_fill_order(
-        self, 
-        account: ChecksumAddress, 
-        args: ICLOBPostFillOrderArgs, 
-        sender_address: ChecksumAddress, 
-        **kwargs
+            self,
+            account: ChecksumAddress,
+            args: ICLOBPostFillOrderArgs,
+            **kwargs
     ) -> TypedContractFunction[dict]:
         """
         Post a fill order to the CLOB.
@@ -286,26 +279,20 @@ class ICLOB:
         Args:
             account: Address of the account to post the order for
             args: PostFillOrderArgs struct with order details
-            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
         func = self.contract.functions.postFillOrder(account, args)
-        params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
-            **kwargs,
-        }
-        return TypedContractFunction(func, params)
+        params = {**kwargs}
+        return TypedContractFunction(func, params).with_event(self.contract.events.FillOrderProcessed)
 
     def amend(
-        self, 
-        account: ChecksumAddress, 
-        args: ICLOBAmendArgs, 
-        sender_address: ChecksumAddress, 
-        **kwargs
+            self,
+            account: ChecksumAddress,
+            args: ICLOBAmendArgs,
+            **kwargs
     ) -> TypedContractFunction[tuple[int, int]]:
         """
         Amend an existing order.
@@ -313,7 +300,6 @@ class ICLOB:
         Args:
             account: Address of the account that owns the order
             args: AmendArgs struct with order details
-            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -322,18 +308,15 @@ class ICLOB:
         """
         func = self.contract.functions.amend(account, args)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def cancel(
-        self, 
-        account: ChecksumAddress, 
-        args: ICLOBCancelArgs, 
-        sender_address: ChecksumAddress, 
-        **kwargs
+            self,
+            account: ChecksumAddress,
+            args: ICLOBCancelArgs,
+            **kwargs
     ) -> TypedContractFunction[tuple[int, int]]:
         """
         Cancel one or more orders.
@@ -341,7 +324,6 @@ class ICLOB:
         Args:
             account: Address of the account that owns the orders
             args: CancelArgs struct with order IDs and settlement type
-            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -350,20 +332,17 @@ class ICLOB:
         """
         func = self.contract.functions.cancel(account, args)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def accept_ownership(
-        self, sender_address: ChecksumAddress, **kwargs
+            self, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Accept ownership of the contract.
 
         Args:
-            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -371,20 +350,17 @@ class ICLOB:
         """
         func = self.contract.functions.acceptOwnership()
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def renounce_ownership(
-        self, sender_address: ChecksumAddress, **kwargs
+            self, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Renounce ownership of the contract.
 
         Args:
-            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -392,24 +368,20 @@ class ICLOB:
         """
         func = self.contract.functions.renounceOwnership()
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def transfer_ownership(
-        self, 
-        new_owner: ChecksumAddress, 
-        sender_address: ChecksumAddress, 
-        **kwargs
+            self,
+            new_owner: ChecksumAddress,
+            **kwargs
     ) -> TypedContractFunction[None]:
         """
         Transfer ownership of the contract.
 
         Args:
             new_owner: Address of the new owner
-            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -417,18 +389,15 @@ class ICLOB:
         """
         func = self.contract.functions.transferOwnership(new_owner)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def set_max_limits_exempt(
-        self, 
-        account: ChecksumAddress, 
-        toggle: bool, 
-        sender_address: ChecksumAddress, 
-        **kwargs
+            self,
+            account: ChecksumAddress,
+            toggle: bool,
+            **kwargs
     ) -> TypedContractFunction[None]:
         """
         Set whether an account is exempt from the max limits restriction.
@@ -436,7 +405,6 @@ class ICLOB:
         Args:
             account: Address of the account
             toggle: True to exempt, False to not exempt
-            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -444,21 +412,18 @@ class ICLOB:
         """
         func = self.contract.functions.setMaxLimitsExempt(account, toggle)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def set_max_limits_per_tx(
-        self, new_max_limits: int, sender_address: ChecksumAddress, **kwargs
+            self, new_max_limits: int, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Set the maximum number of limit orders allowed per transaction.
 
         Args:
             new_max_limits: The new maximum number of limits per transaction
-            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -466,21 +431,18 @@ class ICLOB:
         """
         func = self.contract.functions.setMaxLimitsPerTx(new_max_limits)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def set_min_limit_order_amount_in_base(
-        self, new_min_amount: int, sender_address: ChecksumAddress, **kwargs
+            self, new_min_amount: int, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Set the minimum amount in base for limit orders.
 
         Args:
             new_min_amount: The new minimum amount in base
-            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -488,21 +450,18 @@ class ICLOB:
         """
         func = self.contract.functions.setMinLimitOrderAmountInBase(new_min_amount)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def set_tick_size(
-        self, tick_size: int, sender_address: ChecksumAddress, **kwargs
+            self, tick_size: int, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Set the tick size for the CLOB.
 
         Args:
             tick_size: The new tick size
-            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -510,8 +469,6 @@ class ICLOB:
         """
         func = self.contract.functions.setTickSize(tick_size)
         params = {
-            "from": sender_address,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -519,14 +476,14 @@ class ICLOB:
     # ================= HELPER METHODS =================
 
     def create_post_limit_order_args(
-        self,
-        amount_in_base: int,
-        price: int,
-        side: int,
-        cancel_timestamp: int = 0,
-        client_order_id: int = 0,
-        limit_order_type: int = LimitOrderType.GOOD_TILL_CANCELLED,
-        settlement: int = Settlement.INSTANT,
+            self,
+            amount_in_base: int,
+            price: int,
+            side: int,
+            cancel_timestamp: int = 0,
+            client_order_id: int = 0,
+            limit_order_type: int = LimitOrderType.GOOD_TILL_CANCELLED,
+            settlement: int = Settlement.INSTANT,
     ) -> ICLOBPostLimitOrderArgs:
         """
         Create a PostLimitOrderArgs struct for use with post_limit_order.
@@ -548,19 +505,19 @@ class ICLOB:
             "price": price,
             "cancelTimestamp": cancel_timestamp,
             "side": side,
-            "clientOrderId": client_order_id,
+            # "clientOrderId": client_order_id,
             "limitOrderType": limit_order_type,
             "settlement": settlement,
         }
 
     def create_post_fill_order_args(
-        self,
-        amount: int,
-        price_limit: int,
-        side: int,
-        amount_is_base: bool = True,
-        fill_order_type: int = FillOrderType.IMMEDIATE_OR_CANCEL,
-        settlement: int = Settlement.INSTANT,
+            self,
+            amount: int,
+            price_limit: int,
+            side: int,
+            amount_is_base: bool = True,
+            fill_order_type: int = FillOrderType.IMMEDIATE_OR_CANCEL,
+            settlement: int = Settlement.INSTANT,
     ) -> ICLOBPostFillOrderArgs:
         """
         Create a PostFillOrderArgs struct for use with post_fill_order.
@@ -586,14 +543,14 @@ class ICLOB:
         }
 
     def create_amend_args(
-        self,
-        order_id: int,
-        amount_in_base: int,
-        price: int,
-        side: int,
-        cancel_timestamp: int = 0,
-        limit_order_type: int = LimitOrderType.GOOD_TILL_CANCELLED,
-        settlement: int = Settlement.INSTANT,
+            self,
+            order_id: int,
+            amount_in_base: int,
+            price: int,
+            side: int,
+            cancel_timestamp: int = 0,
+            limit_order_type: int = LimitOrderType.GOOD_TILL_CANCELLED,
+            settlement: int = Settlement.INSTANT,
     ) -> ICLOBAmendArgs:
         """
         Create an AmendArgs struct for use with amend.
@@ -621,7 +578,7 @@ class ICLOB:
         }
 
     def create_cancel_args(
-        self, order_ids: list[int], settlement: int = Settlement.INSTANT
+            self, order_ids: list[int], settlement: int = Settlement.INSTANT
     ) -> ICLOBCancelArgs:
         """
         Create a CancelArgs struct for use with cancel.

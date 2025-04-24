@@ -376,11 +376,12 @@ class ExecutionClient:
         if time_in_force in [TimeInForce.IOC, TimeInForce.FOK]:
             # Convert amount to base token atoms
 
-            # Map time_in_force to fill_order_type
-            fill_order_type = (
-                FillOrderType.IMMEDIATE_OR_CANCEL if time_in_force == TimeInForce.IOC
-                else FillOrderType.FILL_OR_KILL
-            )
+            if time_in_force == TimeInForce.IOC:
+                fill_order_type = FillOrderType.IMMEDIATE_OR_CANCEL
+            elif time_in_force == TimeInForce.FOK:
+                fill_order_type = FillOrderType.FILL_OR_KILL
+            else:
+                raise ValueError(f"Unknown time_in_force: {time_in_force}")
 
             # Create post fill order args
             args = clob.create_post_fill_order_args(
@@ -396,15 +397,19 @@ class ExecutionClient:
             return clob.post_fill_order(
                 account=self._sender_address,
                 args=args,
-                sender_address=self._sender_address,
                 **kwargs
             )
         else:
-            # if time_in_force == TimeInForce.GTC:
-            #     tif = LimitOrderType.GOOD_TILL_CANCELLED
-            # elif time_in_force == TimeInForce.PostOnly:
-            #     tif = LimitOrderType
-
+            if time_in_force == TimeInForce.GTC:
+                tif = LimitOrderType.GOOD_TILL_CANCELLED
+            elif time_in_force == TimeInForce.FOK:
+                tif = LimitOrderType.FILL_OR_KILL
+            elif time_in_force == TimeInForce.IOC:
+                tif = LimitOrderType.IMMEDIATE_OR_CANCEL
+            elif time_in_force == TimeInForce.GTT:
+                tif = LimitOrderType.GOOD_TILL_TIME
+            else:
+                raise ValueError(f"Unknown time_in_force: {time_in_force}")
             # Create post limit order args
             args = clob.create_post_limit_order_args(
                 amount_in_base=amount_in_base,
@@ -412,15 +417,14 @@ class ExecutionClient:
                 side=contract_side,
                 cancel_timestamp=0,  # No expiration
                 client_order_id=client_order_id,
-                limit_order_type=LimitOrderType.GOOD_TILL_CANCELLED,
+                limit_order_type=tif,
                 settlement=Settlement.INSTANT
             )
-            print(args)
+
             # Return the transaction
             return clob.post_limit_order(
                 account=self._sender_address,
                 args=args,
-                sender_address=self._sender_address,
                 **kwargs
             )
 
@@ -482,7 +486,6 @@ class ExecutionClient:
         return clob.post_fill_order(
             account=self._sender_address,
             args=args,
-            sender_address=self._sender_address,
             **kwargs
         )
 
@@ -540,7 +543,6 @@ class ExecutionClient:
         return clob.amend(
             account=self._sender_address,
             args=args,
-            sender_address=self._sender_address,
             **kwargs
         )
 
@@ -574,7 +576,6 @@ class ExecutionClient:
         return clob.cancel(
             account=self._sender_address,
             args=args,
-            sender_address=self._sender_address,
             **kwargs
         )
 
@@ -622,7 +623,6 @@ class ExecutionClient:
         return clob.cancel(
             account=self._sender_address,
             args=args,
-            sender_address=self._sender_address,
             **kwargs
         )
 
@@ -653,7 +653,6 @@ class ExecutionClient:
         approve_tx = token.approve(
             spender=self._factory.address,
             amount=amount_in_atoms,
-            sender_address=self._sender_address,
             **kwargs
         )
 
@@ -663,7 +662,6 @@ class ExecutionClient:
             token=token_address,
             amount=amount_in_atoms,
             from_operator=False,
-            sender_address=self._sender_address,
             **kwargs
         )
 
@@ -698,7 +696,6 @@ class ExecutionClient:
             token=token_address,
             amount=amount_in_atoms,
             to_operator=False,
-            sender_address=self._sender_address,
             **kwargs
         )
 

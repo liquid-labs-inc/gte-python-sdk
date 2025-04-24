@@ -44,8 +44,7 @@ async def get_market_info(client, market_address):
     return market
 
 
-
-async def approve_and_deposit_example(client: Client, web3, market, amount, send_tx=False):
+async def approve_and_deposit_example(client: Client, web3, market, amount):
     """Example of approving and depositing WETH to the exchange."""
     print_separator("Approve and Deposit WETH Example")
 
@@ -60,21 +59,16 @@ async def approve_and_deposit_example(client: Client, web3, market, amount, send
         gas=100000,
     )
 
-    if send_tx and WALLET_PRIVATE_KEY:
-        print("\nSending approval transaction...")
-        approve_receipt = tx_funcs[0].send_wait(WALLET_PRIVATE_KEY)
+    print("\nSending approval transaction...")
+    approve_receipt = tx_funcs[0].send_wait(WALLET_PRIVATE_KEY)
 
-        print("\nSending deposit transaction...")
-        deposit_receipt = tx_funcs[1].send_wait(WALLET_PRIVATE_KEY)
+    print("\nSending deposit transaction...")
+    deposit_receipt = tx_funcs[1].send_wait(WALLET_PRIVATE_KEY)
 
-        return approve_receipt, deposit_receipt
-    else:
-        print("\nNOTE: This is a demonstration only. No transactions were sent.")
-        print("Set send_tx=True and provide WALLET_PRIVATE_KEY to send transactions.")
-        return None
+    return approve_receipt, deposit_receipt
 
 
-async def limit_order_example(client: Client, web3, market, send_tx=False):
+async def limit_order_example(client: Client, web3, market):
     """Example of creating a limit order."""
     print_separator("Limit Order Example")
 
@@ -89,45 +83,23 @@ async def limit_order_example(client: Client, web3, market, send_tx=False):
         side=OrderSide.BUY,
         amount=amount,
         price=price,
+        time_in_force=TimeInForce.IOC,
+    )
+
+    print("\nSending transaction...")
+    receipt = tx_func.send_wait(WALLET_PRIVATE_KEY)
+    print(receipt)
+
+    tx_func = await client.place_limit_order(
+        market=market,
+        side=OrderSide.SELL,
+        amount=amount,
+        price=price,
         time_in_force=TimeInForce.GTC,
     )
-
-    if send_tx and WALLET_PRIVATE_KEY:
-        print("\nSending transaction...")
-        receipt = tx_func.send_wait(WALLET_PRIVATE_KEY)
-        return receipt
-    else:
-        print("\nNOTE: This is a demonstration only. No transaction was sent.")
-        print("Set send_tx=True and provide WALLET_PRIVATE_KEY to send transactions.")
-        return None
-
-
-async def market_order_example(client: Client, web3, market, send_tx=False):
-    """Example of creating a market order."""
-    print_separator("Market Order Example")
-
-    # Current market price (or estimate)
-    price = market.price or 100.0
-
-    print(f"Current market price: {price}")
-    print(f"Creating market buy order")
-
-    tx_func = await client.place_market_order(
-        market=market,
-        side=OrderSide.BUY,
-        amount=0.01,  # Small amount for testing
-        amount_is_base=True,
-        gas=300000,
-    )
-
-    if send_tx and WALLET_PRIVATE_KEY:
-        print("\nSending transaction...")
-        receipt = tx_func.send(WALLET_PRIVATE_KEY)
-        return receipt
-    else:
-        print("\nNOTE: This is a demonstration only. No transaction was sent.")
-        print("Set send_tx=True and provide WALLET_PRIVATE_KEY to send transactions.")
-        return None
+    print("\nSending transaction...")
+    receipt = tx_func.send_wait(WALLET_PRIVATE_KEY)
+    print(receipt)
 
 
 async def cancel_order_example(client, web3, market, order_id=None, send_tx=False):
@@ -145,14 +117,9 @@ async def cancel_order_example(client, web3, market, order_id=None, send_tx=Fals
         gas=200000,
     )
 
-    if send_tx and WALLET_PRIVATE_KEY:
-        print("\nSending transaction...")
-        receipt = tx_func.send_wait(WALLET_PRIVATE_KEY)
-        return receipt
-    else:
-        print("\nNOTE: This is a demonstration only. No transaction was sent.")
-        print("Set send_tx=True and provide WALLET_PRIVATE_KEY to send transactions.")
-        return None
+    print("\nSending transaction...")
+    receipt = tx_func.send_wait(WALLET_PRIVATE_KEY)
+    return receipt
 
 
 async def show_balances(client: Client, market: Market):
@@ -203,12 +170,12 @@ async def main():
     print("\nNOTE: For WETH wrapping and unwrapping examples, see wrap_weth.py")
 
     # Deposit tokens example
-    await approve_and_deposit_example(client, web3, market, amount=1, send_tx=send_tx)
+    await approve_and_deposit_example(client, web3, market, amount=1)
 
     await show_balances(client, market)
     # Order examples
-    await limit_order_example(client, web3, market, send_tx)
-    await market_order_example(client, web3, market, send_tx)
+    await limit_order_example(client, web3, market)
+
     await cancel_order_example(client, web3, market, order_id=None, send_tx=send_tx)
 
 

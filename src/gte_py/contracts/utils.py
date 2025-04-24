@@ -92,9 +92,15 @@ class TypedContractFunction(Generic[T]):
     def __init__(self, func: ContractFunction, params: TxParams | Any = None):
         self.func = func  # Bound contract function (with arguments)
         self.params = params  # Transaction parameters
+        self.event = None
         self.result: T | None = None
         self.receipt: dict[str, Any] | None = None
         self.tx_hash: HexBytes | None = None
+
+    def with_event(self, event) -> "TypedContractFunction":
+        """Set the event to listen for"""
+        self.event = event
+        return self
 
     def call(self) -> T:
         """Synchronous read operation"""
@@ -106,7 +112,10 @@ class TypedContractFunction(Generic[T]):
         tx = self.func.build_transaction(self.params)
         if private_key:
             local_account = Account.from_key(private_key)
-            tx['nonce'] = self.params['nonce'] = self.func.w3.eth.get_transaction_count(local_account.address)
+            if 'from' not in tx:
+                tx['from'] = local_account.address
+            if 'nonce' not in tx:
+                tx['nonce'] = self.func.w3.eth.get_transaction_count(local_account.address)
             # Sign and send the transaction
             signed = self.func.w3.eth.account.sign_transaction(tx, private_key)
             self.tx_hash = self.func.w3.eth.send_raw_transaction(signed.raw_transaction)
@@ -119,8 +128,7 @@ class TypedContractFunction(Generic[T]):
     def build_transaction(self) -> TxParams:
         return self.func.build_transaction(self.params)
 
-    # def retrieve(self) -> T:
-    def retrieve(self):
+    def retrieve(self) -> T:
         """
         Retrieves the result of a transaction.
 
@@ -139,12 +147,15 @@ class TypedContractFunction(Generic[T]):
 
         if self.tx_hash is None:
             raise ValueError("Transaction hash is None. Call send() first.")
-
+        if self.event is None:
+            return None
         # Wait for the transaction to be mined
         web3 = self.func.w3
         self.receipt = web3.eth.wait_for_transaction_receipt(self.tx_hash)
-        return None
+        logs = self.event.process_receipt(self.receipt)
+        assert len(logs) == 1
+        return logs[0]
 
-    def send_wait(self, private_key: PrivateKeyType | None = None) -> HexBytes:
+    def send_wait(self, private_key: PrivateKeyType | None = None) -> T:
         self.send(private_key)
         return self.retrieve()
