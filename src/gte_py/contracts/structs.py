@@ -94,6 +94,7 @@ class ICLOBPostLimitOrderArgs(TypedDict):
     price: int
     cancelTimestamp: int
     side: int
+    clientOrderId: int
     limitOrderType: int
     settlement: int
 

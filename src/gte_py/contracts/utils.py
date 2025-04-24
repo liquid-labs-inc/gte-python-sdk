@@ -109,17 +109,21 @@ class TypedContractFunction(Generic[T]):
 
     def send(self, private_key: PrivateKeyType | None = None) -> HexBytes:
         """Synchronous write operation"""
-        tx = self.func.build_transaction(self.params)
         if private_key:
+            tx = self.params
             local_account = Account.from_key(private_key)
             if 'from' not in tx:
                 tx['from'] = local_account.address
             if 'nonce' not in tx:
                 tx['nonce'] = self.func.w3.eth.get_transaction_count(local_account.address)
+            print(f'Sending {self.func} with {tx}')
+            tx = self.func.build_transaction(tx)
             # Sign and send the transaction
             signed = self.func.w3.eth.account.sign_transaction(tx, private_key)
             self.tx_hash = self.func.w3.eth.send_raw_transaction(signed.raw_transaction)
         else:
+            print(f'Sending {self.func} with {tx}')
+            tx = self.func.build_transaction(self.params)
             # Send the transaction with default account
             self.tx_hash = self.func.w3.eth.send_transaction(tx)
 

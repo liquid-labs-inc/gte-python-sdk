@@ -257,7 +257,6 @@ class ICLOB:
         Args:
             account: Address of the account to post the order for
             args: PostLimitOrderArgs struct with order details
-            sender_address: ChecksumAddress of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -505,7 +504,7 @@ class ICLOB:
             "price": price,
             "cancelTimestamp": cancel_timestamp,
             "side": side,
-            # "clientOrderId": client_order_id,
+            "clientOrderId": client_order_id,
             "limitOrderType": limit_order_type,
             "settlement": settlement,
         }

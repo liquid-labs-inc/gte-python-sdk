@@ -49,12 +49,12 @@ async def approve_and_deposit_example(client: Client, web3, market, amount):
     print_separator("Approve and Deposit WETH Example")
 
     # Get the quote token address (assuming it's WETH for this example)
-    token_address = market.quote_token_address
+    quote = market.quote_token_address
     print(f"Creating transaction to approve and deposit {amount} {market.quote_asset.symbol}...")
 
     # Get deposit transactions - this returns a list containing [approve_tx, deposit_tx]
     tx_funcs = await client.deposit_to_market(
-        token_address=token_address,
+        token_address=quote,
         amount=amount,
         gas=100000,
     )
@@ -65,7 +65,18 @@ async def approve_and_deposit_example(client: Client, web3, market, amount):
     print("\nSending deposit transaction...")
     deposit_receipt = tx_funcs[1].send_wait(WALLET_PRIVATE_KEY)
 
-    return approve_receipt, deposit_receipt
+    base = market.base_token_address
+    print(f"Creating transaction to approve and deposit {amount} {market.base_asset.symbol}...")
+    tx_funcs = await client.deposit_to_market(
+        token_address=base,
+        amount=amount,
+        gas=100000,
+    )
+    print("\nSending approval transaction...")
+    approve_receipt = tx_funcs[0].send_wait(WALLET_PRIVATE_KEY)
+    print("\nSending deposit transaction...")
+    deposit_receipt = tx_funcs[1].send_wait(WALLET_PRIVATE_KEY)
+
 
 
 async def limit_order_example(client: Client, web3, market):
@@ -78,17 +89,17 @@ async def limit_order_example(client: Client, web3, market):
 
     print(f"Limit order price: {price}")
 
-    tx_func = await client.place_limit_order(
-        market=market,
-        side=OrderSide.BUY,
-        amount=amount,
-        price=price,
-        time_in_force=TimeInForce.IOC,
-    )
-
-    print("\nSending transaction...")
-    receipt = tx_func.send_wait(WALLET_PRIVATE_KEY)
-    print(receipt)
+    # FIXME: IOC doesn't work yet
+    # tx_func = await client.place_limit_order(
+    #     market=market,
+    #     side=OrderSide.BUY,
+    #     amount=amount,
+    #     price=price,
+    #     time_in_force=TimeInForce.IOC,
+    # )
+    #
+    # receipt = tx_func.send_wait(WALLET_PRIVATE_KEY)
+    # print(receipt)
 
     tx_func = await client.place_limit_order(
         market=market,
@@ -97,7 +108,7 @@ async def limit_order_example(client: Client, web3, market):
         price=price,
         time_in_force=TimeInForce.GTC,
     )
-    print("\nSending transaction...")
+
     receipt = tx_func.send_wait(WALLET_PRIVATE_KEY)
     print(receipt)
 
