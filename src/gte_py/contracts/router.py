@@ -27,9 +27,9 @@ class Router:
     """
 
     def __init__(
-        self,
-        web3: Web3,
-        contract_address: str,
+            self,
+            web3: Web3,
+            contract_address: ChecksumAddress,
     ):
         """
         Initialize the GTERouter wrapper.
@@ -39,7 +39,7 @@ class Router:
             contract_address: Address of the GTERouter contract
         """
         self.web3 = web3
-        self.address = web3.to_checksum_address(contract_address)
+        self.address = contract_address
         loaded_abi = load_abi("router")
         self.contract = self.web3.eth.contract(address=self.address, abi=loaded_abi)
 
@@ -68,7 +68,7 @@ class Router:
     # ================= WRITE METHODS =================
 
     def clob_cancel(
-        self, clob_address: str, args: ICLOBCancelArgs, sender_address: ChecksumAddress, **kwargs
+            self, clob_address: str, args: ICLOBCancelArgs, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[HexBytes]:
         """
         Cancel a CLOB order.
@@ -89,12 +89,12 @@ class Router:
         return TypedContractFunction(func, tx_params)
 
     def clob_deposit(
-        self,
-        token_address: ChecksumAddress,
-        amount: int,
-        from_router: bool,
-        sender_address: ChecksumAddress,
-        **kwargs,
+            self,
+            token_address: ChecksumAddress,
+            amount: int,
+            from_router: bool,
+            sender_address: ChecksumAddress,
+            **kwargs,
     ) -> TypedContractFunction[HexBytes]:
         """
         Deposit tokens into a CLOB.
@@ -116,11 +116,11 @@ class Router:
         return TypedContractFunction(func, tx_params)
 
     def clob_post_limit_order(
-        self,
-        clob_address: str,
-        args: ICLOBPostLimitOrderArgs,
-        sender_address: ChecksumAddress,
-        **kwargs,
+            self,
+            clob_address: str,
+            args: ICLOBPostLimitOrderArgs,
+            sender_address: ChecksumAddress,
+            **kwargs,
     ) -> TypedContractFunction[HexBytes]:
         """
         Post a limit order to a CLOB.
@@ -141,7 +141,7 @@ class Router:
         return TypedContractFunction(func, tx_params)
 
     def clob_withdraw(
-        self, token_address: str, amount: int, sender_address: ChecksumAddress, **kwargs
+            self, token_address: str, amount: int, sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[HexBytes]:
         """
         Withdraw tokens from a CLOB.
@@ -162,7 +162,7 @@ class Router:
         return TypedContractFunction(func, tx_params)
 
     def execute_clob_post_fill_order(
-        self, clob_address: str, args: dict[str, Any], sender_address: ChecksumAddress, **kwargs
+            self, clob_address: str, args: dict[str, Any], sender_address: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[HexBytes]:
         """
         Execute a fill order on a CLOB.
@@ -184,16 +184,16 @@ class Router:
         return TypedContractFunction(func, tx_params)
 
     def execute_route(
-        self,
-        token_in: Address,
-        amount_in: int,
-        amount_out_min: int,
-        deadline: int,
-        hops: list[bytes],
-        settlement: int,
-        sender_address: ChecksumAddress,
-        value: int = 0,
-        **kwargs,
+            self,
+            token_in: Address,
+            amount_in: int,
+            amount_out_min: int,
+            deadline: int,
+            hops: list[bytes],
+            settlement: int,
+            sender_address: ChecksumAddress,
+            value: int = 0,
+            **kwargs,
     ) -> TypedContractFunction[HexBytes]:
         """
         Execute a multi-hop route.
@@ -221,12 +221,12 @@ class Router:
         return TypedContractFunction(func, tx_params)
 
     def execute_univ2_swap_exact_tokens_for_tokens(
-        self,
-        amount_in: int,
-        amount_out_min: int,
-        path: list[Address],
-        sender_address: ChecksumAddress,
-        **kwargs,
+            self,
+            amount_in: int,
+            amount_out_min: int,
+            path: list[Address],
+            sender_address: ChecksumAddress,
+            **kwargs,
     ) -> TypedContractFunction[HexBytes]:
         """
         Execute a UniswapV2 swap.
@@ -250,14 +250,14 @@ class Router:
         return TypedContractFunction(func, tx_params)
 
     def launchpad_buy(
-        self,
-        launch_token: Address,
-        amount_out_base: int,
-        quote_token: Address,
-        worst_amount_in_quote: int,
-        sender_address: ChecksumAddress,
-        value: int = 0,
-        **kwargs,
+            self,
+            launch_token: Address,
+            amount_out_base: int,
+            quote_token: Address,
+            worst_amount_in_quote: int,
+            sender_address: ChecksumAddress,
+            value: int = 0,
+            **kwargs,
     ) -> TypedContractFunction[HexBytes]:
         """
         Buy tokens from a launchpad.
@@ -282,15 +282,15 @@ class Router:
         return TypedContractFunction(func, tx_params)
 
     def launchpad_buy_permit2(
-        self,
-        launch_token: Address,
-        amount_out_base: int,
-        quote_token: Address,
-        worst_amount_in_quote: int,
-        permit_single: dict[str, Any],
-        signature: bytes,
-        sender_address: ChecksumAddress,
-        **kwargs,
+            self,
+            launch_token: Address,
+            amount_out_base: int,
+            quote_token: Address,
+            worst_amount_in_quote: int,
+            permit_single: dict[str, Any],
+            signature: bytes,
+            sender_address: ChecksumAddress,
+            **kwargs,
     ) -> TypedContractFunction[HexBytes]:
         """
         Buy tokens from a launchpad using Permit2.
@@ -322,13 +322,13 @@ class Router:
         return TypedContractFunction(func, tx_params)
 
     def launchpad_sell(
-        self,
-        launch_token: str,
-        amount_in_base: int,
-        worst_amount_out_quote: int,
-        unwrap_eth: bool,
-        sender_address: ChecksumAddress,
-        **kwargs,
+            self,
+            launch_token: str,
+            amount_in_base: int,
+            worst_amount_out_quote: int,
+            unwrap_eth: bool,
+            sender_address: ChecksumAddress,
+            **kwargs,
     ) -> TypedContractFunction[HexBytes]:
         """
         Sell tokens on a launchpad.
@@ -353,14 +353,14 @@ class Router:
         return TypedContractFunction(func, tx_params)
 
     def launchpad_sell_permit2(
-        self,
-        token: str,
-        amount_in_base: int,
-        worst_amount_out_quote: int,
-        permit_single: dict[str, Any],
-        signature: bytes,
-        sender_address: ChecksumAddress,
-        **kwargs,
+            self,
+            token: str,
+            amount_in_base: int,
+            worst_amount_out_quote: int,
+            permit_single: dict[str, Any],
+            signature: bytes,
+            sender_address: ChecksumAddress,
+            **kwargs,
     ) -> TypedContractFunction[HexBytes]:
         """
         Sell tokens on a launchpad using Permit2.

@@ -3,9 +3,12 @@ import json
 import time
 from typing import Any, Generic, TypeVar
 
+from eth_account import Account
+from eth_account.types import PrivateKeyType
+from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
 from web3.contract.contract import ContractFunction
-from web3.types import TxParams
+from web3.types import TxParams, Wei
 
 
 def get_current_timestamp() -> int:
@@ -37,7 +40,7 @@ def to_wei(amount: float, decimals: int = 18) -> int:
     Returns:
         Integer amount in wei
     """
-    return int(amount * (10**decimals))
+    return int(amount * (10 ** decimals))
 
 
 def from_wei(amount: int, decimals: int = 18) -> float:
@@ -51,7 +54,7 @@ def from_wei(amount: int, decimals: int = 18) -> float:
     Returns:
         Decimal amount
     """
-    return amount / (10**decimals)
+    return amount / (10 ** decimals)
 
 
 # Fix for the Traversable issue
@@ -98,12 +101,26 @@ class TypedContractFunction(Generic[T]):
         self.result = self.func.call(self.params)
         return self.result
 
-    def send(self) -> HexBytes:
+    def send(self, private_key: PrivateKeyType | None = None) -> HexBytes:
         """Synchronous write operation"""
-        self.tx_hash = self.func.transact(self.params)
+        tx = self.func.build_transaction(self.params)
+        if private_key:
+            local_account = Account.from_key(private_key)
+            tx['nonce'] = self.params['nonce'] = self.func.w3.eth.get_transaction_count(local_account.address)
+            # Sign and send the transaction
+            signed = self.func.w3.eth.account.sign_transaction(tx, private_key)
+            self.tx_hash = self.func.w3.eth.send_raw_transaction(signed.raw_transaction)
+        else:
+            # Send the transaction with default account
+            self.tx_hash = self.func.w3.eth.send_transaction(tx)
+
         return self.tx_hash
 
-    def retrieve(self) -> T:
+    def build_transaction(self) -> TxParams:
+        return self.func.build_transaction(self.params)
+
+    # def retrieve(self) -> T:
+    def retrieve(self):
         """
         Retrieves the result of a transaction.
 
@@ -126,5 +143,8 @@ class TypedContractFunction(Generic[T]):
         # Wait for the transaction to be mined
         web3 = self.func.w3
         self.receipt = web3.eth.wait_for_transaction_receipt(self.tx_hash)
+        return None
 
-        raise NotImplementedError
+    def send_wait(self, private_key: PrivateKeyType | None = None) -> HexBytes:
+        self.send(private_key)
+        return self.retrieve()

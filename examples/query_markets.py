@@ -1,21 +1,17 @@
 """Example of querying all available markets from GTE."""
 
 import asyncio
-import os
 
-from dotenv import load_dotenv
-from tabulate import tabulate  # pip install tabulate
+from eth_utils import to_checksum_address
+from tabulate import tabulate
 from web3 import Web3
 
 from gte_py import Client
+from gte_py.config import TESTNET_CONFIG
 from gte_py.models import Market
 
-# Load environment variables from .env file
-load_dotenv()
 
 # Configure these variables through environment or directly
-RPC_URL = os.getenv("RPC_URL", "https://rpc-testnet.example.com")
-ROUTER_ADDRESS = os.getenv("ROUTER_ADDRESS")
 
 
 def print_separator(title):
@@ -80,7 +76,7 @@ def format_chain_market_table(markets: list[Market], title: str):
                 f"{market.quote_token[:10]}...",
                 market.base_decimals,
                 market.quote_decimals,
-                market.tick_size,
+                market.tick_size_in_quote,
             ]
         )
 
@@ -90,7 +86,7 @@ def format_chain_market_table(markets: list[Market], title: str):
     print(f"Total: {len(markets)} on-chain markets")
 
 
-async def query_api_markets(client: Client):
+async def query_markets(client: Client):
     """Query markets from the API."""
     # Get all markets
     print("Fetching all markets from API...")
@@ -109,7 +105,7 @@ async def query_api_markets(client: Client):
     format_market_table(high_value_markets, "Markets with price < 1000")
 
     # Find markets with on-chain contracts
-    onchain_markets = [m for m in markets if m.contract_address]
+    onchain_markets = [m for m in markets if m.address]
     format_market_table(onchain_markets, "Markets with On-chain Contracts")
 
     # Demonstrate pagination
@@ -123,48 +119,10 @@ async def query_api_markets(client: Client):
             break
 
 
-async def query_onchain_markets(client: Client):
-    """Query markets directly from the blockchain."""
-    try:
-        if not hasattr(client, "get_available_onchain_markets") or client._web3 is None:
-            print("Web3 provider not configured. Skipping on-chain market queries.")
-            return
 
-        print("\nFetching markets directly from blockchain...")
-        onchain_markets = client.get_available_onchain_markets()
-        format_chain_market_table(onchain_markets, "On-chain Markets")
-
-        # Get market details
-        if onchain_markets:
-            market = onchain_markets[0]
-            print_separator(f"Details for Market {market.contract_address[:10]}...")
-            print(f"Contract: {market.contract_address}")
-            print(f"Base Token: {market.base_token}")
-            print(f"Quote Token: {market.quote_token}")
-            print(f"Base Decimals: {market.base_decimals}")
-            print(f"Quote Decimals: {market.quote_decimals}")
-            print(f"Tick Size: {market.tick_size}")
-            print(f"Base Atoms Per Lot: {market.base_atoms_per_lot}")
-    except Exception as e:
-        print(f"Error fetching on-chain markets: {str(e)}")
-
-
-async def query_market_details(client: Client):
+async def query_market_details(client: Client, market: Market):
     """Query detailed information for a specific market."""
     print_separator("Market Details Example")
-
-    # Get all markets
-    markets = await client.get_markets(limit=100)
-
-    # Select a market to examine
-    if not markets:
-        print("No markets found!")
-        return
-
-    selected_market = markets[0]  # Use the first market
-
-    # Get detailed information
-    market = await client.get_market(selected_market.address)
 
     # Display detailed market information
     print(f"Market: {market.pair} ({market.address})")
@@ -185,13 +143,13 @@ async def query_market_details(client: Client):
     print(f"  Decimals: {market.quote_asset.decimals}")
 
     # On-chain details if available
-    if market.contract_address:
+    if market.address:
         print("\nOn-chain Details:")
-        print(f"  Contract: {market.contract_address}")
+        print(f"  Contract: {market.address}")
         print(f"  Base Token: {market.base_token_address}")
         print(f"  Quote Token: {market.quote_token_address}")
-        print(f"  Tick Size: {market.tick_size}")
-        print(f"  Base Atoms Per Lot: {market.base_atoms_per_lot}")
+        print(f"  Tick Size: {market.tick_size_in_quote}")
+        print(f"  Lot Size: {market.lot_size_in_base}")
 
 
 async def main():
@@ -199,24 +157,19 @@ async def main():
     print("GTE Market Query Example")
 
     # Initialize Web3 if configuration is available
-    web3 = None
-    if RPC_URL and RPC_URL != "https://rpc-testnet.example.com":
-        try:
-            web3 = Web3(Web3.HTTPProvider(RPC_URL))
-            print(f"Web3 Connected: {web3.is_connected()}")
-        except Exception as e:
-            print(f"Couldn't initialize Web3: {e}")
+    web3 = Web3(Web3.HTTPProvider(TESTNET_CONFIG.rpc_http))
 
     # Initialize client
     client = Client(
-        web3_provider=web3, router_address=ROUTER_ADDRESS if web3 and web3.is_connected() else None
+        web3=web3,
+        config=TESTNET_CONFIG
     )
 
     try:
         # Run examples
-        await query_api_markets(client)
-        await query_onchain_markets(client)
-        await query_market_details(client)
+        # await query_markets(client)
+        market = client.get_market(to_checksum_address('0xfaf0bb6f2f4690ca4319e489f6dc742167b9fb10'))
+        await query_market_details(client, market)
 
     except Exception as e:
         print(f"Error during examples: {str(e)}")

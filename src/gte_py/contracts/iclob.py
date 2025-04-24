@@ -63,8 +63,8 @@ class ICLOB:
     def get_base_token(self) -> ChecksumAddress:
         """Get the base token used in the CLOB."""
         return self.contract.functions.getBaseToken().call()
-
-    def get_market_config(self) -> dict:
+    # factory, mask?, quote, base, tick_size?, lot_size?
+    def get_market_config(self) -> tuple[ChecksumAddress, int, ChecksumAddress, ChecksumAddress, int, int]:
         """Get the market configuration settings for the CLOB."""
         return self.contract.functions.getMarketConfig().call()
 
@@ -81,7 +81,7 @@ class ICLOB:
         """
         return self.contract.functions.getOpenInterest().call()
 
-    def get_order(self, order_id: int) -> TxParams:
+    def get_order(self, order_id: int) -> dict:
         """
         Get the details of a specific order.
 
@@ -123,7 +123,7 @@ class ICLOB:
         """Get the total number of ask orders in the order book."""
         return self.contract.functions.getNumAsks().call()
 
-    def get_next_biggest_ticks(self, price: int, side: int) -> int:
+    def get_next_biggest_price(self, price: int, side: int) -> int:
         """
         Get the next biggest price for a given side.
 
@@ -134,9 +134,9 @@ class ICLOB:
         Returns:
             The next biggest price
         """
-        return self.contract.functions.getNextBiggestTicks(price, side).call()
+        return self.contract.functions.getNextBiggestPrice(price, side).call()
 
-    def get_next_smallest_ticks(self, price: int, side: int) -> int:
+    def get_next_smallest_price(self, price: int, side: int) -> int:
         """
         Get the next smallest price for a given side.
 
@@ -147,7 +147,7 @@ class ICLOB:
         Returns:
             The next smallest price
         """
-        return self.contract.functions.getNextSmallestTicks(price, side).call()
+        return self.contract.functions.getNextSmallestPrice(price, side).call()
 
     def get_next_orders(self, start_order_id: int, num_orders: int) -> list[TxParams]:
         """
@@ -224,7 +224,7 @@ class ICLOB:
         """Get the current event nonce."""
         return self.contract.functions.getEventNonce().call()
 
-    def get_max_limit_exempt(self, account: str) -> bool:
+    def get_max_limit_exempt(self, account: ChecksumAddress) -> bool:
         """
         Check if an account is exempt from the max limit restriction.
 
@@ -234,7 +234,6 @@ class ICLOB:
         Returns:
             True if the account is exempt, False otherwise
         """
-        account = self.web3.to_checksum_address(account)
         return self.contract.functions.getMaxLimitExempt(account).call()
 
     def owner(self) -> ChecksumAddress:
@@ -249,11 +248,11 @@ class ICLOB:
 
     def post_limit_order(
         self,
-        account: str,
+        account: ChecksumAddress,
         args: ICLOBPostLimitOrderArgs,
         sender_address: ChecksumAddress,
         **kwargs,
-    ) -> TypedContractFunction[int]:
+    ) -> TypedContractFunction[dict]:
         """
         Post a limit order to the CLOB.
 
@@ -266,7 +265,6 @@ class ICLOB:
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
-        account = self.web3.to_checksum_address(account)
         func = self.contract.functions.postLimitOrder(account, args)
         params = {
             "from": sender_address,
@@ -276,8 +274,12 @@ class ICLOB:
         return TypedContractFunction(func, params)
 
     def post_fill_order(
-        self, account: str, args: ICLOBPostFillOrderArgs, sender_address: ChecksumAddress, **kwargs
-    ) -> TypedContractFunction[tuple[int, int]]:
+        self, 
+        account: ChecksumAddress, 
+        args: ICLOBPostFillOrderArgs, 
+        sender_address: ChecksumAddress, 
+        **kwargs
+    ) -> TypedContractFunction[dict]:
         """
         Post a fill order to the CLOB.
 
@@ -290,7 +292,6 @@ class ICLOB:
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
-        account = self.web3.to_checksum_address(account)
         func = self.contract.functions.postFillOrder(account, args)
         params = {
             "from": sender_address,
@@ -300,8 +301,12 @@ class ICLOB:
         return TypedContractFunction(func, params)
 
     def amend(
-        self, account: str, args: ICLOBAmendArgs, sender_address: ChecksumAddress, **kwargs
-    ) -> TypedContractFunction[int]:
+        self, 
+        account: ChecksumAddress, 
+        args: ICLOBAmendArgs, 
+        sender_address: ChecksumAddress, 
+        **kwargs
+    ) -> TypedContractFunction[tuple[int, int]]:
         """
         Amend an existing order.
 
@@ -312,9 +317,9 @@ class ICLOB:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            TypedContractFunction that can be used to execute the transaction
+            TypedContractFunction that can be used to execute the transaction,
+            returns tuple of (quote_delta, base_delta)
         """
-        account = self.web3.to_checksum_address(account)
         func = self.contract.functions.amend(account, args)
         params = {
             "from": sender_address,
@@ -324,8 +329,12 @@ class ICLOB:
         return TypedContractFunction(func, params)
 
     def cancel(
-        self, account: str, args: ICLOBCancelArgs, sender_address: ChecksumAddress, **kwargs
-    ) -> TypedContractFunction[None]:
+        self, 
+        account: ChecksumAddress, 
+        args: ICLOBCancelArgs, 
+        sender_address: ChecksumAddress, 
+        **kwargs
+    ) -> TypedContractFunction[tuple[int, int]]:
         """
         Cancel one or more orders.
 
@@ -336,9 +345,9 @@ class ICLOB:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            TypedContractFunction that can be used to execute the transaction
+            TypedContractFunction that can be used to execute the transaction,
+            returns tuple of (quote_refund, base_refund)
         """
-        account = self.web3.to_checksum_address(account)
         func = self.contract.functions.cancel(account, args)
         params = {
             "from": sender_address,
@@ -390,7 +399,10 @@ class ICLOB:
         return TypedContractFunction(func, params)
 
     def transfer_ownership(
-        self, new_owner: str, sender_address: ChecksumAddress, **kwargs
+        self, 
+        new_owner: ChecksumAddress, 
+        sender_address: ChecksumAddress, 
+        **kwargs
     ) -> TypedContractFunction[None]:
         """
         Transfer ownership of the contract.
@@ -403,7 +415,6 @@ class ICLOB:
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
-        new_owner = self.web3.to_checksum_address(new_owner)
         func = self.contract.functions.transferOwnership(new_owner)
         params = {
             "from": sender_address,
@@ -413,7 +424,11 @@ class ICLOB:
         return TypedContractFunction(func, params)
 
     def set_max_limits_exempt(
-        self, account: str, toggle: bool, sender_address: ChecksumAddress, **kwargs
+        self, 
+        account: ChecksumAddress, 
+        toggle: bool, 
+        sender_address: ChecksumAddress, 
+        **kwargs
     ) -> TypedContractFunction[None]:
         """
         Set whether an account is exempt from the max limits restriction.
@@ -427,7 +442,6 @@ class ICLOB:
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
-        account = self.web3.to_checksum_address(account)
         func = self.contract.functions.setMaxLimitsExempt(account, toggle)
         params = {
             "from": sender_address,
@@ -510,6 +524,7 @@ class ICLOB:
         price: int,
         side: int,
         cancel_timestamp: int = 0,
+        client_order_id: int = 0,
         limit_order_type: int = LimitOrderType.GOOD_TILL_CANCELLED,
         settlement: int = Settlement.INSTANT,
     ) -> ICLOBPostLimitOrderArgs:
@@ -521,6 +536,7 @@ class ICLOB:
             price: The price of the order
             side: BUY(0) or SELL(1)
             cancel_timestamp: Timestamp after which the order is automatically canceled (0 = never)
+            client_order_id: Optional client-side order ID for tracking
             limit_order_type: Type of limit order (default: GOOD_TILL_CANCELLED)
             settlement: Settlement type (default: INSTANT)
 
@@ -532,6 +548,7 @@ class ICLOB:
             "price": price,
             "cancelTimestamp": cancel_timestamp,
             "side": side,
+            "clientOrderId": client_order_id,
             "limitOrderType": limit_order_type,
             "settlement": settlement,
         }

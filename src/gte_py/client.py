@@ -2,12 +2,13 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, List, Optional, Callable, Tuple, Dict, Union
 
 from eth_typing import ChecksumAddress
 from web3 import Web3
 
 from .api.rest_api import RestApi
+from .config import NetworkConfig
 from .execution import ExecutionClient
 from .info import MarketService
 from .market import MarketClient
@@ -22,6 +23,7 @@ from .models import (
     TimeInForce,
     Trade,
 )
+from .contracts.utils import TypedContractFunction
 
 logger = logging.getLogger(__name__)
 
@@ -30,51 +32,39 @@ class Client:
     """User-friendly client for interacting with GTE."""
 
     def __init__(
-        self,
-        # TODO: Do we favor async Web3?
-        web3_provider: str | Web3,
-        # TODO: make this optional because we might not need it
-        sender_address: ChecksumAddress,
-        api_url: str = "https://api.gte.io",
-        ws_url: str = "wss://ws.gte.io/v1",
+            self,
+            web3: Web3,
+            config: NetworkConfig,
+            sender_address: ChecksumAddress | None = None,
     ):
         """
         Initialize the client.
 
         Args:
-            api_url: Base URL for the REST API
-            ws_url: URL for the WebSocket API
-            web3_provider: Web3 provider URL or instance for blockchain interactions
-            router_address: Address of the GTE Router contract
+            web3: Web3 instance
+            config: Network configuration
+            sender_address: Address to send transactions from (optional)
         """
-        self._rest_client = RestApi(base_url=api_url)
-        self._ws_url = ws_url
+        self._rest_client = RestApi(base_url=config.api_url)
+        self._ws_url = config.ws_url
         self._market_clients: dict[str, MarketClient] = {}
 
-        # Initialize Web3 if provider is given
-        self._web3 = None
-        self._market_info = None
+        self._web3 = web3
 
-        if web3_provider:
-            if isinstance(web3_provider, str):
-                self._web3 = Web3(Web3.HTTPProvider(web3_provider))
-            else:
-                self._web3 = web3_provider
+        # Initialize market service for fetching market information
+        self._market_info = MarketService(web3=self._web3, router_address=config.router_address)
 
-            if not self._web3.is_connected():
-                logger.warning("Web3 provider is not connected. On-chain functions will not work.")
+        if not sender_address:
+            self._execution_client = None
+        else:
+            # Initialize execution client for trading operations
+            self._execution_client = ExecutionClient(
+                web3=self._web3,
+                sender_address=sender_address,
+                factory_address=config.clob_manager_address,
+            )
 
-            # Initialize market info service if router address is provided
-        router_address = "0x1234567890abcdef1234567890abcdef12345678"  # Example router address
-        router_address = self._web3.to_checksum_address(router_address)
-        self._market_info = MarketService(web3=self._web3, router_address=router_address)
-
-        # Initialize execution client for trading operations
-        self._execution_client = ExecutionClient(
-            web3=self._web3,
-            router_address=router_address,
-            sender_address=sender_address,
-        )
+        self._sender_address = sender_address
 
     async def __aenter__(self):
         """Enter async context."""
@@ -94,7 +84,7 @@ class Client:
 
     # Asset methods
     async def get_assets(
-        self, creator: str | None = None, limit: int = 100, offset: int = 0
+            self, creator: str | None = None, limit: int = 100, offset: int = 0
     ) -> list[Asset]:
         """
         Get list of assets.
@@ -125,12 +115,12 @@ class Client:
 
     # Market methods
     async def get_markets(
-        self,
-        limit: int = 100,
-        offset: int = 0,
-        market_type: str | None = None,
-        asset_address: str | None = None,
-        max_price: float | None = None,
+            self,
+            limit: int = 100,
+            offset: int = 0,
+            market_type: str | None = None,
+            asset_address: str | None = None,
+            max_price: float | None = None,
     ) -> list[Market]:
         """
         Get list of markets.
@@ -155,13 +145,9 @@ class Client:
 
         markets = [Market.from_api(market_data) for market_data in response.get("markets", [])]
 
-        # Update market info cache with discovered markets
-        if self._market_info:
-            self._market_info.update_market_cache(markets)
-
         return markets
 
-    async def get_market(self, address: str) -> Market:
+    def get_market(self, address: ChecksumAddress) -> Market:
         """
         Get market by address.
 
@@ -171,8 +157,7 @@ class Client:
         Returns:
             Market
         """
-        response = await self._rest_client.get_market(address)
-        return Market.from_api(response)
+        return self._market_info.get_market_info_by_address(address)
 
     async def get_market_client(self, market_address: ChecksumAddress) -> MarketClient:
         """
@@ -196,12 +181,12 @@ class Client:
 
     # Historical data methods
     async def get_candles(
-        self,
-        market_address: ChecksumAddress,
-        interval: str = "1h",
-        start_time: int | datetime | None = None,
-        end_time: int | datetime | None = None,
-        limit: int = 500,
+            self,
+            market_address: ChecksumAddress,
+            interval: str = "1h",
+            start_time: int | datetime | None = None,
+            end_time: int | datetime | None = None,
+            limit: int = 500,
     ) -> list[Candle]:
         """
         Get historical candles for a market.
@@ -238,7 +223,7 @@ class Client:
         return [Candle.from_api(candle_data) for candle_data in response.get("candles", [])]
 
     async def get_recent_trades(
-        self, market_address: ChecksumAddress, limit: int = 50
+            self, market_address: ChecksumAddress, limit: int = 50
     ) -> list[Trade]:
         """
         Get recent trades for a market.
@@ -269,7 +254,7 @@ class Client:
         return [Position.from_api(pos_data) for pos_data in response.get("positions", [])]
 
     async def get_user_assets(
-        self, user_address: ChecksumAddress, limit: int = 100
+            self, user_address: ChecksumAddress, limit: int = 100
     ) -> list[Asset]:
         """
         Get assets held by a user.
@@ -288,286 +273,431 @@ class Client:
         ]
 
     # Trading methods
-    async def create_order(
-        self,
-        market_address: ChecksumAddress,
-        side: OrderSide | str,
-        order_type: OrderType | str,
-        amount: float,
-        price: float | None = None,
-        time_in_force: TimeInForce | str = TimeInForce.GTC,
-        sender_address: str | None = None,
-        use_contract: bool = False,
-        use_router: bool = True,
-        **tx_kwargs,
-    ) -> Order | dict[str, Any]:
+    async def place_limit_order(
+            self,
+            market: Market,
+            side: OrderSide,
+            amount: float,
+            price: float,
+            time_in_force: TimeInForce = TimeInForce.GTC,
+            client_order_id: int = 0,
+            **kwargs,
+    ) -> TypedContractFunction:
         """
-        Create a new order.
+        Place a limit order on the market.
 
         Args:
-            market_address: Market address
+            market: Market to place order on
             side: Order side (buy, sell)
-            order_type: Order type (limit, market)
-            amount: Order amount
-            price: Order price (required for limit orders)
+            amount: Order amount in base tokens
+            price: Order price
             time_in_force: Time in force (GTC, IOC, FOK)
-            sender_address: Address to send transaction from (required for on-chain orders)
-            use_contract: Whether to create the order on-chain using contracts
-            use_router: Whether to use the router for creating orders (safer)
-            **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+            client_order_id: Optional client-side order ID
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Created order information or transaction data when using contracts
+            TypedContractFunction that can be used to execute the transaction
 
         Raises:
-            ValueError: For missing required parameters or invalid input
+            ValueError: If execution client is not initialized or parameters are invalid
         """
-        # Convert string enums to proper enum types if needed
-        if isinstance(side, str):
-            side = OrderSide(side)
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
 
-        if isinstance(order_type, str):
-            order_type = OrderType(order_type)
-
-        if isinstance(time_in_force, str):
-            time_in_force = TimeInForce(time_in_force)
-
-        # Try to get from market info service first
-        market_info = None
-        if self._market_info:
-            market_info = self._market_info.get_market_info(market_address)
-
-        # If not found in market info service, fetch from API
-        if not market_info:
-            # Get market details from API
-            market = await self.get_market(market_address)
-
-            # Update market info cache
-            if self._market_info and market.address:
-                self._market_info.add_market_info(market)
-        else:
-            # Use market_info directly
-            market = market_info
-
-        # Delegate to execution client
-        return await self._execution_client.create_order(
+        return await self._execution_client.place_limit_order(
             market=market,
             side=side,
-            order_type=order_type,
             amount=amount,
-            price=price,
+            price_in_quote=price,
             time_in_force=time_in_force,
-            sender_address=sender_address,
-            use_contract=use_contract,
-            use_router=use_router,
-            **tx_kwargs,
+            client_order_id=client_order_id,
+            **kwargs,
+        )
+
+    async def place_market_order(
+            self,
+            market: Market,
+            side: OrderSide,
+            amount: float,
+            amount_is_base: bool = True,
+            **kwargs,
+    ) -> TypedContractFunction:
+        """
+        Place a market order on the market.
+
+        Args:
+            market: Market to place order on
+            side: Order side (buy, sell)
+            amount: Order amount in base tokens (if amount_is_base=True) or quote tokens
+            amount_is_base: Whether the amount is in base tokens
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+
+        Returns:
+            TypedContractFunction that can be used to execute the transaction
+
+        Raises:
+            ValueError: If execution client is not initialized
+        """
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
+
+        return await self._execution_client.place_market_order(
+            market=market,
+            side=side,
+            amount=amount,
+            amount_is_base=amount_is_base,
+            **kwargs,
         )
 
     async def cancel_order(
-        self,
-        market_address: ChecksumAddress,
-        order_id: int,
-        sender_address: str,
-        use_router: bool = True,
-        **tx_kwargs,
-    ) -> Order:
+            self,
+            market: Market,
+            order_id: int,
+            **kwargs,
+    ) -> TypedContractFunction:
         """
         Cancel an order.
 
         Args:
-            market_address: Market address
+            market: Market where the order was placed
             order_id: ID of the order to cancel
-            sender_address: Address to send transaction from
-            use_router: Whether to use the router for canceling orders (safer)
-            **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            Transaction data
+            TypedContractFunction that can be used to execute the transaction
 
         Raises:
-            ValueError: If Web3 is not configured or parameters are invalid
+            ValueError: If execution client is not initialized
         """
-        # Get market details first
-        market_info = None
-        if self._market_info:
-            market_info = self._market_info.get_market_info(market_address)
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
 
-        if not market_info:
-            market = await self.get_market(market_address)
-        else:
-            market = market_info
-
-        # Delegate to execution client
-        return self._execution_client.cancel_order(
+        return await self._execution_client.cancel_order(
             market=market,
             order_id=order_id,
-            sender_address=sender_address,
-            use_router=use_router,
-            **tx_kwargs,
+            **kwargs,
         )
 
-    # async def modify_order(
-    #     self,
-    #     market_address: ChecksumAddress,
-    #     order_id: int,
-    #     new_amount: float,
-    #     sender_address: str,
-    #     **tx_kwargs,
-    # ) -> dict[str, Any]:
-    #     """
-    #     Modify an existing order's amount (reduce only).
-    #
-    #     Args:
-    #         market_address: Market address
-    #         order_id: ID of the order to modify
-    #         new_amount: New amount for the order (must be less than current)
-    #         sender_address: Address to send transaction from
-    #         **tx_kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-    #
-    #     Returns:
-    #         Transaction data
-    #
-    #     Raises:
-    #         ValueError: If Web3 is not configured or parameters are invalid
-    #     """
-    #     # Get market details first
-    #     market_info = None
-    #     if self._market_info:
-    #         market_info = self._market_info.get_market_info(market_address)
-    #
-    #     if not market_info:
-    #         market = await self.get_market(market_address)
-    #     else:
-    #         market = market_info
-    #
-    #     # Delegate to execution client
-    #     return self._execution_client.modify_order(
-    #         market=market,
-    #         order_id=order_id,
-    #         new_amount=new_amount,
-    #         sender_address=sender_address,
-    #         **tx_kwargs,
-    #     )
-
-    def get_available_onchain_markets(self) -> list[Market]:
+    async def cancel_all_orders(
+            self,
+            market: Market,
+            **kwargs,
+    ) -> TypedContractFunction:
         """
-        Get available on-chain markets.
+        Cancel all open orders on a market.
+
+        Args:
+            market: Market where the orders were placed
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            List of market information from the blockchain
+            TypedContractFunction that can be used to execute the transaction
 
         Raises:
-            ValueError: If Web3 or router not configured
+            ValueError: If execution client is not initialized
         """
-        if not self._market_info:
-            raise ValueError(
-                "Market info service not configured. "
-                + "Initialize with web3_provider and router_address."
-            )
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
 
-        return self._market_info.get_available_markets()
+        return await self._execution_client.cancel_all_orders(
+            market=market,
+            **kwargs,
+        )
 
-    # User order and trade methods
-    async def get_user_orders(
-        self,
-        user_address: ChecksumAddress,
-        market_address: ChecksumAddress | None = None,
-        status: str | None = None,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> list[Order]:
+    async def amend_order(
+            self,
+            market: Market,
+            order_id: int,
+            new_amount: Optional[float] = None,
+            new_price: Optional[float] = None,
+            **kwargs,
+    ) -> TypedContractFunction:
         """
-        Fetch orders for a specific user.
+        Amend an existing order.
 
         Args:
-            user_address: Address of the user
-            market_address: Optional market address to filter by
-            status: Optional status to filter by (open, filled, cancelled)
-            limit: Maximum number of orders to return
-            offset: Offset for pagination
+            market: Market where the order was placed
+            order_id: ID of the order to amend
+            new_amount: New amount for the order (None to keep current)
+            new_price: New price for the order (None to keep current)
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            List of user orders
+            TypedContractFunction that can be used to execute the transaction
+
+        Raises:
+            ValueError: If execution client is not initialized
         """
-        return await self._execution_client.get_user_orders(
-            user_address=user_address,
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
+
+        return await self._execution_client.amend_order(
+            market=market,
+            order_id=order_id,
+            new_amount=new_amount,
+            new_price=new_price,
+            **kwargs,
+        )
+
+    async def deposit_to_market(
+            self,
+            token_address: ChecksumAddress,
+            amount: float,
+            **kwargs,
+    ) -> List[TypedContractFunction]:
+        """
+        Deposit tokens to the exchange for trading.
+
+        Args:
+            token_address: Address of token to deposit
+            amount: Amount to deposit
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+
+        Returns:
+            List of TypedContractFunction objects (approve and deposit)
+
+        Raises:
+            ValueError: If execution client is not initialized
+        """
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
+
+        return await self._execution_client.deposit_to_market(
+            token_address=token_address,
+            amount=amount,
+            **kwargs,
+        )
+
+    async def withdraw_from_market(
+            self,
+            token_address: ChecksumAddress,
+            amount: float,
+            **kwargs,
+    ) -> TypedContractFunction:
+        """
+        Withdraw tokens from the exchange.
+
+        Args:
+            token_address: Address of token to withdraw
+            amount: Amount to withdraw
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+
+        Returns:
+            TypedContractFunction for the withdraw transaction
+
+        Raises:
+            ValueError: If execution client is not initialized
+        """
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
+
+        return await self._execution_client.withdraw_from_market(
+            token_address=token_address,
+            amount=amount,
+            **kwargs,
+        )
+
+    async def get_balance(
+            self,
+            token_address: ChecksumAddress,
+            account: Optional[ChecksumAddress] = None,
+    ) -> Tuple[float, float]:
+        """
+        Get token balance for an account both on-chain and in the exchange.
+
+        Args:
+            token_address: Address of token to check
+            account: Account to check (defaults to sender address)
+
+        Returns:
+            Tuple of (wallet_balance, exchange_balance) in human-readable format
+
+        Raises:
+            ValueError: If execution client is not initialized
+        """
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
+
+        return await self._execution_client.get_balance(
+            token_address=token_address,
+            account=account or self._sender_address,
+        )
+
+    async def wrap_eth(
+            self,
+            weth_address: ChecksumAddress,
+            amount_eth: float,
+            **kwargs,
+    ) -> TypedContractFunction:
+        """
+        Wrap ETH to get WETH.
+
+        Args:
+            weth_address: Address of the WETH contract
+            amount_eth: Amount of ETH to wrap (as a float, e.g., 1.5 ETH)
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+
+        Returns:
+            TypedContractFunction that can be used to execute the transaction
+
+        Raises:
+            ValueError: If execution client is not initialized
+        """
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
+
+        return await self._execution_client.wrap_eth(
+            weth_address=weth_address,
+            amount_eth=amount_eth,
+            **kwargs,
+        )
+
+    async def unwrap_eth(
+            self,
+            weth_address: ChecksumAddress,
+            amount_eth: float,
+            **kwargs,
+    ) -> TypedContractFunction:
+        """
+        Unwrap WETH to get ETH.
+
+        Args:
+            weth_address: Address of the WETH contract
+            amount_eth: Amount of WETH to unwrap (as a float, e.g., 1.5 ETH)
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+
+        Returns:
+            TypedContractFunction that can be used to execute the transaction
+
+        Raises:
+            ValueError: If execution client is not initialized
+        """
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
+
+        return await self._execution_client.unwrap_eth(
+            weth_address=weth_address,
+            amount_eth=amount_eth,
+            **kwargs,
+        )
+
+    # Streaming methods
+    async def stream_user_orders(
+            self,
+            user_address: Optional[ChecksumAddress] = None,
+            market_address: Optional[ChecksumAddress] = None,
+            callback: Callable[[Order, str], None] = None,
+    ) -> str:
+        """
+        Stream order updates for a specific user.
+
+        Args:
+            user_address: Address of the user (defaults to sender address)
+            market_address: Optional market address to filter by
+            callback: Function to call with each order update and event type
+
+        Returns:
+            Subscription ID that can be used to unsubscribe
+
+        Raises:
+            ValueError: If execution client is not initialized
+        """
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
+
+        return await self._execution_client.stream_user_orders(
+            user_address=user_address or self._sender_address,
             market_address=market_address,
-            status=status,
-            limit=limit,
-            offset=offset,
+            callback=callback,
         )
 
-    async def get_user_trades(
-        self,
-        user_address: ChecksumAddress,
-        market_address: ChecksumAddress | None = None,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> list[Trade]:
+    async def stream_market_trades(
+            self,
+            market: Market,
+            callback: Callable[[Trade], None],
+    ) -> str:
         """
-        Fetch historical trades for a specific user.
+        Stream trades for a specific market.
 
         Args:
-            user_address: Address of the user
-            market_address: Optional market address to filter by
-            limit: Maximum number of trades to return
-            offset: Offset for pagination
+            market: Market to get trades for
+            callback: Function to call with each trade
 
         Returns:
-            List of user trades
+            Subscription ID that can be used to unsubscribe
+
+        Raises:
+            ValueError: If execution client is not initialized
         """
-        return await self._execution_client.get_user_trades(
-            user_address=user_address, market_address=market_address, limit=limit, offset=offset
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
+
+        return await self._execution_client.stream_market_trades(
+            market_address=market.address,
+            callback=callback,
         )
+
+    async def stream_user_trades(
+            self,
+            user_address: Optional[ChecksumAddress] = None,
+            market: Optional[Market] = None,
+            callback: Callable[[Trade], None] = None,
+    ) -> str:
+        """
+        Stream trades for a specific user.
+
+        Args:
+            user_address: Address of the user (defaults to sender address)
+            market: Optional market to filter by
+            callback: Function to call with each trade
+
+        Returns:
+            Subscription ID that can be used to unsubscribe
+
+        Raises:
+            ValueError: If execution client is not initialized
+        """
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
+
+        market_address = market.address if market else None
+        return await self._execution_client.stream_user_trades(
+            user_address=user_address or self._sender_address,
+            market_address=market_address,
+            callback=callback,
+        )
+
+    async def unsubscribe(self, subscription_id: str) -> None:
+        """
+        Unsubscribe from a streaming subscription.
+
+        Args:
+            subscription_id: ID of the subscription to cancel
+
+        Raises:
+            ValueError: If execution client is not initialized
+        """
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
+
+        await self._execution_client.unsubscribe(subscription_id)
 
     async def get_order_book_snapshot(
-        self, market_address: ChecksumAddress, depth: int = 10
+            self,
+            market: Market,
+            depth: int = 10
     ) -> dict[str, Any]:
         """
         Get current order book snapshot from the chain.
 
         Args:
-            market_address: Market address
+            market: Market to get order book for
             depth: Number of price levels to fetch on each side
 
         Returns:
             Dictionary with bids and asks arrays
         """
-        # Get market details first
-        market_info = None
-        if self._market_info:
-            market_info = self._market_info.get_market_info(market_address)
-
-        if not market_info:
-            market = await self.get_market(market_address)
-        else:
-            market = market_info
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
 
         return await self._execution_client.get_order_book_snapshot(market=market, depth=depth)
-
-    async def get_user_balances(
-        self, user_address: ChecksumAddress, market_address: ChecksumAddress
-    ) -> dict[str, int]:
-        """
-        Get user token balances in the CLOB.
-
-        Args:
-            user_address: Address of the user
-            market_address: Market address
-
-        Returns:
-            Dictionary with base and quote token balances
-        """
-        # Get market details first
-        market_info = None
-        if self._market_info:
-            market_info = self._market_info.get_market_info(market_address)
-
-        if not market_info:
-            market = await self.get_market(market_address)
-        else:
-            market = market_info
-
-        return await self._execution_client.get_user_balances(
-            user_address=user_address, market=market
-        )

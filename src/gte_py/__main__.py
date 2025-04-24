@@ -310,7 +310,6 @@ def user_assets(user_address: str, limit: int = 100):
 def user_positions(user_address: str):
     """Get LP positions for a user."""
 
-
     async def _user_positions():
         nonlocal user_address
         w3 = Web3(Web3.HTTPProvider("https://rpc.gte.network"))
