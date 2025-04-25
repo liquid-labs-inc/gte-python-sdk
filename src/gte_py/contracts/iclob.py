@@ -1,9 +1,16 @@
-from typing import TypeVar
+from typing import TypeVar, Union, Optional, List
 
 from eth_typing import ChecksumAddress
 from web3 import Web3
 from web3.types import TxParams
 
+from .events import (
+    CLOBEvent, 
+    LimitOrderProcessedEvent,
+    FillOrderProcessedEvent,
+    OrderAmendedEvent,
+    OrderCanceledEvent
+)
 from .structs import (
     FillOrderType,
     ICLOBAmendArgs,
@@ -21,7 +28,6 @@ T = TypeVar("T")
 
 class CLOBError(Exception):
     """Base exception for CLOB contract errors"""
-
     pass
 
 
@@ -250,7 +256,7 @@ class ICLOB:
             account: ChecksumAddress,
             args: ICLOBPostLimitOrderArgs,
             **kwargs,
-    ) -> TypedContractFunction[dict]:
+    ) -> TypedContractFunction[LimitOrderProcessedEvent]:
         """
         Post a limit order to the CLOB.
 
@@ -261,6 +267,7 @@ class ICLOB:
 
         Returns:
             TypedContractFunction that can be used to execute the transaction
+            Will return a LimitOrderProcessedEvent when waiting for the event
         """
         func = self.contract.functions.postLimitOrder(account, args)
         params = {**kwargs}
@@ -271,7 +278,7 @@ class ICLOB:
             account: ChecksumAddress,
             args: ICLOBPostFillOrderArgs,
             **kwargs
-    ) -> TypedContractFunction[dict]:
+    ) -> TypedContractFunction[FillOrderProcessedEvent]:
         """
         Post a fill order to the CLOB.
 
@@ -282,6 +289,7 @@ class ICLOB:
 
         Returns:
             TypedContractFunction that can be used to execute the transaction
+            Will return a FillOrderProcessedEvent when waiting for the event
         """
         func = self.contract.functions.postFillOrder(account, args)
         params = {**kwargs}
@@ -292,7 +300,7 @@ class ICLOB:
             account: ChecksumAddress,
             args: ICLOBAmendArgs,
             **kwargs
-    ) -> TypedContractFunction[tuple[int, int]]:
+    ) -> TypedContractFunction[OrderAmendedEvent]:
         """
         Amend an existing order.
 
@@ -303,20 +311,18 @@ class ICLOB:
 
         Returns:
             TypedContractFunction that can be used to execute the transaction,
-            returns tuple of (quote_delta, base_delta)
+            Will return an OrderAmendedEvent when waiting for the event
         """
         func = self.contract.functions.amend(account, args)
-        params = {
-            **kwargs,
-        }
-        return TypedContractFunction(func, params)
+        params = {**kwargs}
+        return TypedContractFunction(func, params).with_event(self.contract.events.OrderAmended)
 
     def cancel(
             self,
             account: ChecksumAddress,
             args: ICLOBCancelArgs,
             **kwargs
-    ) -> TypedContractFunction[tuple[int, int]]:
+    ) -> TypedContractFunction[OrderCanceledEvent]:
         """
         Cancel one or more orders.
 
@@ -327,13 +333,11 @@ class ICLOB:
 
         Returns:
             TypedContractFunction that can be used to execute the transaction,
-            returns tuple of (quote_refund, base_refund)
+            Will return an OrderCanceledEvent when waiting for the event
         """
         func = self.contract.functions.cancel(account, args)
-        params = {
-            **kwargs,
-        }
-        return TypedContractFunction(func, params)
+        params = {**kwargs}
+        return TypedContractFunction(func, params).with_event(self.contract.events.OrderCanceled)
 
     def accept_ownership(
             self, **kwargs

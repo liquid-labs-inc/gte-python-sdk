@@ -1,14 +1,13 @@
 import importlib.resources as pkg_resources
 import json
 import time
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, Callable
 
 from eth_account import Account
 from eth_account.types import PrivateKeyType
-from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
 from web3.contract.contract import ContractFunction
-from web3.types import TxParams, Wei
+from web3.types import TxParams, EventData
 
 
 def get_current_timestamp() -> int:
@@ -93,13 +92,15 @@ class TypedContractFunction(Generic[T]):
         self.func = func  # Bound contract function (with arguments)
         self.params = params  # Transaction parameters
         self.event = None
+        self.event_parser: Callable[[EventData], T] | None = None
         self.result: T | None = None
         self.receipt: dict[str, Any] | None = None
         self.tx_hash: HexBytes | None = None
 
-    def with_event(self, event) -> "TypedContractFunction":
+    def with_event(self, event, parser: Callable[[EventData], T] | None = None) -> "TypedContractFunction[T]":
         """Set the event to listen for"""
         self.event = event
+        self.event_parser = parser
         return self
 
     def call(self) -> T:
@@ -122,8 +123,9 @@ class TypedContractFunction(Generic[T]):
             signed = self.func.w3.eth.account.sign_transaction(tx, private_key)
             self.tx_hash = self.func.w3.eth.send_raw_transaction(signed.raw_transaction)
         else:
+            tx = self.params
             print(f'Sending {self.func} with {tx}')
-            tx = self.func.build_transaction(self.params)
+            tx = self.func.build_transaction(tx)
             # Send the transaction with default account
             self.tx_hash = self.func.w3.eth.send_transaction(tx)
 
@@ -158,6 +160,8 @@ class TypedContractFunction(Generic[T]):
         self.receipt = web3.eth.wait_for_transaction_receipt(self.tx_hash)
         logs = self.event.process_receipt(self.receipt)
         assert len(logs) == 1
+        if self.event_parser:
+            return self.event_parser(logs[0])
         return logs[0]['args']
 
     def send_wait(self, private_key: PrivateKeyType | None = None) -> T:

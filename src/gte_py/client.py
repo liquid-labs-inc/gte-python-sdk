@@ -527,7 +527,7 @@ class Client:
             self,
             weth_address: ChecksumAddress,
             amount_eth: float,
-            **kwargs,
+            **kwargs
     ) -> TypedContractFunction:
         """
         Wrap ETH to get WETH.
@@ -538,7 +538,7 @@ class Client:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            TypedContractFunction that can be used to execute the transaction
+            TypedContractFunction that can be used to execute the transaction and returns DepositEvent
 
         Raises:
             ValueError: If execution client is not initialized
@@ -556,7 +556,7 @@ class Client:
             self,
             weth_address: ChecksumAddress,
             amount_eth: float,
-            **kwargs,
+            **kwargs
     ) -> TypedContractFunction:
         """
         Unwrap WETH to get ETH.
@@ -567,7 +567,7 @@ class Client:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            TypedContractFunction that can be used to execute the transaction
+            TypedContractFunction that can be used to execute the transaction and returns WithdrawalEvent
 
         Raises:
             ValueError: If execution client is not initialized

@@ -1,6 +1,6 @@
 """Python wrapper for WETH (Wrapped Ether) token contracts."""
 
-from typing import TypeVar, Optional, Dict, Any
+from typing import TypeVar
 
 from eth_typing import ChecksumAddress
 from web3 import Web3
@@ -40,7 +40,6 @@ class WETH(ERC20):
     def deposit(
         self, 
         amount: int, 
-        sender_address: ChecksumAddress, 
         **kwargs
     ) -> TypedContractFunction[None]:
         """
@@ -48,7 +47,6 @@ class WETH(ERC20):
         
         Args:
             amount: Amount of ETH to wrap (in wei)
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
             
         Returns:
@@ -56,7 +54,6 @@ class WETH(ERC20):
         """
         func = self.contract.functions.deposit()
         params = {
-            "from": sender_address,
             "value": amount,
             **kwargs,
         }
@@ -65,7 +62,6 @@ class WETH(ERC20):
     def withdraw(
         self, 
         amount: int, 
-        sender_address: ChecksumAddress, 
         **kwargs
     ) -> TypedContractFunction[None]:
         """
@@ -73,7 +69,6 @@ class WETH(ERC20):
         
         Args:
             amount: Amount of WETH to unwrap (in wei)
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
             
         Returns:
@@ -81,12 +76,8 @@ class WETH(ERC20):
         """
         func = self.contract.functions.withdraw(amount)
         
-        # Ensure we have a nonce
-        if 'nonce' not in kwargs:
-            kwargs['nonce'] = self.web3.eth.get_transaction_count(sender_address)
-            
+
         params = {
-            "from": sender_address,
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -94,7 +85,6 @@ class WETH(ERC20):
     def deposit_eth(
         self, 
         amount_eth: float, 
-        sender_address: ChecksumAddress, 
         **kwargs
     ) -> TypedContractFunction[None]:
         """
@@ -102,7 +92,6 @@ class WETH(ERC20):
         
         Args:
             amount_eth: Amount of ETH to wrap (as a float, e.g., 1.5 ETH)
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
             
         Returns:
@@ -110,12 +99,11 @@ class WETH(ERC20):
         """
         # Convert ETH amount to wei
         amount_wei = self.web3.to_wei(amount_eth, 'ether')
-        return self.deposit(amount_wei, sender_address, **kwargs)
+        return self.deposit(amount_wei, **kwargs)
     
     def withdraw_eth(
         self, 
         amount_eth: float, 
-        sender_address: ChecksumAddress, 
         **kwargs
     ) -> TypedContractFunction[None]:
         """
@@ -123,7 +111,6 @@ class WETH(ERC20):
         
         Args:
             amount_eth: Amount of WETH to unwrap (as a float, e.g., 1.5 ETH)
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
             
         Returns:
@@ -131,4 +118,4 @@ class WETH(ERC20):
         """
         # Convert ETH amount to wei
         amount_wei = self.web3.to_wei(amount_eth, 'ether')
-        return self.withdraw(amount_wei, sender_address, **kwargs)
+        return self.withdraw(amount_wei, **kwargs)
