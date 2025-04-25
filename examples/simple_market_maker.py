@@ -12,10 +12,10 @@ from gte_py.models import OrderSide, TimeInForce
 from gte_py.contracts.erc20 import ERC20
 # --- Config ---
 BINANCE_BOOK_URL = "https://api.binance.com/api/v3/depth?symbol=BTCUSDT&limit=5"
-ORDER_SIZE = 0.001  # BTC
+ORDER_SIZE = 0.01  # BTC
 UPDATE_INTERVAL = 0.1  # seconds
-RISK_AVERSION = 0.1
-VOL_EMA_ALPHA = 0.2
+RISK_AVERSION = 0.05
+VOL_EMA_ALPHA = 0.1
 GBTC_CUSD_MARKET_ADDRESS = "0x0F3642714B9516e3d17a936bAced4de47A6FFa5F"
 
 # Load environment variables for wallet
@@ -71,8 +71,9 @@ class Stoikov:
     def __init__(self, risk_aversion=RISK_AVERSION):
         self.gamma = risk_aversion
 
-    def compute_quotes(self, microprice, sigma, inv=0, k=1.5):
+    def compute_quotes(self, microprice, sigma, inv=0, k=3):
         spread = self.gamma * sigma**2 / k
+        spread = min(max(spread, 0.001), 0.01)
         mid_adj = -inv * self.gamma * sigma**2
         bid = microprice + mid_adj - spread / 2
         ask = microprice + mid_adj + spread / 2
@@ -153,7 +154,7 @@ async def main():
                     price=quotes.bid,
                     time_in_force=TimeInForce.GTC,
                 )
-                buy_hash = buy_tx.send_wait(WALLET_PRIVATE_KEY)
+                buy_tx.send_wait(WALLET_PRIVATE_KEY)
                 open_orders.append(None)  # Placeholder: order_id tracking requires API support
 
                 # Place new sell order
@@ -165,15 +166,14 @@ async def main():
                     price=quotes.ask,
                     time_in_force=TimeInForce.GTC,
                 )
-                sell_hash = sell_tx.send_wait(WALLET_PRIVATE_KEY)
+                sell_tx.send_wait(WALLET_PRIVATE_KEY)
                 open_orders.append(None)  # Placeholder: order_id tracking requires API support
 
                 print(f"Quotes: bid={quotes.bid:.2f}, ask={quotes.ask:.2f}, sigma={sigma:.6f}")
-                print(f"Buy tx hash: {buy_hash}, Sell tx hash: {sell_hash}")
                 # print("NOTE: To cancel specific orders, you must fetch order IDs from the API after placement.")
             except Exception as e:
                 print(f"Error: {e}")
             await asyncio.sleep(UPDATE_INTERVAL)
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())

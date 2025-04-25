@@ -269,6 +269,7 @@ class ICLOB:
         params = {
             "from": sender_address,
             "nonce": self.web3.eth.get_transaction_count(sender_address),
+            "gas": 800000000,
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -296,6 +297,7 @@ class ICLOB:
         params = {
             "from": sender_address,
             "nonce": self.web3.eth.get_transaction_count(sender_address),
+            "gas": 800000000,
             **kwargs,
         }
         return TypedContractFunction(func, params)
