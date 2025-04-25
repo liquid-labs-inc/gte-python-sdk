@@ -273,6 +273,22 @@ class Client:
         ]
 
     # Trading methods
+    async def get_order(self, market: Market, order_id: int) -> Order | None:
+        """
+        Get order details by ID.
+
+        Args:
+            market: Market where the order was placed
+            order_id: Order ID
+
+        Returns:
+            Order object or None if not found
+        """
+        if not self._execution_client:
+            raise ValueError("Execution client not initialized. Sender address is required.")
+
+        return await self._execution_client.get_order(market=market, order_id=order_id)
+
     async def place_limit_order(
             self,
             market: Market,

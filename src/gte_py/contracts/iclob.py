@@ -5,7 +5,7 @@ from web3 import Web3
 from web3.types import TxParams
 
 from .events import (
-    LimitOrderProcessedEvent, 
+    LimitOrderProcessedEvent,
     FillOrderProcessedEvent,
     OrderAmendedEvent,
     OrderCanceledEvent,
@@ -21,7 +21,7 @@ from .structs import (
     ICLOBPostFillOrderArgs,
     ICLOBPostLimitOrderArgs,
     LimitOrderType,
-    Settlement,
+    Settlement, CLOBOrder,
 )
 from .utils import TypedContractFunction, load_abi
 
@@ -90,7 +90,7 @@ class ICLOB:
         """
         return self.contract.functions.getOpenInterest().call()
 
-    def get_order(self, order_id: int) -> dict:
+    def get_order(self, order_id: int) -> CLOBOrder:
         """
         Get the details of a specific order.
 
@@ -100,7 +100,8 @@ class ICLOB:
         Returns:
             Order details as a dictionary
         """
-        return self.contract.functions.getOrder(order_id).call()
+        tpl = self.contract.functions.getOrder(order_id).call()
+        return CLOBOrder.from_tuple(tpl)
 
     def get_tob(self) -> tuple[int, int]:
         """
@@ -275,7 +276,7 @@ class ICLOB:
         func = self.contract.functions.postLimitOrder(account, args)
         params = {**kwargs}
         return TypedContractFunction(func, params).with_event(
-            self.contract.events.LimitOrderProcessed, 
+            self.contract.events.LimitOrderProcessed,
             parse_limit_order_processed
         )
 

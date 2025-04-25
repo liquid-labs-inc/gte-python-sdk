@@ -43,7 +43,7 @@ async def show_user_orders(client, user_address, market_address=None):
     print(f"Found {len(open_orders)} open orders")
     for i, order in enumerate(open_orders, 1):
         print(f"\nOrder {i}:")
-        print(f"  ID: {order.id}")
+        print(f"  ID: {order.order_id}")
         print(f"  Market: {order.market_address}")
         print(f"  Type: {order.order_type.name} {order.side.name}")
         print(f"  Price: {order.price}")
@@ -59,7 +59,7 @@ async def show_user_orders(client, user_address, market_address=None):
     print(f"\nFound {len(filled_orders)} filled orders")
     for i, order in enumerate(filled_orders, 1):
         print(f"\nOrder {i}:")
-        print(f"  ID: {order.id}")
+        print(f"  ID: {order.order_id}")
         print(f"  Market: {order.market_address}")
         print(f"  Type: {order.order_type.name} {order.side.name}")
         print(f"  Price: {order.price}")

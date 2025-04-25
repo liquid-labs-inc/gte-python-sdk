@@ -10,7 +10,7 @@ from web3 import Web3
 
 from gte_py import Client
 from gte_py.config import TESTNET_CONFIG
-from gte_py.models import OrderSide, TimeInForce, Market
+from gte_py.models import OrderSide, TimeInForce, Market, Order
 
 # Load environment variables from .env file
 load_dotenv()
@@ -90,16 +90,17 @@ async def limit_order_example(client: Client, web3, market):
     print(f"Limit order price: {price}")
 
     # FIXME: IOC doesn't work yet
-    # tx_func = await client.place_limit_order(
-    #     market=market,
-    #     side=OrderSide.BUY,
-    #     amount=amount,
-    #     price=price,
-    #     time_in_force=TimeInForce.IOC,
-    # )
-    #
-    # receipt = tx_func.send_wait(WALLET_PRIVATE_KEY)
-    # print(receipt)
+    tx_func = await client.place_limit_order(
+        market=market,
+        side=OrderSide.BUY,
+        amount=amount,
+        price=price,
+        time_in_force=TimeInForce.GTC,
+    )
+
+    order = tx_func.send_wait(WALLET_PRIVATE_KEY)
+    print(order)
+    await get_order_status(client, market, order.order_id)
 
     tx_func = await client.place_limit_order(
         market=market,
@@ -109,11 +110,12 @@ async def limit_order_example(client: Client, web3, market):
         time_in_force=TimeInForce.GTC,
     )
 
-    receipt = tx_func.send_wait(WALLET_PRIVATE_KEY)
-    print(receipt)
+    order: Order = tx_func.send_wait(WALLET_PRIVATE_KEY)
+    print(order)
+    await get_order_status(client, market, order.order_id)
 
 
-async def cancel_order_example(client, web3, market, order_id=None, send_tx=False):
+async def cancel_order_example(client, web3, market, order_id=None):
     """Example of cancelling an order."""
     print_separator("Cancel Order Example")
 
@@ -155,6 +157,24 @@ async def show_balances(client: Client, market: Market):
     print(f"  Exchange: {quote_exchange:.6f}")
 
 
+async def get_order_status(client: Client, market: Market, order_id: int):
+    """Get the status of an order."""
+    print_separator("Order Status Example")
+
+    try:
+        # This only works with Web3 provider and contract address
+        order = await client.get_order(market, order_id=order_id)
+
+        print(f"Order ID: {order.order_id}")
+        print(f"Market: {market.pair}")
+        print(f"Side: {order.side.name}")
+        print(f"Price: {order.price}")
+        print(f"Amount: {order.amount}")
+
+    except Exception as e:
+        print(f"Couldn't fetch on-chain order status: {str(e)}")
+
+
 async def show_orders(client: Client, market):
     """Show orders for the user."""
     print_separator("User Orders")
@@ -165,11 +185,10 @@ async def show_orders(client: Client, market):
 
         print(f"Orders for market {market.pair}:")
         for order in orders:
-            print(f"  ID: {order.id}")
+            print(f"  ID: {order.order_id}")
             print(f"  Side: {order.side.name}")
             print(f"  Price: {order.price}")
             print(f"  Size: {order.size}")
-            print(f"  Time: {format_timestamp(order.timestamp)}")
             print(f"  Status: {order.status.name}")
 
     except Exception as e:
@@ -197,8 +216,6 @@ async def main():
     # Show balances
     await show_balances(client, market)
 
-    # Run the examples (set send_tx=True to actually send transactions)
-    send_tx = True  # Safety default - change to True to send transactions
 
     print("\nNOTE: For WETH wrapping and unwrapping examples, see wrap_weth.py")
 
@@ -209,7 +226,7 @@ async def main():
     # Order examples
     await limit_order_example(client, web3, market)
 
-    await cancel_order_example(client, web3, market, order_id=None, send_tx=send_tx)
+    await cancel_order_example(client, web3, market, order_id=None)
 
 
 if __name__ == "__main__":

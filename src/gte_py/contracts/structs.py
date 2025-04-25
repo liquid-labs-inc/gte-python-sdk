@@ -1,7 +1,9 @@
 """Structure definitions for GTE contracts."""
-
+from dataclasses import dataclass
 from enum import IntEnum
 from typing import TypedDict
+
+from eth_typing import ChecksumAddress
 
 
 class Side(IntEnum):
@@ -148,6 +150,60 @@ class ICLOBCancelArgs(TypedDict):
 
     orderIds: list[int]
     settlement: int
+
+
+"""
+"components": [
+          { "name": "side", "type": "uint8", "internalType": "enum Side" },
+          {
+            "name": "cancelTimestamp",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          { "name": "id", "type": "uint256", "internalType": "OrderId" },
+          {
+            "name": "prevOrderId",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "nextOrderId",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          { "name": "owner", "type": "address", "internalType": "address" },
+          { "name": "price", "type": "uint256", "internalType": "uint256" },
+          { "name": "amount", "type": "uint256", "internalType": "uint256" }
+        ]
+        """
+
+
+@dataclass
+class CLOBOrder:
+    """Order structure from contract."""
+    side: Side
+    cancelTimestamp: int
+    id: int
+    prevOrderId: int
+    nextOrderId: int
+    owner: ChecksumAddress
+    price: int
+    amount: int
+
+    @classmethod
+    def from_tuple(cls, order_tuple: tuple[int, int, int, int, int, ChecksumAddress, int, int,]) -> "CLOBOrder":
+        print(order_tuple)
+        """Convert from tuple to Order."""
+        return cls(
+            side=Side(order_tuple[0]),
+            cancelTimestamp=order_tuple[1],
+            id=order_tuple[2],
+            prevOrderId=order_tuple[3],
+            nextOrderId=order_tuple[4],
+            owner=ChecksumAddress(order_tuple[5]),
+            price=order_tuple[6],
+            amount=order_tuple[7],
+        )
 
 
 class OrderStruct(TypedDict):

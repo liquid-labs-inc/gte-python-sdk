@@ -3,32 +3,27 @@
 import asyncio
 import logging
 from collections.abc import Callable
-from typing import Any, Optional, List, Dict, Tuple, Union
+from typing import Any, Optional, List, Dict, Tuple
 
-from eth_typing import AnyAddress, ChecksumAddress
+from eth_typing import ChecksumAddress
 from web3 import Web3
 from web3.exceptions import LogTopicError
 from web3.providers import WebSocketProvider
 from web3.types import EventData
 
-from .contracts.events import OrderCanceledEvent
-from .contracts.iclob import ICLOB
-from .contracts.factory import CLOBFactory
 from .contracts.erc20 import ERC20
-from .contracts.router import Router
-from .contracts.weth import WETH  # Add import for WETH class
+from .contracts.events import OrderCanceledEvent
+from .contracts.factory import CLOBFactory
+from .contracts.iclob import ICLOB
 from .contracts.structs import (
     Side,
     Settlement,
     LimitOrderType,
     FillOrderType,
-    ICLOBPostLimitOrderArgs,
-    ICLOBPostFillOrderArgs,
-    ICLOBAmendArgs,
-    ICLOBCancelArgs
+    CLOBOrder
 )
 from .contracts.utils import get_current_timestamp, TypedContractFunction
-from .info import MarketService
+from .contracts.weth import WETH  # Add import for WETH class
 from .models import Market, Order, OrderStatus, OrderSide, OrderType, TimeInForce, Trade
 
 logger = logging.getLogger(__name__)
@@ -608,7 +603,7 @@ class ExecutionClient:
         )
 
         # Filter for open orders
-        open_order_ids = [int(order.id) for order in orders if order.status == OrderStatus.OPEN]
+        open_order_ids = [int(order.order_id) for order in orders if order.status == OrderStatus.OPEN]
 
         if not open_order_ids:
             # No orders to cancel
@@ -731,45 +726,43 @@ class ExecutionClient:
 
         return (wallet_balance, exchange_balance)
 
-    async def get_order(self, market: Market, order_id: int):
+    async def get_order(self, market: Market, order_id: int) -> Order:
         clob = self._get_clob(market.address)
         order = clob.get_order(order_id)
-        return order
+        return await self._convert_contract_order_to_model(market, order)
 
     async def _convert_contract_order_to_model(
             self,
-            order_data: Dict[str, Any],
-            market_address: ChecksumAddress
+            market: Market,
+            order_data: CLOBOrder,
     ) -> Order:
         """
         Convert contract order data to Order model.
-        
+
         Args:
             order_data: Order data from the contract
-            market_address: Address of the market
-            
+            market: Address of the market
+
         Returns:
             Order model
         """
-        # Map contract side to model side
-        side = OrderSide.BUY if order_data.get('side', 0) == Side.BUY else OrderSide.SELL
+        side = OrderSide.BUY if order_data.side == Side.BUY else OrderSide.SELL
 
         # Determine order status
         status = OrderStatus.OPEN
-        if order_data.get('amount', 0) == 0:
+        if order_data.amount:
             status = OrderStatus.FILLED
-        elif order_data.get('cancelTimestamp', 0) > 0 and order_data.get('cancelTimestamp',
-                                                                         0) < get_current_timestamp():
+        elif order_data.cancelTimestamp > 0 and order_data.cancelTimestamp < get_current_timestamp():
             status = OrderStatus.EXPIRED
 
         # Create Order model
         return Order(
-            id=str(order_data.get('id', 0)),
-            market_address=market_address,
+            order_id=order_data.id,
+            market_address=market.address,
             side=side,
             order_type=OrderType.LIMIT,
-            amount=float(order_data.get('amount', 0)),
-            price=float(order_data.get('price', 0)),
+            amount=order_data.amount / 10 ** market.base_decimals,
+            price=order_data.price / 10 ** market.quote_decimals,
             time_in_force=TimeInForce.GTC,  # Default
             status=status,
             filled_amount=0.0,  # Need to be calculated from events
@@ -785,12 +778,12 @@ class ExecutionClient:
     ) -> Trade:
         """
         Convert fill event to Trade model.
-        
+
         Args:
             event: Fill event data
             market_address: Address of the market
             is_maker: Whether this trade was as a maker
-            
+
         Returns:
             Trade model
         """

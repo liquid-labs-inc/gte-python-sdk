@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Any
 
 from eth_typing import ChecksumAddress
+from hexbytes import HexBytes
 from web3 import Web3
 
 
@@ -179,7 +180,7 @@ class Trade:
     price: float
     size: float
     side: OrderSide
-    tx_hash: ChecksumAddress | None = None  # Transaction hash is an Ethereum address
+    tx_hash: HexBytes | None = None  # Transaction hash is an Ethereum address
     maker: ChecksumAddress | None = None
     taker: ChecksumAddress | None = None
     trade_id: int | None = None
@@ -298,7 +299,7 @@ class OrderbookUpdate:
 class Order:
     """Order model."""
 
-    id: str
+    order_id: int
     market_address: str
     side: OrderSide
     order_type: OrderType
@@ -331,7 +332,7 @@ class Order:
         status_str = data.get("status", "open")
 
         return cls(
-            id=data.get("id", ""),
+            order_id=data.get("id", ""),
             market_address=data.get("marketAddress", ""),
             side=OrderSide(side_str),
             order_type=OrderType(type_str),
