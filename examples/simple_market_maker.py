@@ -12,11 +12,12 @@ from gte_py.models import OrderSide, TimeInForce
 from gte_py.contracts.erc20 import ERC20
 # --- Config ---
 BINANCE_BOOK_URL = "https://api.binance.com/api/v3/depth?symbol=BTCUSDT&limit=5"
-ORDER_SIZE = 0.01  # BTC
-UPDATE_INTERVAL = 0.1  # seconds
+ORDER_SIZE = 0.2  # BTC
+UPDATE_INTERVAL = 0.0  # seconds
 RISK_AVERSION = 0.05
 VOL_EMA_ALPHA = 0.1
 GBTC_CUSD_MARKET_ADDRESS = "0x0F3642714B9516e3d17a936bAced4de47A6FFa5F"
+TARGET_SPREAD = 0.01
 
 # Load environment variables for wallet
 load_dotenv()
@@ -68,12 +69,25 @@ class Quotes:
     ask: float
 
 class Stoikov:
-    def __init__(self, risk_aversion=RISK_AVERSION):
+    def __init__(
+        self,
+        risk_aversion: float = RISK_AVERSION,
+        target_spread: float = TARGET_SPREAD,
+    ):
+        """
+        risk_aversion – Avellaneda-Stoikov γ parameter  
+        target_spread – desired *total* USD spread (ask-bid) we want to quote.
+        """
         self.gamma = risk_aversion
+        self.target_spread = target_spread
 
     def compute_quotes(self, microprice, sigma, inv=0, k=3):
-        spread = self.gamma * sigma**2 / k
-        spread = min(max(spread, 0.001), 0.01)
+        # Theoretical optimal spread suggested by Avellaneda-Stoikov
+        theo_spread = self.gamma * sigma**2 / k
+
+        # Keep the spread at least `target_spread` wide
+        spread = max(theo_spread, self.target_spread)
+
         mid_adj = -inv * self.gamma * sigma**2
         bid = microprice + mid_adj - spread / 2
         ask = microprice + mid_adj + spread / 2
