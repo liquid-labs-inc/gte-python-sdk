@@ -2,7 +2,8 @@ import importlib.resources as pkg_resources
 import json
 import logging
 import time
-from typing import Any, Generic, TypeVar, Callable
+import inspect
+from typing import Any, Generic, TypeVar, Callable, Dict, Tuple, Optional
 
 from eth_account import Account
 from eth_account.types import PrivateKeyType
@@ -170,21 +171,21 @@ class TypedContractFunction(Generic[T]):
                     tx['from'] = local_account.address
                 if 'nonce' not in tx:
                     tx['nonce'] = self.web3.eth.get_transaction_count(local_account.address)
-                logger.info('Sending %s with %s', self.func_call, tx)
+                logger.info('Sending %s with %s', format_contract_function(self.func_call), tx)
                 tx = self.func_call.build_transaction(tx)
                 # Sign and send the transaction
                 signed = self.web3.eth.account.sign_transaction(tx, private_key)
                 self.tx_hash = self.web3.eth.send_raw_transaction(signed.raw_transaction)
             else:
                 tx = self.params
-                logger.info('Sending %s with %s', self.func_call, tx)
+                logger.info('Sending %s with %s', format_contract_function(self.func_call), tx)
                 tx = self.func_call.build_transaction(tx)
                 # Send the transaction with default account
                 self.tx_hash = self.web3.eth.send_transaction(tx)
 
             return self.tx_hash
         except ContractCustomError as e:
-            raise convert_web3_error(e, str(self.func_call))
+            raise convert_web3_error(e, format_contract_function(self.func_call))
 
     def build_transaction(self) -> TxParams:
         return self.func_call.build_transaction(self.params)
@@ -225,8 +226,50 @@ class TypedContractFunction(Generic[T]):
                 return self.event_parser(logs[0])
             return logs[0]['args']
         except ContractCustomError as e:
-            raise convert_web3_error(e, str(self.func_call))
+            raise convert_web3_error(e, format_contract_function(self.func_call))
 
     def send_wait(self, private_key: PrivateKeyType | None = None) -> T:
         self.send(private_key)
         return self.retrieve()
+
+
+def format_contract_function(func: ContractFunction) -> str:
+    """
+    Format a ContractFunction into a more readable string with parameter names and values.
+    
+    Example output:
+    postLimitOrder(address: '0x1234...', order: {'amountInBase': 1.0, 'price': 1.0, 'cancelTimestamp': 0, 
+                                                'side': <Side.SELL: 1>, 'clientOrderId': 0, 
+                                                'limitOrderType': <LimitOrderType.GOOD_TILL_CANCELLED: 0>, 
+                                                'settlement': <Settlement.INSTANT: 1>})
+    
+    Args:
+        func: The ContractFunction to format
+        
+    Returns:
+        A formatted string representation of the function
+    """
+    function_name = func.fn_name
+    args_values = func.args
+    
+    # Try to get parameter names from the ABI
+    param_names = []
+    try:
+        contract = func.contract_abi
+        for item in contract:
+            if item.get('name') == function_name and item.get('type') == 'function':
+                param_names = [input_param.get('name', f'param{i}') for i, input_param in enumerate(item.get('inputs', []))]
+                break
+    except (AttributeError, KeyError):
+        # If we can't get parameter names from ABI, use generic param names
+        param_names = [f'param{i}' for i in range(len(args_values))]
+    
+    # Format each argument with its name
+    formatted_args = []
+    for i, (name, value) in enumerate(zip(param_names, args_values)):
+        if name:
+            formatted_args.append(f"{name}: {repr(value)}")
+        else:
+            formatted_args.append(repr(value))
+    
+    return f"{func.address} {function_name}({', '.join(formatted_args)})"
