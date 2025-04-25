@@ -730,6 +730,11 @@ class ExecutionClient:
 
         return (wallet_balance, exchange_balance)
 
+    async def get_order(self, market: Market, order_id: int):
+        clob = self._get_clob(market.address)
+        order = clob.get_order(order_id)
+        return order
+
     async def _convert_contract_order_to_model(
             self,
             order_data: Dict[str, Any],

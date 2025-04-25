@@ -158,7 +158,7 @@ class TypedContractFunction(Generic[T]):
         self.receipt = web3.eth.wait_for_transaction_receipt(self.tx_hash)
         logs = self.event.process_receipt(self.receipt)
         assert len(logs) == 1
-        return logs[0]
+        return logs[0]['args']
 
     def send_wait(self, private_key: PrivateKeyType | None = None) -> T:
         self.send(private_key)
