@@ -43,7 +43,9 @@ class MarketService:
 
     def get_market_info(self, clob: ICLOB) -> Market:
         # Get market config for additional details
-        factory, mask, quote, base, tick_size, lot_size = clob.get_market_config()
+        factory, maxNumOrders, quote, base, quote_size, base_size = clob.get_market_config()
+        status, maxLimitsPerTx, minLimitOrderAmountInBase, tick_size = clob.get_market_settings()
+        
 
         base_contract = ERC20(self._web3, base)
         quote_contract = ERC20(self._web3, quote)
@@ -75,8 +77,8 @@ class MarketService:
             quote_decimals=quote_asset.decimals,
             tick_size_in_quote=tick_size,
             tick_size=quote_contract.convert_amount_to_float(tick_size),
-            lot_size_in_base=lot_size,
-            lot_size=base_contract.convert_amount_to_float(lot_size),
+            lot_size_in_base=base_size, # TODO: REMOVE
+            lot_size=base_contract.convert_amount_to_float(base_size),
         )
 
         return market_info

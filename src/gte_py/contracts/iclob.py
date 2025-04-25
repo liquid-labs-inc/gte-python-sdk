@@ -68,7 +68,7 @@ class ICLOB:
         """Get the market configuration settings for the CLOB."""
         return self.contract.functions.getMarketConfig().call()
 
-    def get_market_settings(self) -> dict:
+    def get_market_settings(self) -> tuple[bool, int, int, int]:
         """Get the market settings for the CLOB."""
         return self.contract.functions.getMarketSettings().call()
 

@@ -238,8 +238,7 @@ class ERC20:
             Amount in token base units (e.g., 1500000000000000000 wei)
         """
         decimals = self.decimals()
-        # has precision issue for float
-        return int(amount * 10 ** decimals)
+        return int(Decimal(str(amount)) * Decimal(10) ** Decimal(decimals))
 
     def convert_amount_to_float(self, amount: int) -> float:
         """

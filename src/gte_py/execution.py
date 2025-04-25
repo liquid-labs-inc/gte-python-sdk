@@ -327,6 +327,22 @@ class ExecutionClient:
         weth = self._get_weth(weth_address)
         return weth.withdraw_eth(amount_eth, self._sender_address, **kwargs)
 
+    async def normalize_price(self, market: Market, price: int) -> float:
+        """
+        Normalize a price to the market's tick size.
+        
+        Args:
+            market: Market to normalize the price for
+            price: Price to normalize
+            
+        Returns:
+            Price rounded down to the nearest tick size
+        """
+        tick_size = market.tick_size_in_quote
+        normalized_price = (price // tick_size) * tick_size
+        return normalized_price
+      
+
     async def place_limit_order(
             self,
             market: Market,
@@ -363,15 +379,10 @@ class ExecutionClient:
         quote_token = self._get_token(market.quote_token_address)
 
         amount_in_base = base_token.convert_amount_to_int(amount)
-        amount_in_base = amount_in_base // market.lot_size_in_base * market.lot_size_in_base
-        if amount_in_base <= 0:
-            raise ValueError(f"Amount must be greater than zero: {amount_in_base}")
         # Convert price to ticks
         price_in_quote = quote_token.convert_amount_to_int(price_in_quote)
-        price_in_quote = price_in_quote // market.tick_size_in_quote * market.tick_size_in_quote
-        if price_in_quote <= 0:
-            raise ValueError(f"Price must be greater than zero: {price_in_quote}")
-
+        price_in_quote = await self.normalize_price(market, price_in_quote)
+   
         # For IOC and FOK orders, we use the fill order API which has different behavior
         if time_in_force in [TimeInForce.IOC, TimeInForce.FOK]:
             # Convert amount to base token atoms
@@ -625,7 +636,7 @@ class ExecutionClient:
             sender_address=self._sender_address,
             **kwargs
         )
-
+    
     async def deposit_to_market(
             self,
             token_address: ChecksumAddress,
