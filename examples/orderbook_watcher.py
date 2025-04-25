@@ -1,196 +1,202 @@
-"""Example demonstrating how to watch a market's orderbook in real-time."""
-
-import asyncio
-
+"""Simple example demonstrating how to watch a market's orderbook using WebSocket ETH RPC."""
 from dotenv import load_dotenv
+
+load_dotenv()
+import argparse
+import asyncio
+import logging
+import os
+import time
+
 from rich.console import Console
 from rich.live import Live
 from rich.table import Table
+from web3 import Web3
 
 from gte_py import Client
-from gte_py.models import OrderbookUpdate
+from gte_py.config import TESTNET_CONFIG
+from gte_py.contracts.iclob import ICLOB
+from gte_py.contracts.iclob_streaming import CLOBEventStreamer
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Initialize rich console
+# Initialize console for rich text output
 console = Console()
+
+# Default market address - replace with your market of interest
+MARKET_ADDRESS = os.getenv("MARKET_ADDRESS", "0xfaf0BB6F2f4690CA4319e489F6Dc742167B9fB10")  # MEOW/WETH
 
 
 class OrderbookWatcher:
-    """Class for watching and displaying a market's orderbook in real-time."""
+    """Simple class for watching and displaying a market's orderbook in real-time."""
 
-    def __init__(self, market, depth=5, refresh_rate=0.5):
+    def __init__(self, clob: ICLOB, depth=5, poll_interval=0.5):
         """
         Initialize the orderbook watcher.
-
+        
         Args:
-            market: Market object
+            clob: ICLOB instance
             depth: Number of levels to display on each side
-            refresh_rate: How often to refresh the display (in seconds)
+            poll_interval: How often to update the order book in seconds
         """
-        self.market = market
+        # Initialize CLOB contract and streamer
+        self.clob = clob
+        self.streamer = CLOBEventStreamer(clob, poll_interval=poll_interval)
+
         self.depth = depth
-        self.refresh_rate = refresh_rate
-        self.last_update = None
+        self.poll_interval = poll_interval
         self.bids = []
         self.asks = []
-        self.update_count = 0
-        self.table = Table(title=f"Orderbook: {market.pair}")
+        self.last_trade = None
+
+        # Get market symbol information
+        self.base_token = self.clob.get_base_token()
+        self.quote_token = self.clob.get_quote_token()
+        self.market_symbol = f"{self.base_token[-4:]}_{self.quote_token[-4:]}"
+
+        # Initialize display table
+        self.table = Table(title=f"Orderbook: {self.market_symbol}")
         self._setup_table()
 
+        # Running state
+        self.running = False
+        self.task = None
+
     def _setup_table(self):
-        """Set up the table structure."""
-        self.table.add_column("Quantity", justify="right", style="cyan", no_wrap=True)
-        self.table.add_column("Bid Price", justify="right", style="green", no_wrap=True)
-        self.table.add_column("Ask Price", justify="right", style="red", no_wrap=True)
-        self.table.add_column("Quantity", justify="left", style="cyan", no_wrap=True)
+        """Set up the table columns."""
+        self.table.add_column("Bid Size", justify="right", style="cyan")
+        self.table.add_column("Bid Price", justify="right", style="green")
+        self.table.add_column("Ask Price", justify="left", style="red")
+        self.table.add_column("Ask Size", justify="left", style="cyan")
 
-    def update(self, orderbook: OrderbookUpdate):
-        """
-        Process an orderbook update.
+    def update_book(self, snapshot):
+        """Update orderbook data from a snapshot."""
+        self.bids = snapshot['bids']
+        self.asks = snapshot['asks']
+        self._refresh_table()
 
-        Args:
-            orderbook: The orderbook update
-        """
-        self.last_update = orderbook
-        self.bids = orderbook.bids
-        self.asks = orderbook.asks
-        self.update_count += 1
+    def update_trade(self, trade):
+        """Update last trade info."""
+        self.last_trade = trade
         self._refresh_table()
 
     def _refresh_table(self):
-        """Refresh the display table with current orderbook data."""
+        """Refresh the display table with current data."""
         # Clear existing rows
         self.table.rows = []
 
-        # Get spread and mid price
-        spread = self.last_update.spread if self.last_update else None
-        mid_price = self.last_update.mid_price if self.last_update else None
+        # Get top of book prices
+        tob = self.clob.get_tob()
+        max_bid, min_ask = tob
 
-        # Update table title with market info
-        timestamp = self.last_update.datetime.strftime("%H:%M:%S") if self.last_update else "N/A"
+        # Update title with market info
+        spread = min_ask - max_bid if (min_ask > 0 and max_bid > 0) else None
         self.table.title = (
-            f"{self.market.pair} Orderbook | "
-            f"Updates: {self.update_count} | "
-            f"Last: {timestamp} | "
-            f"Spread: {spread:.8f if spread else 'N/A'} | "
-            f"Mid: {mid_price:.8f if mid_price else 'N/A'}"
+            f"{self.market_symbol} | "
+            f"TOB: {max_bid}/{min_ask} | "
+            f"Spread: {spread if spread else 'N/A'} | "
+            f"Last update: {time.strftime('%H:%M:%S')}"
         )
 
         # Sort bids (highest to lowest) and asks (lowest to highest)
-        sorted_bids = sorted(self.bids, key=lambda x: x.price, reverse=True) if self.bids else []
-        sorted_asks = sorted(self.asks, key=lambda x: x.price) if self.asks else []
+        sorted_bids = sorted(self.bids, key=lambda x: x[0], reverse=True) if self.bids else []
+        sorted_asks = sorted(self.asks, key=lambda x: x[0]) if self.asks else []
 
         # Limit to specified depth
-        bids = sorted_bids[: self.depth]
-        asks = sorted_asks[: self.depth]
+        bids = sorted_bids[:self.depth]
+        asks = sorted_asks[:self.depth]
 
         # Pad with empty rows if needed
-        while len(bids) < self.depth:
-            bids.append(None)
-        while len(asks) < self.depth:
-            asks.append(None)
+        max_rows = max(len(bids), len(asks))
+        for i in range(max_rows):
+            bid_price = bids[i][0] if i < len(bids) else ""
+            bid_size = bids[i][1] if i < len(bids) else ""
+            ask_price = asks[i][0] if i < len(asks) else ""
+            ask_size = asks[i][1] if i < len(asks) else ""
 
-        # Add rows to table
-        for i in range(self.depth):
-            bid = bids[i]
-            ask = asks[i]
+            self.table.add_row(str(bid_size), str(bid_price), str(ask_price), str(ask_size))
 
-            bid_size = f"{bid.size:.6f}" if bid else ""
-            bid_price = f"{bid.price:.8f}" if bid else ""
-            ask_price = f"{ask.price:.8f}" if ask else ""
-            ask_size = f"{ask.size:.6f}" if ask else ""
+        # Add last trade info as a footer
+        if self.last_trade:
+            side = "BUY" if self.last_trade.get('taker_side', 0) == 0 else "SELL"
+            price = self.last_trade.get('price', 0)
+            amount = self.last_trade.get('amount', 0)
+            self.table.caption = f"Last trade: {side} {amount} @ {price}"
 
-            # Add colored row based on price change
-            self.table.add_row(bid_size, bid_price, ask_price, ask_size)
+    def start(self):
+        """Start watching the orderbook."""
+        self.running = True
 
-    def generate_table(self):
-        """
-        Generate the table for display.
+        # Register callbacks for different data types
+        self.streamer.on_orderbook(self.update_book)
+        self.streamer.on_trades(self.update_trade)
 
-        Returns:
-            Rich table object
-        """
-        return self.table
+        # Initial data fetch
+        book = self.streamer.get_order_book_snapshot(self.depth)
+        self.update_book(book)
 
+        # Start streams in background
+        self.streamer.stream_order_book(depth=self.depth)
+        self.streamer.stream_trades()
 
-async def watch_orderbook(client, market_address, depth=5, duration=60):
-    """
-    Watch a market's orderbook in real-time.
-
-    Args:
-        client: GTE client instance
-        market_address: Market address to watch
-        depth: Number of levels to display on each side
-        duration: How long to watch (in seconds)
-    """
-    # Get market details
-    market = await client.get_market(market_address)
-    console.print(f"[bold]Watching orderbook for {market.pair}[/bold]")
-
-    # Create market client
-    market_client = await client.get_market_client(market.address)
-
-    # Create orderbook watcher
-    watcher = OrderbookWatcher(market, depth=depth)
-
-    # Set up the live display
-    with Live(watcher.generate_table(), refresh_per_second=4):
-        # Subscribe to orderbook updates
-        await market_client.subscribe_orderbook(callback=watcher.update)
-
-        # Keep watching for specified duration
-        for i in range(duration):
-            await asyncio.sleep(1)
-
-            # Print a message every 10 seconds
-            if i > 0 and i % 10 == 0:
-                print(f"Watching orderbook... {i}s elapsed")
-
-    # Clean up
-    await market_client.unsubscribe_orderbook()
-    await market_client.close()
-
-    console.print("[green]Orderbook watch completed![/green]")
+    def stop(self):
+        """Stop watching the orderbook."""
+        self.running = False
 
 
 async def main():
-    """Main function to run the example."""
-    console.print("[bold blue]GTE Orderbook Watcher Example[/bold blue]\n")
+    """Run the orderbook watcher example."""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="GTE Orderbook Watcher")
+    parser.add_argument("--market", "-m", type=str, default=MARKET_ADDRESS,
+                        help="Market address to watch")
+    parser.add_argument("--depth", "-d", type=int, default=10,
+                        help="Order book depth to display (default: 10)")
+    parser.add_argument("--duration", "-t", type=int, default=60,
+                        help="Duration to watch in seconds (default: 60)")
+    parser.add_argument("--use-http", action="store_true",
+                        help="Use HTTP provider instead of WebSocket")
+    args = parser.parse_args()
 
-    # Initialize client
-    client = Client()
+    console.print("[bold blue]GTE Orderbook Watcher[/bold blue]\n")
 
-    try:
-        # Get available markets
-        console.print("Fetching available markets...")
-        markets = await client.get_markets(limit=5)
+    # Connect to Ethereum node
+    if args.use_http or True:
+        console.print(f"Connecting to MegaETH Testnet via HTTP: {TESTNET_CONFIG.rpc_http}")
+        web3 = Web3(Web3.HTTPProvider(TESTNET_CONFIG.rpc_http))
+    else:
+        console.print(f"Connecting to MegaETH Testnet via WebSocket: {TESTNET_CONFIG.rpc_ws}")
+        web3 = Web3(Web3.LegacyWebSocketProvider(TESTNET_CONFIG.rpc_ws))
 
-        if not markets:
-            console.print("[red]No markets available![/red]")
-            return
+    if not web3.is_connected():
+        console.print("[red]Failed to connect to Ethereum node![/red]")
+        return
 
-        # Display available markets
-        console.print("\n[bold]Available Markets:[/bold]")
-        for i, market in enumerate(markets, 1):
-            price = f"{market.price:.8f}" if market.price else "N/A"
-            console.print(f"{i}. {market.pair} - Price: {price}")
 
-        # Select first market for watching
-        selected_market = markets[0]
-        console.print(f"\nSelected market: [bold]{selected_market.pair}[/bold]")
+    # Initialize GTE client for market info
+    client = Client(web3=web3, config=TESTNET_CONFIG)
 
-        # Watch orderbook for 30 seconds
-        console.print("\n[bold]Starting orderbook watch (30 seconds)...[/bold]")
-        await watch_orderbook(client, selected_market.address, depth=7, duration=30)
+    # Get market details
+    market_address = Web3.to_checksum_address(args.market)
 
-    except Exception as e:
-        console.print(f"[bold red]Error: {str(e)}[/bold red]")
+    # Initialize ICLOB contract
+    clob = ICLOB(web3, market_address)
 
-    finally:
-        await client.close()
+    # Create and start the watcher
+    watcher = OrderbookWatcher(clob, depth=args.depth)
+    watcher.start()
+
+    # Display the orderbook live for specified duration
+    console.print(f"[bold]Watching orderbook for {args.duration} seconds...[/bold]")
+    with Live(watcher.table, refresh_per_second=2):
+        time.sleep(args.duration)
+
+    # Clean up
+    watcher.stop()
+    console.print("[green]Orderbook watch completed![/green]")
+
+    # Close client
+    await client.close()
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())

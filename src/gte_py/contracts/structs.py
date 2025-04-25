@@ -192,7 +192,6 @@ class CLOBOrder:
 
     @classmethod
     def from_tuple(cls, order_tuple: tuple[int, int, int, int, int, ChecksumAddress, int, int,]) -> "CLOBOrder":
-        print(order_tuple)
         """Convert from tuple to Order."""
         return cls(
             side=Side(order_tuple[0]),

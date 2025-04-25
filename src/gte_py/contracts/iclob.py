@@ -112,16 +112,36 @@ class ICLOB:
         """
         return self.contract.functions.getTOB().call()
 
-    def get_limit(self, price: int, side: int) -> TxParams:
+    def get_limit(self, price: int, side: int) -> tuple[int, int, int]:
         """
         Get the limit level details at a specific price level for a given side.
-
+        {
+            "type": "function",
+            "name": "getLimit",
+            "inputs": [
+              { "name": "price", "type": "uint256", "internalType": "uint256" },
+              { "name": "side", "type": "uint8", "internalType": "enum Side" }
+            ],
+            "outputs": [
+              {
+                "name": "",
+                "type": "tuple",
+                "internalType": "struct Limit",
+                "components": [
+                  { "name": "numOrders", "type": "uint64", "internalType": "uint64" },
+                  { "name": "headOrder", "type": "uint256", "internalType": "OrderId" },
+                  { "name": "tailOrder", "type": "uint256", "internalType": "OrderId" }
+                ]
+              }
+            ],
+            "stateMutability": "view"
+          }
         Args:
             price: The price level
             side: The side (BUY=0, SELL=1)
 
         Returns:
-            Limit details as a dictionary
+            Tuple of (num_orders, head_order_id, tail_order_id)
         """
         return self.contract.functions.getLimit(price, side).call()
 
