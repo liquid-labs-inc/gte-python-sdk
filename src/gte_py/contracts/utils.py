@@ -185,7 +185,7 @@ class TypedContractFunction(Generic[T]):
 
             return self.tx_hash
         except ContractCustomError as e:
-            raise convert_web3_error(e, format_contract_function(self.func_call))
+            raise convert_web3_error(e, format_contract_function(self.func_call)) from e
 
     def build_transaction(self) -> TxParams:
         return self.func_call.build_transaction(self.params)
@@ -226,7 +226,7 @@ class TypedContractFunction(Generic[T]):
                 return self.event_parser(logs[0])
             return logs[0]['args']
         except ContractCustomError as e:
-            raise convert_web3_error(e, format_contract_function(self.func_call))
+            raise convert_web3_error(e, format_contract_function(self.func_call)) from e
 
     def send_wait(self, private_key: PrivateKeyType | None = None) -> T:
         self.send(private_key)
