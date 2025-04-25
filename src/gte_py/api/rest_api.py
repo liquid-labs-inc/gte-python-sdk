@@ -4,6 +4,8 @@ import logging
 
 import aiohttp
 
+from ..models import OrderBookSnapshot
+
 logger = logging.getLogger(__name__)
 
 
@@ -211,3 +213,46 @@ class RestApi:
         """
         params = {"limit": limit, "offset": offset}
         return await self._request("GET", f"/v1/users/{user_address}/assets", params=params)
+
+    async def get_order_book(self, market_address: str, limit: int = 5) -> dict:
+        """Get order book snapshot for a market.
+
+        Args:
+            market_address: EVM address of the market
+            limit: Number of price levels to include on each side, range 1-100
+
+        Returns:
+            Dict: Order book data with bids and asks
+        """
+        params = {"limit": limit}
+        return await self._request("GET", f"/v1/markets/{market_address}/book", params=params)
+
+    async def get_order_book_snapshot(self, market_address: str, limit: int = 5) -> OrderBookSnapshot:
+        """Get typed order book snapshot for a market.
+
+        Args:
+            market_address: EVM address of the market
+            limit: Number of price levels to include on each side, range 1-100
+
+        Returns:
+            OrderBookSnapshot: Typed order book data with bids and asks
+        """
+        response = await self.get_order_book(market_address, limit)
+
+        # Convert bid and ask data to appropriate format
+        bids = [
+            (float(bid["px"]), float(bid["sz"]), bid.get("n", 0))
+            for bid in response.get("bids", [])
+        ]
+
+        asks = [
+            (float(ask["px"]), float(ask["sz"]), ask.get("n", 0))
+            for ask in response.get("asks", [])
+        ]
+
+        return OrderBookSnapshot(
+            bids=bids,
+            asks=asks,
+            timestamp=response.get("timestamp", 0),
+            market_address=market_address
+        )

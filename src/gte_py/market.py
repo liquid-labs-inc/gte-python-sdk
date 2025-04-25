@@ -6,8 +6,10 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from .api.rest_api import RestApi
 from .api.ws_api import WebSocketApi
-from .models import Candle, Market, OrderbookUpdate, PriceLevel, Trade
+from .config import NetworkConfig
+from .models import Candle, Market, OrderbookUpdate, PriceLevel, Trade, OrderBookSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -15,15 +17,17 @@ logger = logging.getLogger(__name__)
 class MarketClient:
     """WebSocket-based client for real-time market data."""
 
-    def __init__(self, market: Market, ws_url: str = "wss://ws.gte.io/v1"):
+    def __init__(self, market: Market, config: NetworkConfig):
         """Initialize the client.
 
         Args:
             market: Market object
             ws_url: WebSocket URL
+            rest_url: REST API URL
         """
         self.market = market
-        self._ws_client = WebSocketApi(ws_url=ws_url)
+        self._ws_client = WebSocketApi(ws_url=config.ws_url)
+        self._rest_client = RestApi(base_url=config.api_url)
         self._trade_callbacks = []
         self._candle_callbacks = {}  # Keyed by interval
         self._orderbook_callbacks = []
@@ -93,7 +97,7 @@ class MarketClient:
 
     # Candle methods
     async def subscribe_candles(
-        self, interval: str = "1m", callback: Callable[[Candle], Any] | None = None
+            self, interval: str = "1m", callback: Callable[[Candle], Any] | None = None
     ):
         """Subscribe to real-time candles.
 
@@ -164,7 +168,7 @@ class MarketClient:
 
     # Orderbook methods
     async def subscribe_orderbook(
-        self, callback: Callable[[OrderbookUpdate], Any] | None = None, limit: int = 10
+            self, callback: Callable[[OrderbookUpdate], Any] | None = None, limit: int = 10
     ):
         """Subscribe to real-time orderbook updates.
 
@@ -244,11 +248,11 @@ class MarketClient:
 
     # Convenience method to subscribe to all data types
     async def subscribe_all(
-        self,
-        trade_callback: Callable[[Trade], Any] | None = None,
-        candle_callback: Callable[[Candle], Any] | None = None,
-        orderbook_callback: Callable[[OrderbookUpdate], Any] | None = None,
-        candle_interval: str = "1m",
+            self,
+            trade_callback: Callable[[Trade], Any] | None = None,
+            candle_callback: Callable[[Candle], Any] | None = None,
+            orderbook_callback: Callable[[OrderbookUpdate], Any] | None = None,
+            candle_interval: str = "1m",
     ):
         """Subscribe to all data types for this market.
 
@@ -261,3 +265,16 @@ class MarketClient:
         await self.subscribe_trades(trade_callback)
         await self.subscribe_candles(candle_interval, candle_callback)
         await self.subscribe_orderbook(orderbook_callback)
+
+    async def get_order_book_snapshot(self, depth: int = 5) -> OrderBookSnapshot:
+        """
+        Get a snapshot of the current order book from the API.
+
+        Args:
+            depth: Number of price levels to include on each side
+
+        Returns:
+            OrderBookSnapshot containing bids and asks with prices and sizes
+        """
+        async with self._rest_client as client:
+            return await client.get_order_book_snapshot(self.market.address, limit=depth)

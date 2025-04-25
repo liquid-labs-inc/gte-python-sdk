@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 
 from eth_typing import ChecksumAddress
 from eth_utils import to_wei
@@ -366,3 +366,12 @@ class Order:
             filled_price=data.get("filledPrice", 0.0),
             created_at=data.get("createdAt", int(datetime.now().timestamp() * 1000)),
         )
+
+
+@dataclass
+class OrderBookSnapshot:
+    """Snapshot of the orderbook at a point in time."""
+    bids: List[Tuple[float, float, int]]  # (price, size, count)
+    asks: List[Tuple[float, float, int]]  # (price, size, count)
+    timestamp: int
+    market_address: Optional[str] = None

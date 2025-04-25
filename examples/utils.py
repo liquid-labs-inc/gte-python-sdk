@@ -69,7 +69,7 @@ async def display_market_info(client: Client, market_address: str) -> Market:
         raise ValueError("No market address provided. Set MARKET_ADDRESS in .env file.")
 
     print(f"Using market: {market_address}")
-    market = client.get_market(market_address)
+    market = await client.get_market(market_address)
 
     print(f"Market: {market.pair}")
     print(f"Base token: {market.base_asset.symbol} ({market.base_token_address})")

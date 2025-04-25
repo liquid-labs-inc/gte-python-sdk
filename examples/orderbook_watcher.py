@@ -17,6 +17,8 @@ from gte_py import Client
 from gte_py.config import TESTNET_CONFIG
 from gte_py.contracts.iclob import ICLOB
 from gte_py.contracts.iclob_streaming import CLOBEventStreamer
+from gte_py.market import MarketClient
+from gte_py.models import Market, OrderBookSnapshot
 
 # Initialize console for rich text output
 console = Console()
@@ -41,10 +43,14 @@ class OrderbookWatcher:
         self.clob = clob
         self.streamer = CLOBEventStreamer(clob, poll_interval=poll_interval)
 
+        # Also initialize MarketClient for REST API access
+        self.market_address = clob.address
+        self.market_client: MarketClient | None = None  # Will be set in start() method
+
         self.depth = depth
         self.poll_interval = poll_interval
-        self.bids = []
-        self.asks = []
+        self.ob: OrderBookSnapshot | None = None
+
         self.last_trade = None
 
         # Get market symbol information
@@ -67,10 +73,9 @@ class OrderbookWatcher:
         self.table.add_column("Ask Price", justify="left", style="red")
         self.table.add_column("Ask Size", justify="left", style="cyan")
 
-    def update_book(self, snapshot):
+    def update_book(self, snapshot: OrderBookSnapshot):
         """Update orderbook data from a snapshot."""
-        self.bids = snapshot['bids']
-        self.asks = snapshot['asks']
+        self.ob = snapshot
         self._refresh_table()
 
     def update_trade(self, trade):
@@ -89,7 +94,7 @@ class OrderbookWatcher:
 
         # Update title with market info
         spread = min_ask - max_bid if (min_ask > 0 and max_bid > 0) else None
-        self.table.title = (
+        print(
             f"{self.market_symbol} | "
             f"TOB: {max_bid}/{min_ask} | "
             f"Spread: {spread if spread else 'N/A'} | "
@@ -97,8 +102,8 @@ class OrderbookWatcher:
         )
 
         # Sort bids (highest to lowest) and asks (lowest to highest)
-        sorted_bids = sorted(self.bids, key=lambda x: x[0], reverse=True) if self.bids else []
-        sorted_asks = sorted(self.asks, key=lambda x: x[0]) if self.asks else []
+        sorted_bids = sorted(self.ob.bids, key=lambda x: x[0], reverse=True) if self.ob.bids else []
+        sorted_asks = sorted(self.ob.asks, key=lambda x: x[0]) if self.ob.asks else []
 
         # Limit to specified depth
         bids = sorted_bids[:self.depth]
@@ -112,34 +117,49 @@ class OrderbookWatcher:
             ask_price = asks[i][0] if i < len(asks) else ""
             ask_size = asks[i][1] if i < len(asks) else ""
 
-            self.table.add_row(str(bid_size), str(bid_price), str(ask_price), str(ask_size))
+            print(str(bid_size), str(bid_price), str(ask_price), str(ask_size))
 
         # Add last trade info as a footer
         if self.last_trade:
             side = "BUY" if self.last_trade.get('taker_side', 0) == 0 else "SELL"
             price = self.last_trade.get('price', 0)
             amount = self.last_trade.get('amount', 0)
-            self.table.caption = f"Last trade: {side} {amount} @ {price}"
+            print(f"Last trade: {side} {amount} @ {price}")
 
-    def start(self):
+    async def start(self, client: Client | None = None):
         """Start watching the orderbook."""
         self.running = True
+        market = await client.get_market(self.market_address)
 
-        # Register callbacks for different data types
-        self.streamer.on_orderbook(self.update_book)
+        # Initialize MarketClient if we have a client
+        async def refresh_snapshot():
+            while self.running:
+                if client:
+                    # await self.market_client.connect()
+                    self.market_client = MarketClient(market, TESTNET_CONFIG)
+                    snapshot = await self.market_client.get_order_book_snapshot(self.depth)
+
+                    self.update_book(snapshot)
+
+                else:
+                    # Use RPC only
+                    book = self.streamer.get_order_book_snapshot(self.depth)
+                    self.update_book(book)
+                await asyncio.sleep(self.poll_interval)
+
+        asyncio.create_task(refresh_snapshot())
+
         self.streamer.on_trades(self.update_trade)
-
-        # Initial data fetch
-        book = self.streamer.get_order_book_snapshot(self.depth)
-        self.update_book(book)
 
         # Start streams in background
         self.streamer.stream_order_book(depth=self.depth)
         self.streamer.stream_trades()
 
-    def stop(self):
+    async def stop(self):
         """Stop watching the orderbook."""
         self.running = False
+        if self.market_client:
+            await self.market_client.close()
 
 
 async def main():
@@ -170,7 +190,6 @@ async def main():
         console.print("[red]Failed to connect to Ethereum node![/red]")
         return
 
-
     # Initialize GTE client for market info
     client = Client(web3=web3, config=TESTNET_CONFIG)
 
@@ -182,15 +201,14 @@ async def main():
 
     # Create and start the watcher
     watcher = OrderbookWatcher(clob, depth=args.depth)
-    watcher.start()
+    await watcher.start(client)  # Pass client for REST API access
 
     # Display the orderbook live for specified duration
     console.print(f"[bold]Watching orderbook for {args.duration} seconds...[/bold]")
-    with Live(watcher.table, refresh_per_second=2):
-        time.sleep(args.duration)
+    await asyncio.sleep(args.duration)
 
     # Clean up
-    watcher.stop()
+    await watcher.stop()
     console.print("[green]Orderbook watch completed![/green]")
 
     # Close client

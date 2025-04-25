@@ -147,7 +147,7 @@ class Client:
 
         return markets
 
-    def get_market(self, address: ChecksumAddress) -> Market:
+    async def get_market(self, address: ChecksumAddress) -> Market:
         """
         Get market by address.
 
@@ -253,24 +253,32 @@ class Client:
         response = await self._rest_client.get_user_positions(user_address)
         return [Position.from_api(pos_data) for pos_data in response.get("positions", [])]
 
-    async def get_user_assets(
-            self, user_address: ChecksumAddress, limit: int = 100
-    ) -> list[Asset]:
-        """
-        Get assets held by a user.
+    async def get_user_assets(self, user_address: str, limit: int = 100, offset: int = 0) -> dict:
+        """Get assets held by a user.
 
         Args:
-            user_address: User address
-            limit: Maximum number of assets to return
+            user_address: EVM address of the user
+            limit: Range 1-1000
+            offset: Min value 0
 
         Returns:
-            List of assets with balances
+            Dict: List of assets held by the user
         """
-        response = await self._rest_client.get_user_assets(user_address, limit=limit)
-        return [
-            Asset.from_api(asset_data, with_balance=True)
-            for asset_data in response.get("assets", [])
-        ]
+        return self._sync_request(self._api.get_user_assets(user_address, limit, offset))
+        
+    def get_order_book(self, market_address: str, limit: int = 5) -> dict:
+        """Get order book snapshot for a market.
+
+        Args:
+            market_address: EVM address of the market
+            limit: Number of price levels to include on each side, range 1-100
+
+        Returns:
+            Dict: Order book data with bids and asks
+        """
+        return self._sync_request(self._api.get_order_book(market_address, limit))
+
+
 
     # Trading methods
     async def get_order(self, market: Market, order_id: int) -> Order | None:
