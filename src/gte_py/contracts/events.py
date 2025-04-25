@@ -1,16 +1,12 @@
 """Event type classes for CLOB contract events."""
 
 from dataclasses import dataclass
-from typing import Optional, Any, Dict
+from typing import Any, Dict, List
 
 from eth_typing import ChecksumAddress, HexStr
+from web3.types import EventData
 
-from .structs import (
-    ICLOBPostLimitOrderArgs,
-    ICLOBPostFillOrderArgs,
-    ICLOBAmendArgs,
-    OrderStruct
-)
+from .structs import OrderStruct, ICLOBPostLimitOrderArgs, ICLOBPostFillOrderArgs, ICLOBAmendArgs
 
 
 @dataclass
@@ -22,6 +18,7 @@ class CLOBEvent:
     address: ChecksumAddress
     event_name: str
     raw_data: Dict[str, Any]
+    nonce: int
 
 
 @dataclass
@@ -30,7 +27,6 @@ class LimitOrderSubmittedEvent(CLOBEvent):
     owner: ChecksumAddress
     order_id: int
     args: ICLOBPostLimitOrderArgs
-    nonce: int
 
 
 @dataclass
@@ -42,7 +38,6 @@ class LimitOrderProcessedEvent(CLOBEvent):
     quote_token_amount_traded: int
     base_token_amount_traded: int
     taker_fee: int
-    nonce: int
 
 
 @dataclass
@@ -51,7 +46,6 @@ class FillOrderSubmittedEvent(CLOBEvent):
     owner: ChecksumAddress
     order_id: int
     args: ICLOBPostFillOrderArgs
-    nonce: int
 
 
 @dataclass
@@ -62,7 +56,6 @@ class FillOrderProcessedEvent(CLOBEvent):
     quote_token_amount_traded: int
     base_token_amount_traded: int
     taker_fee: int
-    nonce: int
 
 
 @dataclass
@@ -73,7 +66,6 @@ class OrderMatchedEvent(CLOBEvent):
     taker_order: OrderStruct
     maker_order: OrderStruct
     traded_base: int
-    nonce: int
 
 
 @dataclass
@@ -83,7 +75,6 @@ class OrderAmendedEvent(CLOBEvent):
     args: ICLOBAmendArgs
     quote_token_delta: int
     base_token_delta: int
-    event_nonce: int
 
 
 @dataclass
@@ -94,57 +85,202 @@ class OrderCanceledEvent(CLOBEvent):
     quote_token_refunded: int
     base_token_refunded: int
     settlement: int
-    nonce: int
 
 
-@dataclass
-class OrderReducedEvent(CLOBEvent):
-    """Event emitted when an order is reduced in size."""
-    order_id: int
-    new_amount_in_base: int
-    refund_amount_in_base: int
-    settlement: int
-    nonce: int
+def _create_base_event_info(event_data: EventData) -> Dict[str, Any]:
+    """
+    Create base event info dictionary from raw event data.
+    
+    Args:
+        event_data: Raw event data from web3
+        
+    Returns:
+        Base event info dictionary
+    """
+    args = event_data.get('args', {})
+    nonce = args.get('nonce', args.get('eventNonce', 0))
+    
+    return {
+        'tx_hash': event_data.get('transactionHash'),
+        'log_index': event_data.get('logIndex'),
+        'block_number': event_data.get('blockNumber'),
+        'address': event_data.get('address'),
+        'event_name': event_data.get('event'),
+        'raw_data': event_data,
+        'nonce': nonce
+    }
 
 
-@dataclass
-class CancelFailedEvent(CLOBEvent):
-    """Event emitted when a cancel operation fails."""
-    order_id: int
-    owner: ChecksumAddress
-    nonce: int
+def parse_limit_order_submitted(event_data: EventData) -> LimitOrderSubmittedEvent:
+    """
+    Parse LimitOrderSubmitted event.
+    
+    Args:
+        event_data: Raw event data from web3
+        
+    Returns:
+        Typed LimitOrderSubmittedEvent
+    """
+    args = event_data.get('args', {})
+    base_info = _create_base_event_info(event_data)
+    
+    return LimitOrderSubmittedEvent(
+        **base_info,
+        owner=args.get('owner'),
+        order_id=args.get('orderId'),
+        args=args.get('args')
+    )
 
 
-@dataclass
-class MaxLimitOrdersAllowlistedEvent(CLOBEvent):
-    """Event emitted when an account's max limit orders allowlist status changes."""
-    account: ChecksumAddress
-    toggle: bool
-    nonce: int
+def parse_limit_order_processed(event_data: EventData) -> LimitOrderProcessedEvent:
+    """
+    Parse LimitOrderProcessed event.
+    
+    Args:
+        event_data: Raw event data from web3
+        
+    Returns:
+        Typed LimitOrderProcessedEvent
+    """
+    args = event_data.get('args', {})
+    base_info = _create_base_event_info(event_data)
+    
+    return LimitOrderProcessedEvent(
+        **base_info,
+        account=args.get('account'),
+        order_id=args.get('orderId'),
+        amount_posted_in_base=args.get('amountPostedInBase'),
+        quote_token_amount_traded=args.get('quoteTokenAmountTraded'),
+        base_token_amount_traded=args.get('baseTokenAmountTraded'),
+        taker_fee=args.get('takerFee')
+    )
 
 
-@dataclass
-class MaxLimitOrdersPerTxUpdatedEvent(CLOBEvent):
-    """Event emitted when the maximum limit orders per transaction is updated."""
-    new_max_limits: int
-    nonce: int
+def parse_fill_order_submitted(event_data: EventData) -> FillOrderSubmittedEvent:
+    """
+    Parse FillOrderSubmitted event.
+    
+    Args:
+        event_data: Raw event data from web3
+        
+    Returns:
+        Typed FillOrderSubmittedEvent
+    """
+    args = event_data.get('args', {})
+    base_info = _create_base_event_info(event_data)
+    
+    return FillOrderSubmittedEvent(
+        **base_info,
+        owner=args.get('owner'),
+        order_id=args.get('orderId'),
+        args=args.get('args')
+    )
 
 
-@dataclass
-class MinLimitOrderAmountInBaseUpdatedEvent(CLOBEvent):
-    """Event emitted when the minimum limit order amount is updated."""
-    new_min_limit_order_amount_in_base: int
-    nonce: int
+def parse_fill_order_processed(event_data: EventData) -> FillOrderProcessedEvent:
+    """
+    Parse FillOrderProcessed event.
+    
+    Args:
+        event_data: Raw event data from web3
+        
+    Returns:
+        Typed FillOrderProcessedEvent
+    """
+    args = event_data.get('args', {})
+    base_info = _create_base_event_info(event_data)
+    
+    return FillOrderProcessedEvent(
+        **base_info,
+        account=args.get('account'),
+        order_id=args.get('orderId'),
+        quote_token_amount_traded=args.get('quoteTokenAmountTraded'),
+        base_token_amount_traded=args.get('baseTokenAmountTraded'),
+        taker_fee=args.get('takerFee')
+    )
 
 
-@dataclass
-class TickSizeUpdatedEvent(CLOBEvent):
-    """Event emitted when the tick size is updated."""
-    new_tick_size: int
-    nonce: int
+def parse_order_matched(event_data: EventData) -> OrderMatchedEvent:
+    """
+    Parse OrderMatched event.
+    
+    Args:
+        event_data: Raw event data from web3
+        
+    Returns:
+        Typed OrderMatchedEvent
+    """
+    args = event_data.get('args', {})
+    base_info = _create_base_event_info(event_data)
+    
+    return OrderMatchedEvent(
+        **base_info,
+        taker_order_id=args.get('takerOrderId'),
+        maker_order_id=args.get('makerOrderId'),
+        taker_order=args.get('takerOrder'),
+        maker_order=args.get('makerOrder'),
+        traded_base=args.get('tradedBase')
+    )
 
 
-def convert_event_data_to_typed_event(event_data: Dict[str, Any]) -> CLOBEvent:
+def parse_order_amended(event_data: EventData) -> OrderAmendedEvent:
+    """
+    Parse OrderAmended event.
+    
+    Args:
+        event_data: Raw event data from web3
+        
+    Returns:
+        Typed OrderAmendedEvent
+    """
+    args = event_data.get('args', {})
+    base_info = _create_base_event_info(event_data)
+    
+    return OrderAmendedEvent(
+        **base_info,
+        pre_amend=args.get('preAmend'),
+        args=args.get('args'),
+        quote_token_delta=args.get('quoteTokenDelta'),
+        base_token_delta=args.get('baseTokenDelta')
+    )
+
+
+def parse_order_canceled(event_data: EventData) -> OrderCanceledEvent:
+    """
+    Parse OrderCanceled event.
+    
+    Args:
+        event_data: Raw event data from web3
+        
+    Returns:
+        Typed OrderCanceledEvent
+    """
+    args = event_data.get('args', {})
+    base_info = _create_base_event_info(event_data)
+    
+    return OrderCanceledEvent(
+        **base_info,
+        order_id=args.get('orderId'),
+        owner=args.get('owner'),
+        quote_token_refunded=args.get('quoteTokenRefunded'),
+        base_token_refunded=args.get('baseTokenRefunded'),
+        settlement=args.get('settlement')
+    )
+
+
+# Dictionary mapping event names to their parser functions
+EVENT_PARSERS = {
+    'LimitOrderSubmitted': parse_limit_order_submitted,
+    'LimitOrderProcessed': parse_limit_order_processed,
+    'FillOrderSubmitted': parse_fill_order_submitted,
+    'FillOrderProcessed': parse_fill_order_processed,
+    'OrderMatched': parse_order_matched,
+    'OrderAmended': parse_order_amended,
+    'OrderCanceled': parse_order_canceled,
+}
+
+
+def convert_event_data_to_typed_event(event_data: EventData) -> CLOBEvent:
     """
     Convert raw event data to typed event.
     
@@ -155,124 +291,23 @@ def convert_event_data_to_typed_event(event_data: Dict[str, Any]) -> CLOBEvent:
         Typed event class instance
     """
     event_name = event_data.get('event')
-    base_info = {
-        'tx_hash': event_data.get('transactionHash'),
-        'log_index': event_data.get('logIndex'),
-        'block_number': event_data.get('blockNumber'),
-        'address': event_data.get('address'),
-        'event_name': event_name,
-        'raw_data': event_data
-    }
     
+    # Look up the appropriate parser function
+    parser_func = EVENT_PARSERS.get(event_name)
+    
+    if parser_func:
+        return parser_func(event_data)
+    
+    # Return base event for unknown event types
     args = event_data.get('args', {})
+    nonce = args.get('nonce', args.get('eventNonce', 0))
     
-    if event_name == 'LimitOrderSubmitted':
-        return LimitOrderSubmittedEvent(
-            **base_info,
-            owner=args.get('owner'),
-            order_id=args.get('orderId'),
-            args=args.get('args'),
-            nonce=args.get('nonce')
-        )
-    elif event_name == 'LimitOrderProcessed':
-        return LimitOrderProcessedEvent(
-            **base_info,
-            account=args.get('account'),
-            order_id=args.get('orderId'),
-            amount_posted_in_base=args.get('amountPostedInBase'),
-            quote_token_amount_traded=args.get('quoteTokenAmountTraded'),
-            base_token_amount_traded=args.get('baseTokenAmountTraded'),
-            taker_fee=args.get('takerFee'),
-            nonce=args.get('nonce')
-        )
-    elif event_name == 'FillOrderSubmitted':
-        return FillOrderSubmittedEvent(
-            **base_info,
-            owner=args.get('owner'),
-            order_id=args.get('orderId'),
-            args=args.get('args'),
-            nonce=args.get('nonce')
-        )
-    elif event_name == 'FillOrderProcessed':
-        return FillOrderProcessedEvent(
-            **base_info,
-            account=args.get('account'),
-            order_id=args.get('orderId'),
-            quote_token_amount_traded=args.get('quoteTokenAmountTraded'),
-            base_token_amount_traded=args.get('baseTokenAmountTraded'),
-            taker_fee=args.get('takerFee'),
-            nonce=args.get('nonce')
-        )
-    elif event_name == 'OrderMatched':
-        return OrderMatchedEvent(
-            **base_info,
-            taker_order_id=args.get('takerOrderId'),
-            maker_order_id=args.get('makerOrderId'),
-            taker_order=args.get('takerOrder'),
-            maker_order=args.get('makerOrder'),
-            traded_base=args.get('tradedBase'),
-            nonce=args.get('nonce')
-        )
-    elif event_name == 'OrderAmended':
-        return OrderAmendedEvent(
-            **base_info,
-            pre_amend=args.get('preAmend'),
-            args=args.get('args'),
-            quote_token_delta=args.get('quoteTokenDelta'),
-            base_token_delta=args.get('baseTokenDelta'),
-            event_nonce=args.get('eventNonce')
-        )
-    elif event_name == 'OrderCanceled':
-        return OrderCanceledEvent(
-            **base_info,
-            order_id=args.get('orderId'),
-            owner=args.get('owner'),
-            quote_token_refunded=args.get('quoteTokenRefunded'),
-            base_token_refunded=args.get('baseTokenRefunded'),
-            settlement=args.get('settlement'),
-            nonce=args.get('nonce')
-        )
-    elif event_name == 'OrderReduced':
-        return OrderReducedEvent(
-            **base_info,
-            order_id=args.get('orderId'),
-            new_amount_in_base=args.get('newAmountInBase'),
-            refund_amount_in_base=args.get('refundAmountInBase'),
-            settlement=args.get('settlement'),
-            nonce=args.get('nonce')
-        )
-    elif event_name == 'CancelFailed':
-        return CancelFailedEvent(
-            **base_info,
-            order_id=args.get('orderId'),
-            owner=args.get('owner'),
-            nonce=args.get('nonce')
-        )
-    elif event_name == 'MaxLimitOrdersAllowlisted':
-        return MaxLimitOrdersAllowlistedEvent(
-            **base_info,
-            account=args.get('account'),
-            toggle=args.get('toggle'),
-            nonce=args.get('nonce')
-        )
-    elif event_name == 'MaxLimitOrdersPerTxUpdated':
-        return MaxLimitOrdersPerTxUpdatedEvent(
-            **base_info,
-            new_max_limits=args.get('newMaxLimits'),
-            nonce=args.get('nonce')
-        )
-    elif event_name == 'MinLimitOrderAmountInBaseUpdated':
-        return MinLimitOrderAmountInBaseUpdatedEvent(
-            **base_info,
-            new_min_limit_order_amount_in_base=args.get('newMinLimitOrderAmountInBase'),
-            nonce=args.get('nonce')
-        )
-    elif event_name == 'TickSizeUpdated':
-        return TickSizeUpdatedEvent(
-            **base_info,
-            new_tick_size=args.get('newTickSize'),
-            nonce=args.get('nonce')
-        )
-    else:
-        # Return base event for unknown event types
-        return CLOBEvent(**base_info)
+    return CLOBEvent(
+        tx_hash=event_data.get('transactionHash'),
+        log_index=event_data.get('logIndex'),
+        block_number=event_data.get('blockNumber'),
+        address=event_data.get('address'),
+        event_name=event_name,
+        raw_data=event_data,
+        nonce=nonce
+    )

@@ -1,15 +1,18 @@
-from typing import TypeVar, Union, Optional, List
+from typing import TypeVar
 
 from eth_typing import ChecksumAddress
 from web3 import Web3
 from web3.types import TxParams
 
 from .events import (
-    CLOBEvent, 
-    LimitOrderProcessedEvent,
+    LimitOrderProcessedEvent, 
     FillOrderProcessedEvent,
     OrderAmendedEvent,
-    OrderCanceledEvent
+    OrderCanceledEvent,
+    parse_limit_order_processed,
+    parse_fill_order_processed,
+    parse_order_amended,
+    parse_order_canceled
 )
 from .structs import (
     FillOrderType,
@@ -28,6 +31,7 @@ T = TypeVar("T")
 
 class CLOBError(Exception):
     """Base exception for CLOB contract errors"""
+
     pass
 
 
@@ -267,11 +271,13 @@ class ICLOB:
 
         Returns:
             TypedContractFunction that can be used to execute the transaction
-            Will return a LimitOrderProcessedEvent when waiting for the event
         """
         func = self.contract.functions.postLimitOrder(account, args)
         params = {**kwargs}
-        return TypedContractFunction(func, params).with_event(self.contract.events.LimitOrderProcessed)
+        return TypedContractFunction(func, params).with_event(
+            self.contract.events.LimitOrderProcessed, 
+            parse_limit_order_processed
+        )
 
     def post_fill_order(
             self,
@@ -289,11 +295,13 @@ class ICLOB:
 
         Returns:
             TypedContractFunction that can be used to execute the transaction
-            Will return a FillOrderProcessedEvent when waiting for the event
         """
         func = self.contract.functions.postFillOrder(account, args)
         params = {**kwargs}
-        return TypedContractFunction(func, params).with_event(self.contract.events.FillOrderProcessed)
+        return TypedContractFunction(func, params).with_event(
+            self.contract.events.FillOrderProcessed,
+            parse_fill_order_processed
+        )
 
     def amend(
             self,
@@ -310,12 +318,16 @@ class ICLOB:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            TypedContractFunction that can be used to execute the transaction,
-            Will return an OrderAmendedEvent when waiting for the event
+            TypedContractFunction that can be used to execute the transaction
         """
         func = self.contract.functions.amend(account, args)
-        params = {**kwargs}
-        return TypedContractFunction(func, params).with_event(self.contract.events.OrderAmended)
+        params = {
+            **kwargs,
+        }
+        return TypedContractFunction(func, params).with_event(
+            self.contract.events.OrderAmended,
+            parse_order_amended
+        )
 
     def cancel(
             self,
@@ -332,12 +344,16 @@ class ICLOB:
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
-            TypedContractFunction that can be used to execute the transaction,
-            Will return an OrderCanceledEvent when waiting for the event
+            TypedContractFunction that can be used to execute the transaction
         """
         func = self.contract.functions.cancel(account, args)
-        params = {**kwargs}
-        return TypedContractFunction(func, params).with_event(self.contract.events.OrderCanceled)
+        params = {
+            **kwargs,
+        }
+        return TypedContractFunction(func, params).with_event(
+            self.contract.events.OrderCanceled,
+            parse_order_canceled
+        )
 
     def accept_ownership(
             self, **kwargs

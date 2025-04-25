@@ -1,6 +1,7 @@
 """Example of on-chain trading with the GTE client."""
 
 import asyncio
+import logging
 import os
 
 from dotenv import load_dotenv
@@ -76,7 +77,6 @@ async def approve_and_deposit_example(client: Client, web3, market, amount):
     approve_receipt = tx_funcs[0].send_wait(WALLET_PRIVATE_KEY)
     print("\nSending deposit transaction...")
     deposit_receipt = tx_funcs[1].send_wait(WALLET_PRIVATE_KEY)
-
 
 
 async def limit_order_example(client: Client, web3, market):
@@ -155,6 +155,28 @@ async def show_balances(client: Client, market: Market):
     print(f"  Exchange: {quote_exchange:.6f}")
 
 
+async def show_orders(client: Client, market):
+    """Show orders for the user."""
+    print_separator("User Orders")
+
+    try:
+        # This only works with Web3 provider and contract address
+        orders = await client.get_or(market_address=market.address)
+
+        print(f"Orders for market {market.pair}:")
+        for order in orders:
+            print(f"  ID: {order.id}")
+            print(f"  Side: {order.side.name}")
+            print(f"  Price: {order.price}")
+            print(f"  Size: {order.size}")
+            print(f"  Time: {format_timestamp(order.timestamp)}")
+            print(f"  Status: {order.status.name}")
+
+    except Exception as e:
+        print(f"Couldn't fetch on-chain orders: {str(e)}")
+        print("This feature requires Web3 provider and a market with contract address")
+
+
 async def main():
     """Run the on-chain trading examples."""
     network = TESTNET_CONFIG
@@ -191,4 +213,5 @@ async def main():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())

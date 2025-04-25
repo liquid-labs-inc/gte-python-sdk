@@ -11,6 +11,7 @@ from web3.exceptions import LogTopicError
 from web3.providers import WebSocketProvider
 from web3.types import EventData
 
+from .contracts.events import OrderCanceledEvent
 from .contracts.iclob import ICLOB
 from .contracts.factory import CLOBFactory
 from .contracts.erc20 import ERC20
@@ -305,7 +306,7 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
         weth = self._get_weth(weth_address)
-        return weth.deposit_eth(amount_eth, self._sender_address, **kwargs)
+        return weth.deposit_eth(amount_eth, **kwargs)
 
     async def unwrap_eth(
             self,
@@ -325,7 +326,7 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
         weth = self._get_weth(weth_address)
-        return weth.withdraw_eth(amount_eth, self._sender_address, **kwargs)
+        return weth.withdraw_eth(amount_eth, **kwargs)
 
     async def place_limit_order(
             self,
@@ -551,7 +552,7 @@ class ExecutionClient:
             market: Market,
             order_id: int,
             **kwargs
-    ) -> TypedContractFunction:
+    ) -> TypedContractFunction[OrderCanceledEvent | None]:
         """
         Cancel an existing order.
         

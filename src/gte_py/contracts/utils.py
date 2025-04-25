@@ -1,5 +1,6 @@
 import importlib.resources as pkg_resources
 import json
+import logging
 import time
 from typing import Any, Generic, TypeVar, Callable
 
@@ -8,6 +9,8 @@ from eth_account.types import PrivateKeyType
 from hexbytes import HexBytes
 from web3.contract.contract import ContractFunction
 from web3.types import TxParams, EventData
+
+logger = logging.getLogger(__name__)
 
 
 def get_current_timestamp() -> int:
@@ -85,10 +88,16 @@ def load_abi(abi_name: str) -> list[dict[str, Any]]:
 T = TypeVar("T")
 
 
+def lift_callable(func: Callable[[EventData], T | None]) -> Callable[[EventData], T]:
+    return func  # type: ignore
+
+
 class TypedContractFunction(Generic[T]):
     """Generic transaction wrapper with typed results and async support"""
+    __slots__ = ["web3", "func", "params", "event", "event_parser", "result", "receipt", "tx_hash"]
 
     def __init__(self, func: ContractFunction, params: TxParams | Any = None):
+        self.web3 = func.w3
         self.func = func  # Bound contract function (with arguments)
         self.params = params  # Transaction parameters
         self.event = None
@@ -116,18 +125,18 @@ class TypedContractFunction(Generic[T]):
             if 'from' not in tx:
                 tx['from'] = local_account.address
             if 'nonce' not in tx:
-                tx['nonce'] = self.func.w3.eth.get_transaction_count(local_account.address)
-            print(f'Sending {self.func} with {tx}')
+                tx['nonce'] = self.web3.eth.get_transaction_count(local_account.address)
+            logger.info('Sending %s with %s', self.func, tx)
             tx = self.func.build_transaction(tx)
             # Sign and send the transaction
-            signed = self.func.w3.eth.account.sign_transaction(tx, private_key)
-            self.tx_hash = self.func.w3.eth.send_raw_transaction(signed.raw_transaction)
+            signed = self.web3.eth.account.sign_transaction(tx, private_key)
+            self.tx_hash = self.web3.eth.send_raw_transaction(signed.raw_transaction)
         else:
             tx = self.params
-            print(f'Sending {self.func} with {tx}')
+            logger.info('Sending %s with %s', self.func, tx)
             tx = self.func.build_transaction(tx)
             # Send the transaction with default account
-            self.tx_hash = self.func.w3.eth.send_transaction(tx)
+            self.tx_hash = self.web3.eth.send_transaction(tx)
 
         return self.tx_hash
 
@@ -156,10 +165,14 @@ class TypedContractFunction(Generic[T]):
         if self.event is None:
             return None
         # Wait for the transaction to be mined
-        web3 = self.func.w3
-        self.receipt = web3.eth.wait_for_transaction_receipt(self.tx_hash)
+        self.receipt = self.web3.eth.wait_for_transaction_receipt(self.tx_hash)
         logs = self.event.process_receipt(self.receipt)
-        assert len(logs) == 1
+
+        if len(logs) == 0:
+            return None
+        if len(logs) > 1:
+            logger.warning("Multiple logs found, expected one: %s", logs)
+
         if self.event_parser:
             return self.event_parser(logs[0])
         return logs[0]['args']
