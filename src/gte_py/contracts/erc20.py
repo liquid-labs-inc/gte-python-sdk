@@ -107,7 +107,7 @@ class ERC20:
         """
         func = self.contract.functions.transfer(recipient, amount)
         params = {
-            
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -131,7 +131,7 @@ class ERC20:
         """
         func = self.contract.functions.approve(spender, amount)
         params = {
-            
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -159,7 +159,7 @@ class ERC20:
         """
         func = self.contract.functions.transferFrom(sender, recipient, amount)
         params = {
-            
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -185,7 +185,7 @@ class ERC20:
         """
         func = self.contract.functions.increaseAllowance(spender, added_value)
         params = {
-            
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -211,26 +211,12 @@ class ERC20:
         """
         func = self.contract.functions.decreaseAllowance(spender, subtracted_value)
         params = {
-            
+
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     # ================= HELPER METHODS =================
-
-    def convert_amount_to_int(self, amount: float) -> int:
-        """
-        Convert a float amount to the token's base units.
-
-        Args:
-            amount: Amount as a float (e.g., 1.5 ETH)
-
-        Returns:
-            Amount in token base units (e.g., 1500000000000000000 wei)
-        """
-        decimals = self.decimals()
-        # has precision issue for float
-        return int(amount * 10 ** decimals)
 
     def convert_amount_to_float(self, amount: int) -> float:
         """

@@ -293,8 +293,8 @@ class Client:
             self,
             market: Market,
             side: OrderSide,
-            amount: float,
-            price: float,
+            amount: int,
+            price: int,
             time_in_force: TimeInForce = TimeInForce.GTC,
             client_order_id: int = 0,
             **kwargs,
@@ -324,7 +324,7 @@ class Client:
             market=market,
             side=side,
             amount=amount,
-            price_in_quote=price,
+            price=price,
             time_in_force=time_in_force,
             client_order_id=client_order_id,
             **kwargs,
@@ -458,7 +458,7 @@ class Client:
     async def deposit_to_market(
             self,
             token_address: ChecksumAddress,
-            amount: float,
+            amount: int,
             **kwargs,
     ) -> List[TypedContractFunction]:
         """

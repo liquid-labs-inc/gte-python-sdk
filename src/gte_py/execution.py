@@ -327,8 +327,8 @@ class ExecutionClient:
             self,
             market: Market,
             side: OrderSide,
-            amount: float,
-            price_in_quote: float,
+            amount: int,
+            price: int,
             time_in_force: TimeInForce = TimeInForce.GTC,
             client_order_id: int = 0,
             **kwargs
@@ -340,7 +340,7 @@ class ExecutionClient:
             market: Market to place the order on
             side: Order side (BUY or SELL)
             amount: Order amount in base tokens
-            price_in_quote: Order price
+            price: Order price
             time_in_force: Time in force (GTC, IOC, FOK)
             client_order_id: Optional client order ID for tracking
             **kwargs: Additional transaction parameters
@@ -354,19 +354,10 @@ class ExecutionClient:
         # Convert model types to contract types
         contract_side = Side.BUY if side == OrderSide.BUY else Side.SELL
 
-        # Get token instances
-        base_token = self._get_token(market.base_token_address)
-        quote_token = self._get_token(market.quote_token_address)
-
-        amount_in_base = base_token.convert_amount_to_int(amount)
-        amount_in_base = amount_in_base // market.lot_size_in_base * market.lot_size_in_base
-        if amount_in_base <= 0:
-            raise ValueError(f"Amount must be greater than zero: {amount_in_base}")
-        # Convert price to ticks
-        price_in_quote = quote_token.convert_amount_to_int(price_in_quote)
-        price_in_quote = price_in_quote // market.tick_size_in_quote * market.tick_size_in_quote
-        if price_in_quote <= 0:
-            raise ValueError(f"Price must be greater than zero: {price_in_quote}")
+        if not market.check_lot_size(amount):
+            raise ValueError(f"Amount is not multiples of lot size: {amount} (lot size: {market.lot_size_in_base})")
+        if not market.check_tick_size(price):
+            raise ValueError(f"Price is not multiples of tick size: {price} (tick size: {market.tick_size_in_quote})")
 
         # For IOC and FOK orders, we use the fill order API which has different behavior
         if time_in_force in [TimeInForce.IOC, TimeInForce.FOK]:
@@ -381,8 +372,8 @@ class ExecutionClient:
 
             # Create post fill order args
             args = clob.create_post_fill_order_args(
-                amount=amount_in_base,
-                price_limit=price_in_quote,
+                amount=amount,
+                price_limit=price,
                 side=contract_side,
                 amount_is_base=True,  # Since amount is in base tokens
                 fill_order_type=fill_order_type,
@@ -408,8 +399,8 @@ class ExecutionClient:
                 raise ValueError(f"Unknown time_in_force: {time_in_force}")
             # Create post limit order args
             args = clob.create_post_limit_order_args(
-                amount_in_base=amount_in_base,
-                price=price_in_quote,
+                amount_in_base=amount,
+                price=price,
                 side=contract_side,
                 cancel_timestamp=0,  # No expiration
                 client_order_id=client_order_id,
@@ -428,7 +419,7 @@ class ExecutionClient:
             self,
             market: Market,
             side: OrderSide,
-            amount: float,
+            amount: int,
             amount_is_base: bool = True,
             slippage: float = 0.01,
             **kwargs
@@ -452,25 +443,17 @@ class ExecutionClient:
         # Convert model types to contract types
         contract_side = Side.BUY if side == OrderSide.BUY else Side.SELL
 
-        # Convert amount to atoms
-        quote_token = self._get_token(market.quote_token_address)
-        if amount_is_base:
-            base_token = self._get_token(market.base_token_address)
-            amount_in_atoms = base_token.convert_amount_to_int(amount)
-        else:
-            amount_in_atoms = quote_token.convert_amount_to_int(amount)
-
         # For market orders, use a very aggressive price limit to ensure execution
         # For buy orders: high price, for sell orders: low price
         highest_bid, lowest_ask = clob.get_tob()
         if contract_side == Side.BUY:
-            price_limit = lowest_ask * (1 + slippage)
+            price_limit = int(lowest_ask * (1 + slippage))
         else:
-            price_limit = highest_bid * (1 - slippage)
-        price_limit = quote_token.convert_amount_to_int(price_limit)
+            price_limit = int(highest_bid * (1 - slippage))
+
         # Create post fill order args
         args = clob.create_post_fill_order_args(
-            amount=amount_in_atoms,
+            amount=amount,
             price_limit=price_limit,
             side=contract_side,
             amount_is_base=amount_is_base,
@@ -513,13 +496,11 @@ class ExecutionClient:
         order = clob.get_order(order_id)
 
         # Extract order details
-        side = order['side']
-        current_amount = order['amount']
-        current_price = order['price']
+        side = order.side
+        current_amount = order.amount
+        current_price = order.price
 
-        # Convert new values to contract format
-        base_token = self._get_token(market.base_token_address)
-        amount_in_base = base_token.convert_amount_to_int(new_amount) if new_amount is not None else current_amount
+        amount_in_base = new_amount or current_amount
 
         tick_size = market.tick_size_in_quote
         price_in_ticks = int(new_price / tick_size) if new_price is not None else current_price
@@ -625,7 +606,7 @@ class ExecutionClient:
     async def deposit_to_market(
             self,
             token_address: ChecksumAddress,
-            amount: float,
+            amount: int,
             **kwargs
     ) -> List[TypedContractFunction]:
         """
@@ -643,7 +624,7 @@ class ExecutionClient:
             raise ValueError("Factory not initialized")
 
         token = self._get_token(token_address)
-        amount_in_atoms = token.convert_amount_to_int(amount)
+        amount_in_atoms = amount
 
         # First approve the factory to spend tokens
         approve_tx = token.approve(
@@ -666,7 +647,7 @@ class ExecutionClient:
     async def withdraw_from_market(
             self,
             token_address: ChecksumAddress,
-            amount: float,
+            amount: int,
             **kwargs
     ) -> TypedContractFunction:
         """
@@ -684,7 +665,7 @@ class ExecutionClient:
             raise ValueError("Factory not initialized")
 
         token = self._get_token(token_address)
-        amount_in_atoms = token.convert_amount_to_int(amount)
+        amount_in_atoms = amount
 
         # Withdraw the tokens
         return self._factory.withdraw(

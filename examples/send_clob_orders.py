@@ -2,24 +2,25 @@
 
 import asyncio
 import logging
-from eth_typing import HexStr
+from typing import Optional
+
 from web3 import Web3
+from web3.types import TxReceipt
 
 from gte_py import Client
 from gte_py.config import TESTNET_CONFIG
-from gte_py.models import OrderSide, TimeInForce, Market, Order
-
+from gte_py.models import OrderSide, TimeInForce, Market
 from utils import (
-    print_separator, 
-    display_market_info, 
-    show_balances, 
-    WALLET_ADDRESS, 
-    WALLET_PRIVATE_KEY, 
+    print_separator,
+    display_market_info,
+    show_balances,
+    WALLET_ADDRESS,
+    WALLET_PRIVATE_KEY,
     MARKET_ADDRESS
 )
 
 
-async def approve_and_deposit_example(client: Client, market, amount):
+async def approve_and_deposit_example(client: Client, market: Market, amount: float, price: float) -> None:
     """Example of approving and depositing tokens to the exchange."""
     print_separator("Approve and Deposit Tokens Example")
 
@@ -30,7 +31,7 @@ async def approve_and_deposit_example(client: Client, market, amount):
     # Get deposit transactions - this returns a list containing [approve_tx, deposit_tx]
     tx_funcs = await client.deposit_to_market(
         token_address=quote,
-        amount=amount,
+        amount=market.round_quote_to_ticks_int(amount * price),
         gas=100000,
     )
 
@@ -45,24 +46,24 @@ async def approve_and_deposit_example(client: Client, market, amount):
     print(f"Creating transaction to approve and deposit {amount} {market.base_asset.symbol}...")
     tx_funcs = await client.deposit_to_market(
         token_address=base,
-        amount=amount,
+        amount=market.round_base_to_lots_int(amount),
         gas=100000,
     )
-    
+
     print("\nSending approval transaction...")
     tx_funcs[0].send_wait(WALLET_PRIVATE_KEY)
-    
+
     print("\nSending deposit transaction...")
     tx_funcs[1].send_wait(WALLET_PRIVATE_KEY)
 
 
-async def limit_order_example(client: Client, market):
+async def limit_order_example(client: Client, market: Market) -> None:
     """Example of creating a limit order."""
     print_separator("Limit Order Example")
 
     # Current market price (or estimate)
-    price = market.price or market.tick_size
-    amount = market.lot_size
+    price = market.round_quote_to_ticks_int(market.tick_size)
+    amount = market.round_base_to_lots_int(market.lot_size)
 
     print(f"Creating BUY limit order at price: {price}")
     tx_func = await client.place_limit_order(
@@ -91,7 +92,7 @@ async def limit_order_example(client: Client, market):
     await get_order_status(client, market, order.order_id)
 
 
-async def cancel_order_example(client, market, order_id=None):
+async def cancel_order_example(client: Client, market: Market, order_id: Optional[int] = None) -> Optional[TxReceipt]:
     """Example of cancelling an order."""
     print_separator("Cancel Order Example")
 
@@ -111,7 +112,7 @@ async def cancel_order_example(client, market, order_id=None):
     return receipt
 
 
-async def get_order_status(client: Client, market: Market, order_id: int):
+async def get_order_status(client: Client, market: Market, order_id: int) -> None:
     """Get the status of an order."""
     print_separator("Order Status Example")
 
@@ -129,7 +130,7 @@ async def get_order_status(client: Client, market: Market, order_id: int):
         print(f"Couldn't fetch on-chain order status: {str(e)}")
 
 
-async def show_orders(client: Client, market):
+async def show_orders(client: Client, market: Market) -> None:
     """Show orders for the user."""
     print_separator("User Orders")
 
@@ -149,7 +150,7 @@ async def show_orders(client: Client, market):
         print("This feature requires Web3 provider and a market with contract address")
 
 
-async def main():
+async def main() -> None:
     """Run the on-chain trading examples."""
     network = TESTNET_CONFIG
 
@@ -164,7 +165,7 @@ async def main():
         raise ValueError("WALLET_ADDRESS and WALLET_PRIVATE_KEY must be set in .env file")
 
     wallet_address = Web3.to_checksum_address(WALLET_ADDRESS)
-    
+
     # Initialize client with Web3
     print("Initializing GTE client...")
     client = Client(web3=web3, config=network, sender_address=wallet_address)
@@ -179,23 +180,23 @@ async def main():
         print("\nNOTE: For WETH wrapping and unwrapping examples, see wrap_weth.py")
 
         # Deposit tokens example
-        await approve_and_deposit_example(client, market, amount=1)
+        await approve_and_deposit_example(client, market, amount=1, price=1)
 
         # Check balances after deposit
         await show_balances(client, market)
-        
+
         # Order examples
         await limit_order_example(client, market)
 
         # Cancel an order
         await cancel_order_example(client, market, order_id=None)
-        
+
         # Show all orders
         await show_orders(client, market)
-        
+
     except Exception as e:
         print(f"Error during examples: {str(e)}")
-        
+
     finally:
         await client.close()
 

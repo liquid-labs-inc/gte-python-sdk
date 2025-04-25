@@ -2,10 +2,12 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 from typing import Any
 
 from eth_typing import ChecksumAddress
+from eth_utils import to_wei
 from hexbytes import HexBytes
 from web3 import Web3
 
@@ -107,6 +109,26 @@ class Market:
     volume_24h: float | None = None
     base_token_address: ChecksumAddress | None = None
     quote_token_address: ChecksumAddress | None = None
+
+    def round_quote_to_ticks_int(self, price: float) -> int:
+        """Convert price to integer based on tick size."""
+        ticks_in_float = price / self.tick_size
+        ticks_in_int = round(ticks_in_float)
+        price_in_quote = ticks_in_int * self.tick_size_in_quote
+        return price_in_quote
+
+    def round_base_to_lots_int(self, amount: float) -> int:
+        """Convert amount to integer based on lot size."""
+        amount_in_float = amount / self.lot_size
+        amount_in_int = round(amount_in_float)
+        amount_in_base = amount_in_int * self.lot_size_in_base
+        return amount_in_base
+
+    def check_tick_size(self, price: int) -> bool:
+        return price % self.tick_size_in_quote == 0
+
+    def check_lot_size(self, amount: int) -> bool:
+        return amount % self.lot_size_in_base == 0
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Market":

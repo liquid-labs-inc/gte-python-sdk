@@ -1,10 +1,12 @@
 """Common utilities for GTE examples."""
 
+from typing import Optional, Tuple, List, Any
 from tabulate import tabulate
 from web3 import Web3
 from dotenv import load_dotenv
 import os
 from gte_py.models import Market
+from gte_py import Client
 
 # Load environment variables from .env file
 load_dotenv()
@@ -14,19 +16,19 @@ WALLET_ADDRESS = os.getenv("WALLET_ADDRESS")
 WALLET_PRIVATE_KEY = os.getenv("WALLET_PRIVATE_KEY")
 MARKET_ADDRESS = os.getenv("MARKET_ADDRESS", "0xfaf0BB6F2f4690CA4319e489F6Dc742167B9fB10")  # MEOW/WETH
 
-def print_separator(title):
+def print_separator(title: str) -> None:
     """Print a section separator."""
     print("\n" + "=" * 50)
     print(title)
     print("=" * 50)
 
-def format_price(price: float | None) -> str:
+def format_price(price: Optional[float]) -> str:
     """Format price for display."""
     if price is None:
         return "N/A"
     return f"{price:.8f}"
 
-def format_market_table(markets: list[Market], title: str):
+def format_market_table(markets: List[Market], title: str) -> None:
     """Format and print a table of markets."""
     print_separator(title)
 
@@ -54,14 +56,14 @@ def format_market_table(markets: list[Market], title: str):
     print(tabulate(rows, headers=headers, tablefmt="grid"))
     print(f"Total: {len(markets)} markets")
 
-def get_web3_wallet():
+def get_web3_wallet() -> str:
     """Create a Web3 instance and get wallet address."""
     if not WALLET_ADDRESS:
         raise ValueError("WALLET_ADDRESS not found in environment")
     
     return Web3.to_checksum_address(WALLET_ADDRESS)
 
-async def display_market_info(client, market_address):
+async def display_market_info(client: Client, market_address: str) -> Market:
     """Get and display market information."""
     if not market_address:
         raise ValueError("No market address provided. Set MARKET_ADDRESS in .env file.")
@@ -77,7 +79,7 @@ async def display_market_info(client, market_address):
 
     return market
 
-async def show_balances(client, market):
+async def show_balances(client: Client, market: Market) -> None:
     """Display token balances for a market."""
     print_separator("Token Balances")
 

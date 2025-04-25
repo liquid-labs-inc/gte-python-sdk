@@ -1,8 +1,10 @@
 """Example of wrapping and unwrapping ETH with the GTE client."""
 
 import asyncio
+from typing import Optional, Any, Dict, Union
 from eth_typing import HexStr
 from web3 import Web3
+from web3.types import TxReceipt, Wei
 
 from gte_py import Client
 from gte_py.config import TESTNET_CONFIG
@@ -15,7 +17,7 @@ from utils import (
 )
 
 
-async def wait_for_transaction(web3, tx_hash, timeout=120):
+async def wait_for_transaction(web3: Web3, tx_hash: HexStr, timeout: int = 120) -> TxReceipt:
     """Wait for a transaction to be mined."""
     start_time = asyncio.get_event_loop().time()
     while True:
@@ -32,7 +34,7 @@ async def wait_for_transaction(web3, tx_hash, timeout=120):
         await asyncio.sleep(2)
 
 
-async def get_weth_balance(client: Client, web3, weth_address):
+async def get_weth_balance(client: Client, web3: Web3, weth_address: str) -> None:
     """Get WETH balance of the wallet."""
     print_separator("WETH Balance")
 
@@ -54,7 +56,7 @@ async def get_weth_balance(client: Client, web3, weth_address):
     print(f"WETH Balance:  {exchange_balance:.6f} WETH (in exchange)")
 
 
-async def wrap_eth_example(client: Client, web3, weth_address, amount_eth=0.01):
+async def wrap_eth_example(client: Client, web3: Web3, weth_address: str, amount_eth: float = 0.01) -> TxReceipt:
     """Example of wrapping ETH to WETH."""
     print_separator("Wrap ETH Example")
 
@@ -80,7 +82,7 @@ async def wrap_eth_example(client: Client, web3, weth_address, amount_eth=0.01):
         raise
 
 
-async def unwrap_eth_example(client: Client, web3, weth_address, amount_eth=0.01):
+async def unwrap_eth_example(client: Client, web3: Web3, weth_address: str, amount_eth: float = 0.01) -> TxReceipt:
     """Example of unwrapping WETH back to ETH."""
     print_separator("Unwrap WETH Example")
 
@@ -106,7 +108,7 @@ async def unwrap_eth_example(client: Client, web3, weth_address, amount_eth=0.01
         raise
 
 
-async def main():
+async def main() -> None:
     """Run the WETH wrapping examples."""
     network = TESTNET_CONFIG
 

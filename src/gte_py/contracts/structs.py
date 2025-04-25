@@ -154,27 +154,27 @@ class ICLOBCancelArgs(TypedDict):
 
 """
 "components": [
-          { "name": "side", "type": "uint8", "internalType": "enum Side" },
-          {
-            "name": "cancelTimestamp",
-            "type": "uint32",
-            "internalType": "uint32"
-          },
-          { "name": "id", "type": "uint256", "internalType": "OrderId" },
-          {
-            "name": "prevOrderId",
-            "type": "uint256",
-            "internalType": "OrderId"
-          },
-          {
-            "name": "nextOrderId",
-            "type": "uint256",
-            "internalType": "OrderId"
-          },
-          { "name": "owner", "type": "address", "internalType": "address" },
-          { "name": "price", "type": "uint256", "internalType": "uint256" },
-          { "name": "amount", "type": "uint256", "internalType": "uint256" }
-        ]
+  { "name": "side", "type": "uint8", "internalType": "enum Side" },
+  {
+    "name": "cancelTimestamp",
+    "type": "uint32",
+    "internalType": "uint32"
+  },
+  { "name": "id", "type": "uint256", "internalType": "OrderId" },
+  {
+    "name": "prevOrderId",
+    "type": "uint256",
+    "internalType": "OrderId"
+  },
+  {
+    "name": "nextOrderId",
+    "type": "uint256",
+    "internalType": "OrderId"
+  },
+  { "name": "owner", "type": "address", "internalType": "address" },
+  { "name": "price", "type": "uint256", "internalType": "uint256" },
+  { "name": "amount", "type": "uint256", "internalType": "uint256" }
+]
         """
 
 

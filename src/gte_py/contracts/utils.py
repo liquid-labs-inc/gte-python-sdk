@@ -39,35 +39,6 @@ def create_deadline(minutes_in_future: int = 30) -> int:
     """
     return get_current_timestamp() + (minutes_in_future * 60)
 
-
-def to_wei(amount: float, decimals: int = 18) -> int:
-    """
-    Convert a decimal amount to wei (or equivalent for other tokens).
-
-    Args:
-        amount: Decimal amount
-        decimals: Number of decimals of the token
-
-    Returns:
-        Integer amount in wei
-    """
-    return int(amount * (10 ** decimals))
-
-
-def from_wei(amount: int, decimals: int = 18) -> float:
-    """
-    Convert wei amount to decimal.
-
-    Args:
-        amount: Wei amount
-        decimals: Number of decimals of the token
-
-    Returns:
-        Decimal amount
-    """
-    return amount / (10 ** decimals)
-
-
 # Fix for the Traversable issue
 def load_abi(abi_name: str) -> list[dict[str, Any]]:
     """
