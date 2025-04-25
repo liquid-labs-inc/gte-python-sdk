@@ -1,28 +1,18 @@
 """Example of wrapping and unwrapping ETH with the GTE client."""
 
 import asyncio
-import os
-
-from dotenv import load_dotenv
 from eth_typing import HexStr
 from web3 import Web3
 
 from gte_py import Client
 from gte_py.config import TESTNET_CONFIG
+from gte_py.contracts.weth import WETH
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Configure these variables through environment or directly
-WALLET_ADDRESS = Web3.to_checksum_address(os.getenv("WALLET_ADDRESS"))
-WALLET_PRIVATE_KEY = HexStr(os.getenv("WALLET_PRIVATE_KEY"))
-
-
-def print_separator(title):
-    """Print a section separator."""
-    print("\n" + "=" * 50)
-    print(title)
-    print("=" * 50)
+from utils import (
+    print_separator, 
+    WALLET_ADDRESS, 
+    WALLET_PRIVATE_KEY
+)
 
 
 async def wait_for_transaction(web3, tx_hash, timeout=120):
@@ -42,7 +32,29 @@ async def wait_for_transaction(web3, tx_hash, timeout=120):
         await asyncio.sleep(2)
 
 
-async def wrap_eth_example(client: Client, web3, amount_eth=0.01, send_tx=False):
+async def get_weth_balance(client: Client, web3, weth_address):
+    """Get WETH balance of the wallet."""
+    print_separator("WETH Balance")
+
+    # Create WETH instance directly to check balance
+    weth = WETH(web3, weth_address)
+
+    # Get WETH balance using the ERC20 balanceOf method
+    weth_balance_raw = weth.balance_of(WALLET_ADDRESS)
+    weth_balance = weth.convert_amount_to_float(weth_balance_raw)
+
+    # Get exchange balance through the client
+    _, exchange_balance = await client.get_balance(weth_address)
+
+    # Get native ETH balance
+    eth_balance = web3.from_wei(web3.eth.get_balance(WALLET_ADDRESS), 'ether')
+
+    print(f"ETH Balance:   {eth_balance:.6f} ETH")
+    print(f"WETH Balance:  {weth_balance:.6f} WETH (in wallet)")
+    print(f"WETH Balance:  {exchange_balance:.6f} WETH (in exchange)")
+
+
+async def wrap_eth_example(client: Client, web3, weth_address, amount_eth=0.01):
     """Example of wrapping ETH to WETH."""
     print_separator("Wrap ETH Example")
 
@@ -53,28 +65,22 @@ async def wrap_eth_example(client: Client, web3, amount_eth=0.01, send_tx=False)
         nonce = web3.eth.get_transaction_count(WALLET_ADDRESS)
 
         tx_func = await client.wrap_eth(
-            weth_address=TESTNET_CONFIG.weth_address,
+            weth_address=weth_address,
             amount_eth=amount_eth,
             gas=100000,
             nonce=nonce
         )
 
-        print("Transaction created:")
-
-        if send_tx and WALLET_PRIVATE_KEY:
-            print("\nSending transaction...")
-            receipt = tx_func.send(WALLET_PRIVATE_KEY)
-            return receipt
-        else:
-            print("\nNOTE: This is a demonstration only. No transaction was sent.")
-            print("Set send_tx=True and provide WALLET_PRIVATE_KEY to send transactions.")
-            return None
+        print("Transaction created")
+        print("\nSending transaction...")
+        receipt = tx_func.send(WALLET_PRIVATE_KEY)
+        return receipt
     except Exception as e:
         print(f"Error wrapping ETH: {str(e)}")
         raise
 
 
-async def unwrap_eth_example(client: Client, web3, amount_eth=0.01, send_tx=False):
+async def unwrap_eth_example(client: Client, web3, weth_address, amount_eth=0.01):
     """Example of unwrapping WETH back to ETH."""
     print_separator("Unwrap WETH Example")
 
@@ -85,48 +91,19 @@ async def unwrap_eth_example(client: Client, web3, amount_eth=0.01, send_tx=Fals
         nonce = web3.eth.get_transaction_count(WALLET_ADDRESS)
 
         tx_func = await client.unwrap_eth(
-            weth_address=TESTNET_CONFIG.weth_address,
+            weth_address=weth_address,
             amount_eth=amount_eth,
             gas=100000,
             nonce=nonce
         )
 
-        print("Transaction created:")
-
-        if send_tx and WALLET_PRIVATE_KEY:
-            print("\nSending transaction...")
-            receipt = tx_func.send(WALLET_PRIVATE_KEY)
-            return receipt
-        else:
-            print("\nNOTE: This is a demonstration only. No transaction was sent.")
-            print("Set send_tx=True and provide WALLET_PRIVATE_KEY to send transactions.")
-            return None
+        print("Transaction created")
+        print("\nSending transaction...")
+        receipt = tx_func.send(WALLET_PRIVATE_KEY)
+        return receipt
     except Exception as e:
         print(f"Error unwrapping WETH: {str(e)}")
         raise
-
-
-async def get_weth_balance(client: Client, web3):
-    """Get WETH balance of the wallet."""
-    print_separator("WETH Balance")
-
-    # Create WETH instance directly to check balance
-    from gte_py.contracts.weth import WETH
-    weth = WETH(web3, TESTNET_CONFIG.weth_address)
-
-    # Get WETH balance using the ERC20 balanceOf method
-    weth_balance_raw = weth.balance_of(WALLET_ADDRESS)
-    weth_balance = weth.convert_amount_to_float(weth_balance_raw)
-
-    # Get exchange balance through the client
-    _, exchange_balance = await client.get_balance(TESTNET_CONFIG.weth_address)
-
-    # Get native ETH balance
-    eth_balance = web3.from_wei(web3.eth.get_balance(WALLET_ADDRESS), 'ether')
-
-    print(f"ETH Balance:   {eth_balance:.6f} ETH")
-    print(f"WETH Balance:  {weth_balance:.6f} WETH (in wallet)")
-    print(f"WETH Balance:  {exchange_balance:.6f} WETH (in exchange)")
 
 
 async def main():
@@ -142,44 +119,53 @@ async def main():
     print("Connected to blockchain:")
     print(f"Chain ID: {web3.eth.chain_id}")
 
-    print(f"Using WETH address: {TESTNET_CONFIG.weth_address}")
+    # Check for WETH address
     if not TESTNET_CONFIG.weth_address:
-        print("ERROR: WETH address not configured in TESTNET_CONFIG. Please add it.")
-        return
+        raise ValueError("WETH address not configured in TESTNET_CONFIG")
+    print(f"Using WETH address: {TESTNET_CONFIG.weth_address}")
+
+    # Check for wallet configuration
+    if not WALLET_ADDRESS or not WALLET_PRIVATE_KEY:
+        raise ValueError("WALLET_ADDRESS and WALLET_PRIVATE_KEY must be set in .env file")
+    wallet_address = Web3.to_checksum_address(WALLET_ADDRESS)
 
     # Initialize client with Web3
     print("Initializing GTE client...")
-    client = Client(web3=web3, config=network, sender_address=WALLET_ADDRESS)
+    client = Client(web3=web3, config=network, sender_address=wallet_address)
 
-    # Show balances before operations
-    await get_weth_balance(client, web3)
+    try:
+        # Show balances before operations
+        await get_weth_balance(client, web3, TESTNET_CONFIG.weth_address)
 
-    # Run the examples (set send_tx=True to actually send transactions)
-    send_tx = True  # Set to True to send actual transactions
+        # Wrap ETH to WETH
+        amount_to_wrap = 0.01  # Small amount for testing
+        receipt = await wrap_eth_example(client, web3, TESTNET_CONFIG.weth_address, amount_eth=amount_to_wrap)
+        print(f"Transaction hash: {receipt.transactionHash.hex()}")
 
-    # WETH examples
-    amount_to_wrap = 1  # Small amount for testing
-    await wrap_eth_example(client, web3, amount_eth=amount_to_wrap, send_tx=send_tx)
-
-    # Show balances before operations
-    await get_weth_balance(client, web3)
-
-    # Only try to unwrap if we wrapped first
-    if send_tx:
-        # Wait a bit to make sure the wrapping transaction is fully processed
-        print("\nWaiting for wrap transaction to be fully processed...")
+        # Wait a bit for the transaction to be fully processed
+        print("\nWaiting for transaction to be fully processed...")
         await asyncio.sleep(5)
 
-        # Then try to unwrap the same amount
-        # await unwrap_eth_example(client, web3, amount_eth=amount_to_wrap, send_tx=send_tx)
+        # Show balances after wrapping
+        await get_weth_balance(client, web3, TESTNET_CONFIG.weth_address)
 
-        # Show balances after operations
-        # print("\nBalances after operations:")
-        # Wait a bit to make sure the unwrapping transaction is fully processed
-        # await asyncio.sleep(5)
-        # await get_weth_balance(client, web3)
-    else:
-        print("\nSet send_tx=True to execute actual transactions and see balance changes.")
+        # Unwrap WETH back to ETH
+        print("\nNow unwrapping the same amount...")
+        receipt = await unwrap_eth_example(client, web3, TESTNET_CONFIG.weth_address, amount_eth=amount_to_wrap)
+        print(f"Transaction hash: {receipt.transactionHash.hex()}")
+
+        # Wait a bit for the transaction to be fully processed
+        print("\nWaiting for transaction to be fully processed...")
+        await asyncio.sleep(5)
+
+        # Show final balances
+        await get_weth_balance(client, web3, TESTNET_CONFIG.weth_address)
+
+    except Exception as e:
+        print(f"Error during examples: {str(e)}")
+    
+    finally:
+        await client.close()
 
 
 if __name__ == "__main__":

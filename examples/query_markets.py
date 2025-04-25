@@ -1,132 +1,27 @@
-"""Example of querying all available markets from GTE."""
+"""Example of querying a specific market from GTE."""
 
 import asyncio
-
-from eth_utils import to_checksum_address
-from tabulate import tabulate
 from web3 import Web3
 
 from gte_py import Client
 from gte_py.config import TESTNET_CONFIG
 from gte_py.models import Market
 
-
-# Configure these variables through environment or directly
-
-
-def print_separator(title):
-    """Print a section separator."""
-    print("\n" + "=" * 50)
-    print(title)
-    print("=" * 50)
+from utils import print_separator, format_price, MARKET_ADDRESS
 
 
-def format_price(price: float | None) -> str:
-    """Format price for display."""
-    if price is None:
-        return "N/A"
-    return f"{price:.8f}"
+async def query_specific_market(client: Client, market_address: str):
+    """Query a specific market by address."""
+    print_separator("Specific Market Query")
 
+    # Get a specific market by address
+    print(f"Fetching market with address: {market_address}")
+    market = client.get_market(market_address)
 
-def format_market_table(markets: list[Market], title: str):
-    """Format and print a table of markets."""
-    print_separator(title)
-
-    if not markets:
-        print("No markets found!")
-        return
-
-    # Prepare table rows
-    rows = []
-    for i, market in enumerate(markets, 1):
-        rows.append(
-            [
-                i,
-                market.pair,
-                market.address[:10] + "...",
-                market.market_type.value if hasattr(market, "market_type") else "N/A",
-                format_price(market.price),
-                f"{market.volume_24h:.2f}" if market.volume_24h else "N/A",
-                "Yes" if market.contract_address else "No",
-            ]
-        )
-
-    # Print table
-    headers = ["#", "Pair", "Address", "Type", "Price", "24h Volume", "On-chain"]
-    print(tabulate(rows, headers=headers, tablefmt="grid"))
-    print(f"Total: {len(markets)} markets")
-
-
-def format_chain_market_table(markets: list[Market], title: str):
-    """Format and print a table of on-chain markets."""
-    print_separator(title)
-
-    if not markets:
-        print("No on-chain markets found!")
-        return
-
-    # Prepare table rows
-    rows = []
-    for i, market in enumerate(markets, 1):
-        rows.append(
-            [
-                i,
-                f"{market.contract_address[:10]}...",
-                f"{market.base_token[:10]}...",
-                f"{market.quote_token[:10]}...",
-                market.base_decimals,
-                market.quote_decimals,
-                market.tick_size_in_quote,
-            ]
-        )
-
-    # Print table
-    headers = ["#", "Contract", "Base Token", "Quote Token", "Base Dec", "Quote Dec", "Tick Size"]
-    print(tabulate(rows, headers=headers, tablefmt="grid"))
-    print(f"Total: {len(markets)} on-chain markets")
-
-
-async def query_markets(client: Client):
-    """Query markets from the API."""
-    # Get all markets
-    print("Fetching all markets from API...")
-    markets = await client.get_markets(limit=100)
-    format_market_table(markets, "All Markets")
-
-    # Get markets by type
-    amm_markets = await client.get_markets(limit=50, market_type="amm")
-    format_market_table(amm_markets, "AMM Markets")
-
-    launchpad_markets = await client.get_markets(limit=50, market_type="launchpad")
-    format_market_table(launchpad_markets, "Launchpad Markets")
-
-    # Filter by price
-    high_value_markets = await client.get_markets(limit=50, max_price=1000.0)
-    format_market_table(high_value_markets, "Markets with price < 1000")
-
-    # Find markets with on-chain contracts
-    onchain_markets = [m for m in markets if m.address]
-    format_market_table(onchain_markets, "Markets with On-chain Contracts")
-
-    # Demonstrate pagination
-    print_separator("Pagination Example")
-    page_size = 20
-    for i in range(3):  # Get 3 pages
-        offset = i * page_size
-        page = await client.get_markets(limit=page_size, offset=offset)
-        print(f"Page {i + 1}: Retrieved {len(page)} markets (offset: {offset})")
-        if not page:
-            break
-
-
-
-async def query_market_details(client: Client, market: Market):
-    """Query detailed information for a specific market."""
-    print_separator("Market Details Example")
-
-    # Display detailed market information
+    # Display market information
     print(f"Market: {market.pair} ({market.address})")
-    print(f"Type: {market.market_type.value}")
+    if hasattr(market, 'market_type'):
+        print(f"Type: {market.market_type.value}")
     print(f"Price: {format_price(market.price)}")
     print(f"24h Volume: {market.volume_24h if market.volume_24h else 'N/A'}")
 
@@ -150,13 +45,71 @@ async def query_market_details(client: Client, market: Market):
         print(f"  Quote Token: {market.quote_token_address}")
         print(f"  Tick Size: {market.tick_size_in_quote}")
         print(f"  Lot Size: {market.lot_size_in_base}")
+    
+    return market
+
+
+async def query_market_orderbook(client: Client, market: Market):
+    """Query the orderbook for a market."""
+    print_separator("Market Orderbook")
+
+    try:
+        # Get orderbook for the market
+        orderbook = await client.get_orderbook(market)
+        
+        # Display bids
+        print("Bids:")
+        if not orderbook.bids:
+            print("  No bids found")
+        else:
+            for i, bid in enumerate(orderbook.bids[:5], 1):  # Display top 5 bids
+                print(f"  {i}. Price: {bid.price}, Amount: {bid.amount}")
+        
+        # Display asks
+        print("\nAsks:")
+        if not orderbook.asks:
+            print("  No asks found")
+        else:
+            for i, ask in enumerate(orderbook.asks[:5], 1):  # Display top 5 asks
+                print(f"  {i}. Price: {ask.price}, Amount: {ask.amount}")
+                
+        # Display the spread
+        if orderbook.bids and orderbook.asks:
+            spread = orderbook.asks[0].price - orderbook.bids[0].price
+            spread_percentage = (spread / orderbook.bids[0].price) * 100
+            print(f"\nSpread: {spread:.8f} ({spread_percentage:.2f}%)")
+            
+    except Exception as e:
+        print(f"Error fetching orderbook: {str(e)}")
+
+
+async def query_market_trades(client: Client, market: Market):
+    """Query recent trades for a market."""
+    print_separator("Recent Trades")
+
+    try:
+        # Get recent trades for the market
+        trades = await client.get_trades(market, limit=5)
+        
+        if not trades:
+            print("No recent trades found")
+            return
+            
+        print(f"Recent trades for {market.pair}:")
+        for i, trade in enumerate(trades, 1):
+            side = "BUY" if trade.is_buy else "SELL"
+            timestamp = trade.timestamp if hasattr(trade, "timestamp") else "N/A"
+            print(f"  {i}. Side: {side}, Price: {trade.price}, Amount: {trade.amount}, Time: {timestamp}")
+            
+    except Exception as e:
+        print(f"Error fetching trades: {str(e)}")
 
 
 async def main():
-    """Run the market query examples."""
+    """Run the market query example."""
     print("GTE Market Query Example")
 
-    # Initialize Web3 if configuration is available
+    # Initialize Web3
     web3 = Web3(Web3.HTTPProvider(TESTNET_CONFIG.rpc_http))
 
     # Initialize client
@@ -166,13 +119,18 @@ async def main():
     )
 
     try:
-        # Run examples
-        # await query_markets(client)
-        market = client.get_market(to_checksum_address('0xfaf0bb6f2f4690ca4319e489f6dc742167b9fb10'))
-        await query_market_details(client, market)
+        # Query a specific market
+        market_address = MARKET_ADDRESS
+        market = await query_specific_market(client, market_address)
+        
+        # Query orderbook
+        await query_market_orderbook(client, market)
+        
+        # Query trades
+        await query_market_trades(client, market)
 
     except Exception as e:
-        print(f"Error during examples: {str(e)}")
+        print(f"Error during query: {str(e)}")
 
     finally:
         await client.close()
