@@ -8,8 +8,10 @@ from web3 import Web3
 from eth_typing import ChecksumAddress, HexStr
 from gte_py import Client
 from gte_py.config import TESTNET_CONFIG
-from gte_py.models import OrderSide, TimeInForce
+from gte_py.models import OrderSide, TimeInForce, Market
 from gte_py.contracts.erc20 import ERC20
+from gte_py.contracts.iclob import ICLOB
+
 # --- Config ---
 BINANCE_BOOK_URL = "https://api.binance.com/api/v3/depth?symbol=BTCUSDT&limit=5"
 ORDER_SIZE = 0.2  # BTC
@@ -17,7 +19,7 @@ UPDATE_INTERVAL = 0.0  # seconds
 RISK_AVERSION = 0.05
 VOL_EMA_ALPHA = 0.1
 GBTC_CUSD_MARKET_ADDRESS = "0x0F3642714B9516e3d17a936bAced4de47A6FFa5F"
-TARGET_SPREAD = 0.01
+TARGET_SPREAD = 1.0
 
 # Load environment variables for wallet
 load_dotenv()
@@ -102,7 +104,7 @@ async def cancel_all_orders(client, market, open_orders, web3):
             print(f"Cancel error for order {order_id}: {e}")
     open_orders.clear()
 
-async def get_market_info(client, market_address):
+async def get_market_info(client, market_address) -> Market:
     """Get market information."""
     if not market_address:
         raise ValueError("No market address provided. Set MARKET_ADDRESS in .env file.")
@@ -147,11 +149,15 @@ async def main():
     print(f"Quote balance: {quote_balance}")
     print(f"Quote allowance: {allowance}")
 
+    clob = ICLOB(web3, GBTC_CUSD_MARKET_ADDRESS)
+
     print("\n========Starting Trades========\n")
 
     async with aiohttp.ClientSession() as session:
         while True:
             try:
+                # [max_bid, min_ask] = clob.get_tob()
+                # book_spread = min_ask - max_bid
                 microprice = await price_index.compute(session)
                 sigma = estimator.ema_vol(microprice)
                 quotes = stoikov.compute_quotes(microprice, sigma, inv=inv)
@@ -168,7 +174,7 @@ async def main():
                     price=quotes.bid,
                     time_in_force=TimeInForce.GTC,
                 )
-                buy_tx.send_wait(WALLET_PRIVATE_KEY)
+                buy_tx.send(WALLET_PRIVATE_KEY)
                 open_orders.append(None)  # Placeholder: order_id tracking requires API support
 
                 # Place new sell order
@@ -180,7 +186,7 @@ async def main():
                     price=quotes.ask,
                     time_in_force=TimeInForce.GTC,
                 )
-                sell_tx.send_wait(WALLET_PRIVATE_KEY)
+                sell_tx.send(WALLET_PRIVATE_KEY)
                 open_orders.append(None)  # Placeholder: order_id tracking requires API support
 
                 print(f"Quotes: bid={quotes.bid:.2f}, ask={quotes.ask:.2f}, sigma={sigma:.6f}")
