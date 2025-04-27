@@ -10,6 +10,7 @@ from web3.types import TxReceipt
 from gte_py import Client
 from gte_py.config import TESTNET_CONFIG
 from gte_py.models import OrderSide, TimeInForce, Market
+from gte_py.contracts.iclob_historical import CLOBHistoricalQuerier
 from utils import (
     print_separator,
     display_market_info,
@@ -150,6 +151,34 @@ async def show_orders(client: Client, market: Market) -> None:
         print("This feature requires Web3 provider and a market with contract address")
 
 
+async def display_recent_matches(client: Client, market: Market, block_range: int = 1000) -> None:
+    """Fetch and display recent order matches for the market."""
+    print_separator("Recent Order Matches")
+    
+    try:
+        # Get current block number
+        current_block = client._web3.eth.block_number
+        from_block = max(1, current_block - block_range)
+        
+        # Initialize the historical querier
+        historical_querier = CLOBHistoricalQuerier(client._web3, market.address)
+        
+        # Fetch recent order matches
+        matches = historical_querier.query_order_matched(from_block=from_block)
+        
+        if not matches:
+            print(f"No order matches found in the last {block_range} blocks")
+            return
+        
+        print(f"Found {len(matches)} recent order matches:")
+        for i, match in enumerate(matches, 1):
+            print(f"\nMatch #{i}:")
+            print(f"  Block: {match.block_number}")
+    
+    except Exception as e:
+        print(f"Error fetching recent order matches: {str(e)}")
+
+
 async def main() -> None:
     """Run the on-chain trading examples."""
     network = TESTNET_CONFIG
@@ -176,6 +205,9 @@ async def main() -> None:
 
         # Show balances
         await show_balances(client, market)
+
+        # Display recent order matches
+        await display_recent_matches(client, market)
 
         print("\nNOTE: For WETH wrapping and unwrapping examples, see wrap_weth.py")
 
