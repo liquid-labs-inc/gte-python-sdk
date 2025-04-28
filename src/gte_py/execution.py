@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any, Optional, List, Dict, Tuple
 
 from eth_typing import ChecksumAddress
-from web3 import Web3
+from web3 import AsyncWeb3
 from web3.exceptions import LogTopicError
 from web3.providers import WebSocketProvider
 from web3.types import EventData
@@ -24,7 +24,7 @@ from .contracts.structs import (
 )
 from .contracts.utils import get_current_timestamp, TypedContractFunction
 from .contracts.weth import WETH  # Add import for WETH class
-from .models import Market, Order, OrderStatus, OrderSide, OrderType, TimeInForce, Trade
+from .models import Market, Order, OrderStatus, Side, OrderType, TimeInForce, Trade
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +32,12 @@ logger = logging.getLogger(__name__)
 class SubscriptionManager:
     """Manages event subscriptions for streaming data."""
 
-    def __init__(self, web3: Web3):
+    def __init__(self, web3: AsyncWeb3):
         """
         Initialize the subscription manager.
 
         Args:
-            web3: Web3 instance with WebsocketProvider
+            web3: AsyncWeb3 instance with WebsocketProvider
         """
         self._web3 = web3
         self._subscriptions: dict[str, dict[str, Any]] = {}
@@ -46,7 +46,7 @@ class SubscriptionManager:
         # Check if websocket provider
         if not isinstance(web3.provider, WebSocketProvider):
             logger.warning(
-                "Web3 provider is not a WebsocketProvider. Streaming functionality will be limited."
+                "AsyncWeb3 provider is not a WebsocketProvider. Streaming functionality will be limited."
             )
 
     async def subscribe(
@@ -168,7 +168,7 @@ class SubscriptionManager:
 
         try:
             while True:
-                current_block = self._web3.eth.block_number
+                current_block = await self._web3.eth.block_number
                 from_block = sub_info["last_block"] + 1
 
                 if current_block >= from_block:
@@ -199,12 +199,12 @@ class ExecutionClient:
     EVENT_ORDER_CANCELED = "OrderCanceled"
     EVENT_ORDER_MATCHED = "OrderMatched"
 
-    def __init__(self, web3: Web3, sender_address: ChecksumAddress, factory_address: ChecksumAddress):
+    def __init__(self, web3: AsyncWeb3, sender_address: ChecksumAddress, factory_address: ChecksumAddress):
         """
         Initialize the execution client.
 
         Args:
-            web3: Web3 instance for on-chain interactions
+            web3: AsyncWeb3 instance for on-chain interactions
             sender_address: Address to send transactions from
             factory_address: Address of the GTE Factory contract
         """
@@ -234,10 +234,10 @@ class ExecutionClient:
             ICLOB contract instance
 
         Raises:
-            ValueError: If Web3 is not configured
+            ValueError: If AsyncWeb3 is not configured
         """
         if not self._web3:
-            raise ValueError("Web3 provider not configured. Cannot interact with contracts.")
+            raise ValueError("AsyncWeb3 provider not configured. Cannot interact with contracts.")
 
         if contract_address not in self._clob_clients:
             self._clob_clients[contract_address] = ICLOB(
@@ -256,7 +256,7 @@ class ExecutionClient:
             ERC20 contract instance
         """
         if not self._web3:
-            raise ValueError("Web3 provider not configured. Cannot interact with contracts.")
+            raise ValueError("AsyncWeb3 provider not configured. Cannot interact with contracts.")
 
         if token_address not in self._token_clients:
             self._token_clients[token_address] = ERC20(
@@ -275,7 +275,7 @@ class ExecutionClient:
             WETH contract instance
         """
         if not self._web3:
-            raise ValueError("Web3 provider not configured. Cannot interact with contracts.")
+            raise ValueError("AsyncWeb3 provider not configured. Cannot interact with contracts.")
 
         if weth_address not in self._weth_clients:
             self._weth_clients[weth_address] = WETH(
@@ -326,7 +326,7 @@ class ExecutionClient:
     async def place_limit_order(
             self,
             market: Market,
-            side: OrderSide,
+            side: Side,
             amount: int,
             price: int,
             time_in_force: TimeInForce = TimeInForce.GTC,
@@ -352,7 +352,7 @@ class ExecutionClient:
         clob = self._get_clob(market.address)
 
         # Convert model types to contract types
-        contract_side = Side.BUY if side == OrderSide.BUY else Side.SELL
+        contract_side = Side.BUY if side == Side.BUY else Side.SELL
 
         if not market.check_lot_size(amount):
             raise ValueError(f"Amount is not multiples of lot size: {amount} (lot size: {market.lot_size_in_base})")
@@ -418,7 +418,7 @@ class ExecutionClient:
     async def place_market_order(
             self,
             market: Market,
-            side: OrderSide,
+            side: Side,
             amount: int,
             amount_is_base: bool = True,
             slippage: float = 0.01,
@@ -441,11 +441,11 @@ class ExecutionClient:
         clob = self._get_clob(market.address)
 
         # Convert model types to contract types
-        contract_side = Side.BUY if side == OrderSide.BUY else Side.SELL
+        contract_side = Side.BUY if side == Side.BUY else Side.SELL
 
         # For market orders, use a very aggressive price limit to ensure execution
         # For buy orders: high price, for sell orders: low price
-        highest_bid, lowest_ask = clob.get_tob()
+        highest_bid, lowest_ask = await clob.get_tob()
         if contract_side == Side.BUY:
             price_limit = int(lowest_ask * (1 + slippage))
         else:
@@ -493,7 +493,7 @@ class ExecutionClient:
         clob = self._get_clob(market.address)
 
         # Get the current order
-        order = clob.get_order(order_id)
+        order = await clob.get_order(order_id)
 
         # Extract order details
         side = order.side
@@ -556,6 +556,72 @@ class ExecutionClient:
             **kwargs
         )
 
+    async def get_all_orders(self, market: Market, address: ChecksumAddress | None = None) -> List[Order]:
+        """
+        Get all orders for a specific market and address.
+
+        Args:
+            market: Market to get orders from
+            address: Address to filter orders by (None for all)
+
+        Returns:
+            List of Order objects
+        """
+        clob = self._get_clob(market.address)
+        best_bid, best_ask = await clob.get_tob()
+        orders = []
+        # Get all orders for the bid and ask price levels
+        price_level = best_bid
+        while price_level > 0:
+            orders += await self.get_orders_for_price_level(
+                market=market,
+                price=price_level,
+                side=Side.BUY,
+                address=address
+            )
+            price_level = await clob.get_next_smallest_price(price_level, Side.BUY)
+        price_level = best_ask
+        while price_level > 0:
+            orders += await self.get_orders_for_price_level(
+                market=market,
+                price=price_level,
+                side=Side.SELL,
+                address=address
+            )
+            price_level = await clob.get_next_biggest_price(price_level, Side.SELL)
+        return orders
+
+    async def get_orders_for_price_level(self,
+                                         market: Market,
+                                         price: float,
+                                         side: Side,
+                                         address: ChecksumAddress | None = None
+                                         ) -> List[Order]:
+        """
+        Get all orders for a specific price level.
+
+        Args:
+            market: Market to get orders from
+            price: Price level to filter orders by
+            side: Side of the order (BUY or SELL)
+            address: Address to filter orders by (None for all)
+
+        Returns:
+            List of Order objects
+        """
+        clob = self._get_clob(market.address)
+        orders = []
+        pl = int(price * 10 ** market.quote_decimals)
+        (num, head, tail) = await clob.get_limit(pl, side)
+        order_id = head
+        for i in range(num):
+            order = await clob.get_order(order_id)
+            if address is None or order.owner == address:
+                orders.append(self._convert_contract_order_to_model(market, order))
+            order_id = order.nextOrderId
+        return orders
+
+    # TODO: testing cancel all orders
     async def cancel_all_orders(
             self,
             market: Market,
@@ -698,21 +764,21 @@ class ExecutionClient:
         token = self._get_token(token_address)
 
         # Get wallet balance
-        wallet_balance_raw = token.balance_of(account)
-        wallet_balance = token.convert_amount_to_float(wallet_balance_raw)
+        wallet_balance_raw = await token.balance_of(account)
+        wallet_balance = await token.convert_amount_to_float(wallet_balance_raw)
 
         # Get exchange balance
-        exchange_balance_raw = self._factory.get_account_balance(account, token_address)
-        exchange_balance = token.convert_amount_to_float(exchange_balance_raw)
+        exchange_balance_raw = await self._factory.get_account_balance(account, token_address)
+        exchange_balance = await token.convert_amount_to_float(exchange_balance_raw)
 
         return (wallet_balance, exchange_balance)
 
     async def get_order(self, market: Market, order_id: int) -> Order:
         clob = self._get_clob(market.address)
-        order = clob.get_order(order_id)
-        return await self._convert_contract_order_to_model(market, order)
+        order = await clob.get_order(order_id)
+        return self._convert_contract_order_to_model(market, order)
 
-    async def _convert_contract_order_to_model(
+    def _convert_contract_order_to_model(
             self,
             market: Market,
             order_data: CLOBOrder,
@@ -727,11 +793,10 @@ class ExecutionClient:
         Returns:
             Order model
         """
-        side = OrderSide.BUY if order_data.side == Side.BUY else OrderSide.SELL
 
         # Determine order status
         status = OrderStatus.OPEN
-        if order_data.amount:
+        if order_data.amount == 0:
             status = OrderStatus.FILLED
         elif order_data.cancelTimestamp > 0 and order_data.cancelTimestamp < get_current_timestamp():
             status = OrderStatus.EXPIRED
@@ -740,14 +805,12 @@ class ExecutionClient:
         return Order(
             order_id=order_data.id,
             market_address=market.address,
-            side=side,
+            side=order_data.side,
             order_type=OrderType.LIMIT,
             amount=order_data.amount / 10 ** market.base_decimals,
             price=order_data.price / 10 ** market.quote_decimals,
             time_in_force=TimeInForce.GTC,  # Default
             status=status,
-            filled_amount=0.0,  # Need to be calculated from events
-            filled_price=0.0,  # Need to be calculated from events
             created_at=0  # Need to be retrieved from event timestamp
         )
 
@@ -772,11 +835,11 @@ class ExecutionClient:
         args = event['args']
 
         # Determine side from event data
-        side = OrderSide.BUY if args.get('side', 0) == Side.BUY else OrderSide.SELL
+        side = Side.BUY if args.get('side', 0) == Side.BUY else Side.SELL
 
         # For takers, the side is opposite of the maker's side
         if not is_maker:
-            side = OrderSide.BUY if side == OrderSide.SELL else OrderSide.SELL
+            side = Side.BUY if side == Side.SELL else Side.SELL
 
         # Create Trade model
         return Trade(

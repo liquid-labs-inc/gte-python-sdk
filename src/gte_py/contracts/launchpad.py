@@ -1,6 +1,6 @@
 from eth_typing import Address, ChecksumAddress
 from hexbytes import HexBytes
-from web3 import Web3
+from web3 import AsyncWeb3
 
 from src.gte_py.contracts.utils import TypedContractFunction, load_abi
 
@@ -22,14 +22,14 @@ class Launchpad:
 
     def __init__(
         self,
-        web3: Web3,
+        web3: AsyncWeb3,
         contract_address: str,
     ):
         """
         Initialize the GTELaunchpad wrapper.
 
         Args:
-            web3: Web3 instance connected to a provider
+            web3: AsyncWeb3 instance connected to a provider
             contract_address: Address of the Launchpad contract
             abi_path: Path to the ABI JSON file (optional)
             abi: The contract ABI as a Python dictionary (optional)

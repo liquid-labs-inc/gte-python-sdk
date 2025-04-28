@@ -2,7 +2,7 @@ from typing import Any
 
 from eth_typing import Address, ChecksumAddress
 from hexbytes import HexBytes
-from web3 import Web3
+from web3 import AsyncWeb3
 
 from .structs import ICLOBCancelArgs, ICLOBPostLimitOrderArgs
 from .utils import TypedContractFunction, load_abi
@@ -28,14 +28,14 @@ class Router:
 
     def __init__(
             self,
-            web3: Web3,
+            web3: AsyncWeb3,
             contract_address: ChecksumAddress,
     ):
         """
         Initialize the GTERouter wrapper.
 
         Args:
-            web3: Web3 instance connected to a provider
+            web3: AsyncWeb3 instance connected to a provider
             contract_address: Address of the GTERouter contract
         """
         self.web3 = web3
@@ -45,25 +45,25 @@ class Router:
 
     # ================= READ METHODS =================
 
-    def get_weth(self) -> ChecksumAddress:
+    async def get_weth(self) -> ChecksumAddress:
         """Get the WETH contract address."""
         return self.contract.functions.weth().call()
 
-    def get_launchpad(self) -> ChecksumAddress:
+    async def get_launchpad(self) -> ChecksumAddress:
         """Get the Launchpad contract address."""
         return self.contract.functions.launchpad().call()
 
-    def get_clob_factory(self) -> ChecksumAddress:
+    async def get_clob_factory(self) -> ChecksumAddress:
         """Get the CLOB factory contract address."""
-        return self.contract.functions.clobFactory().call()
+        return await self.contract.functions.clobFactory().call()
 
-    def get_univ2_router(self) -> ChecksumAddress:
+    async def get_univ2_router(self) -> ChecksumAddress:
         """Get the UniswapV2 Router contract address."""
-        return self.contract.functions.uniV2Router().call()
+        return await self.contract.functions.uniV2Router().call()
 
-    def get_permit2(self) -> ChecksumAddress:
+    async def get_permit2(self) -> ChecksumAddress:
         """Get the Permit2 contract address."""
-        return self.contract.functions.permit2().call()
+        return await self.contract.functions.permit2().call()
 
     # ================= WRITE METHODS =================
 

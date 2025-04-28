@@ -3,7 +3,7 @@
 from typing import TypeVar
 
 from eth_typing import ChecksumAddress
-from web3 import Web3
+from web3 import AsyncWeb3
 
 from .erc20 import ERC20
 from .utils import TypedContractFunction, load_abi
@@ -21,14 +21,14 @@ class WETH(ERC20):
 
     def __init__(
         self,
-        web3: Web3,
+        web3: AsyncWeb3,
         contract_address: ChecksumAddress,
     ):
         """
         Initialize the WETH wrapper.
 
         Args:
-            web3: Web3 instance connected to a provider
+            web3: AsyncWeb3 instance connected to a provider
             contract_address: Address of the WETH token contract
         """
         super().__init__(web3, contract_address)
@@ -119,3 +119,41 @@ class WETH(ERC20):
         # Convert ETH amount to wei
         amount_wei = self.web3.to_wei(amount_eth, 'ether')
         return self.withdraw(amount_wei, **kwargs)
+    
+    async def deposit_eth_async(self, amount_eth: float, **kwargs) -> TypedContractFunction:
+        """
+        Wrap native ETH to WETH using async call.
+        
+        Args:
+            amount_eth: Amount of ETH to wrap (as a float, e.g., 1.5 ETH)
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+            
+        Returns:
+            TypedContractFunction for sending the transaction
+        """
+        amount_wei = self.web3.to_wei(amount_eth, 'ether')
+        # Deposit() function is payable, so we need to send ETH with it
+        func = self.contract.functions.deposit()
+        params = {
+            'value': amount_wei,
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)
+        
+    async def withdraw_eth_async(self, amount_eth: float, **kwargs) -> TypedContractFunction:
+        """
+        Unwrap WETH to native ETH using async call.
+        
+        Args:
+            amount_eth: Amount of WETH to unwrap (as a float, e.g., 1.5 WETH)
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+            
+        Returns:
+            TypedContractFunction for sending the transaction
+        """
+        amount_wei = self.web3.to_wei(amount_eth, 'ether')
+        func = self.contract.functions.withdraw(amount_wei)
+        params = {
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)

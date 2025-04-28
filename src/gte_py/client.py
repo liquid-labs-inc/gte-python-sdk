@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any, List, Optional, Callable, Tuple, Dict, Union
 
 from eth_typing import ChecksumAddress
-from web3 import Web3
+from web3 import AsyncWeb3
 
 from .api.rest_api import RestApi
 from .config import NetworkConfig
@@ -17,7 +17,7 @@ from .models import (
     Candle,
     Market,
     Order,
-    OrderSide,
+    Side,
     OrderType,
     Position,
     TimeInForce,
@@ -33,7 +33,7 @@ class Client:
 
     def __init__(
             self,
-            web3: Web3,
+            web3: AsyncWeb3,
             config: NetworkConfig,
             sender_address: ChecksumAddress | None = None,
     ):
@@ -41,13 +41,14 @@ class Client:
         Initialize the client.
 
         Args:
-            web3: Web3 instance
+            web3: AsyncWeb3 instance
             config: Network configuration
             sender_address: Address to send transactions from (optional)
         """
         self._rest_client = RestApi(base_url=config.api_url)
         self._ws_url = config.ws_url
         self._market_clients: dict[str, MarketClient] = {}
+        self.config: NetworkConfig = config
 
         self._web3 = web3
 
@@ -157,7 +158,7 @@ class Client:
         Returns:
             Market
         """
-        return self._market_info.get_market_info_by_address(address)
+        return await self._market_info.get_market_info_by_address(address)
 
     async def get_market_client(self, market_address: ChecksumAddress) -> MarketClient:
         """
@@ -174,7 +175,7 @@ class Client:
         if market_address not in self._market_clients:
             # Get market details first to ensure it's valid
             market = await self.get_market(market_address)
-            self._market_clients[market_address] = MarketClient(market=market, ws_url=self._ws_url)
+            self._market_clients[market_address] = MarketClient(market=market, config=self.config)
             await self._market_clients[market_address].connect()
 
         return self._market_clients[market_address]
@@ -264,9 +265,9 @@ class Client:
         Returns:
             Dict: List of assets held by the user
         """
-        return self._sync_request(self._api.get_user_assets(user_address, limit, offset))
-        
-    def get_order_book(self, market_address: str, limit: int = 5) -> dict:
+        return await self._rest_client.get_user_assets(user_address, limit, offset)
+
+    async def get_order_book(self, market_address: str, limit: int = 5) -> dict:
         """Get order book snapshot for a market.
 
         Args:
@@ -276,9 +277,7 @@ class Client:
         Returns:
             Dict: Order book data with bids and asks
         """
-        return self._sync_request(self._api.get_order_book(market_address, limit))
-
-
+        return await self._rest_client.get_order_book(market_address, limit)
 
     # Trading methods
     async def get_order(self, market: Market, order_id: int) -> Order | None:
@@ -300,7 +299,7 @@ class Client:
     async def place_limit_order(
             self,
             market: Market,
-            side: OrderSide,
+            side: Side,
             amount: int,
             price: int,
             time_in_force: TimeInForce = TimeInForce.GTC,
@@ -341,8 +340,8 @@ class Client:
     async def place_market_order(
             self,
             market: Market,
-            side: OrderSide,
-            amount: float,
+            side: Side,
+            amount: int,
             amount_is_base: bool = True,
             **kwargs,
     ) -> TypedContractFunction:
@@ -495,7 +494,7 @@ class Client:
     async def withdraw_from_market(
             self,
             token_address: ChecksumAddress,
-            amount: float,
+            amount: int,
             **kwargs,
     ) -> TypedContractFunction:
         """

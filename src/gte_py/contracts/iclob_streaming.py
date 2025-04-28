@@ -11,7 +11,7 @@ import asyncio
 from threading import Thread
 
 from urllib3.util import current_time
-from web3 import Web3
+from web3 import AsyncWeb3
 from web3.types import EventData, LogReceipt
 
 from .iclob import ICLOB
@@ -37,7 +37,7 @@ class EventStream(Generic[T]):
 
     def __init__(
             self,
-            web3: Web3,
+            web3: AsyncWeb3,
             event: object,
             parser: Callable[[Dict], T],
             from_block: int = 0,
@@ -48,8 +48,8 @@ class EventStream(Generic[T]):
         Initialize an event stream for a specific event.
         
         Args:
-            web3: Web3 instance
-            event: Web3 contract event object
+            web3: AsyncWeb3 instance
+            event: AsyncWeb3 contract event object
             parser: Function to parse raw event data into typed event objects
             from_block: Starting block number to fetch events from
             to_block: Ending block number or 'latest'

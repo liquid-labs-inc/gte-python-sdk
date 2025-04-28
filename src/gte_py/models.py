@@ -9,7 +9,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from eth_typing import ChecksumAddress
 from eth_utils import to_wei
 from hexbytes import HexBytes
-from web3 import Web3
+from web3 import AsyncWeb3
+from gte_py.contracts.structs import Side as ContractSide
 
 
 class MarketType(Enum):
@@ -20,11 +21,7 @@ class MarketType(Enum):
     CLOB = "clob"
 
 
-class OrderSide(Enum):
-    """Order side - buy or sell."""
-
-    BUY = "buy"
-    SELL = "sell"
+Side = ContractSide
 
 
 class OrderType(Enum):
@@ -75,9 +72,9 @@ class Asset:
 
         # Convert address strings to ChecksumAddress
         if address and isinstance(address, str):
-            address = Web3.to_checksum_address(address)
+            address = AsyncWeb3.to_checksum_address(address)
         if creator and isinstance(creator, str):
-            creator = Web3.to_checksum_address(creator)
+            creator = AsyncWeb3.to_checksum_address(creator)
 
         return cls(
             address=address,
@@ -201,7 +198,7 @@ class Trade:
     timestamp: int
     price: float
     size: float
-    side: OrderSide
+    side: Side
     tx_hash: HexBytes | None = None  # Transaction hash is an Ethereum address
     maker: ChecksumAddress | None = None
     taker: ChecksumAddress | None = None
@@ -222,18 +219,18 @@ class Trade:
 
         # Convert address strings to ChecksumAddress when present
         if tx_hash and isinstance(tx_hash, str):
-            tx_hash = Web3.to_checksum_address(tx_hash)
+            tx_hash = AsyncWeb3.to_checksum_address(tx_hash)
         if maker and isinstance(maker, str):
-            maker = Web3.to_checksum_address(maker)
+            maker = AsyncWeb3.to_checksum_address(maker)
         if taker and isinstance(taker, str):
-            taker = Web3.to_checksum_address(taker)
+            taker = AsyncWeb3.to_checksum_address(taker)
 
         return cls(
             market_address=data.get("m", ""),
             timestamp=data.get("timestamp") or data.get("t", 0),
             price=float(data.get("price") or data.get("px", 0)),
             size=float(data.get("size") or data.get("sz", 0)),
-            side=OrderSide(side_str),
+            side=Side(side_str),
             tx_hash=tx_hash,
             maker=maker,
             taker=taker,
@@ -255,7 +252,7 @@ class Position:
         """Create a Position object from API response data."""
         user = data.get("user", "")
         if user and isinstance(user, str):
-            user = Web3.to_checksum_address(user)
+            user = AsyncWeb3.to_checksum_address(user)
 
         return cls(
             market=Market.from_api(data.get("market", {})),
@@ -323,27 +320,18 @@ class Order:
 
     order_id: int
     market_address: str
-    side: OrderSide
+    side: Side
     order_type: OrderType
     amount: float
     price: float | None
     time_in_force: TimeInForce
     status: OrderStatus
-    filled_amount: float
-    filled_price: float
     created_at: int
 
     @property
     def datetime(self) -> datetime:
         """Get the datetime of the order."""
         return datetime.fromtimestamp(self.created_at / 1000)
-
-    @property
-    def filled_percentage(self) -> float:
-        """Get the filled percentage of the order."""
-        if self.amount == 0:
-            return 0
-        return (self.filled_amount / self.amount) * 100
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Order":
@@ -356,7 +344,7 @@ class Order:
         return cls(
             order_id=data.get("id", ""),
             market_address=data.get("marketAddress", ""),
-            side=OrderSide(side_str),
+            side=Side(side_str),
             order_type=OrderType(type_str),
             amount=data.get("amount", 0.0),
             price=data.get("price"),

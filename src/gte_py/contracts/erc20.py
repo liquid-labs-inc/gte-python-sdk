@@ -2,7 +2,7 @@
 from typing import TypeVar, Dict, Any
 
 from eth_typing import ChecksumAddress
-from web3 import Web3
+from web3 import AsyncWeb3
 
 from .utils import TypedContractFunction, load_abi
 
@@ -17,14 +17,14 @@ class ERC20:
 
     def __init__(
             self,
-            web3: Web3,
+            web3: AsyncWeb3,
             contract_address: ChecksumAddress,
     ):
         """
         Initialize the ERC20 wrapper.
 
         Args:
-            web3: Web3 instance connected to a provider
+            web3: AsyncWeb3 instance connected to a provider
             contract_address: Address of the ERC20 token contract
         """
         self.web3 = web3
@@ -37,29 +37,29 @@ class ERC20:
 
     # ================= READ METHODS =================
 
-    def name(self) -> str:
+    async def name(self) -> str:
         """Get the name of the token."""
         if "name" not in self._token_info_cache:
-            self._token_info_cache["name"] = self.contract.functions.name().call()
+            self._token_info_cache["name"] = await self.contract.functions.name().call()
         return self._token_info_cache["name"]
 
-    def symbol(self) -> str:
+    async def symbol(self) -> str:
         """Get the symbol of the token."""
         if "symbol" not in self._token_info_cache:
-            self._token_info_cache["symbol"] = self.contract.functions.symbol().call()
+            self._token_info_cache["symbol"] = await self.contract.functions.symbol().call()
         return self._token_info_cache["symbol"]
 
-    def decimals(self) -> int:
+    async def decimals(self) -> int:
         """Get the number of decimals the token uses."""
         if "decimals" not in self._token_info_cache:
-            self._token_info_cache["decimals"] = self.contract.functions.decimals().call()
+            self._token_info_cache["decimals"] = await self.contract.functions.decimals().call()
         return self._token_info_cache["decimals"]
 
-    def total_supply(self) -> int:
+    async def total_supply(self) -> int:
         """Get the total token supply in token base units."""
-        return self.contract.functions.totalSupply().call()
+        return await self.contract.functions.totalSupply().call()
 
-    def balance_of(self, account: ChecksumAddress) -> int:
+    async def balance_of(self, account: ChecksumAddress) -> int:
         """
         Get the token balance of an account.
 
@@ -69,7 +69,7 @@ class ERC20:
         Returns:
             Token balance in token base units
         """
-        return self.contract.functions.balanceOf(account).call()
+        return await self.contract.functions.balanceOf(account).call()
 
     def allowance(self, owner: ChecksumAddress, spender: ChecksumAddress) -> int:
         """
@@ -90,7 +90,6 @@ class ERC20:
             self,
             recipient: ChecksumAddress,
             amount: int,
-            sender_address: ChecksumAddress,
             **kwargs
     ) -> TypedContractFunction[bool]:
         """
@@ -99,7 +98,6 @@ class ERC20:
         Args:
             recipient: Address to transfer tokens to
             amount: Amount to transfer in token base units
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -141,7 +139,6 @@ class ERC20:
             sender: ChecksumAddress,
             recipient: ChecksumAddress,
             amount: int,
-            sender_address: ChecksumAddress,
             **kwargs
     ) -> TypedContractFunction[bool]:
         """
@@ -151,7 +148,6 @@ class ERC20:
             sender: Address to transfer tokens from
             recipient: Address to transfer tokens to
             amount: Amount to transfer in token base units
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -168,7 +164,6 @@ class ERC20:
             self,
             spender: ChecksumAddress,
             added_value: int,
-            sender_address: ChecksumAddress,
             **kwargs
     ) -> TypedContractFunction[bool]:
         """
@@ -177,7 +172,6 @@ class ERC20:
         Args:
             spender: Address which will spend the funds
             added_value: Amount of tokens to increase allowance by
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -185,7 +179,6 @@ class ERC20:
         """
         func = self.contract.functions.increaseAllowance(spender, added_value)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -194,7 +187,6 @@ class ERC20:
             self,
             spender: ChecksumAddress,
             subtracted_value: int,
-            sender_address: ChecksumAddress,
             **kwargs
     ) -> TypedContractFunction[bool]:
         """
@@ -203,7 +195,6 @@ class ERC20:
         Args:
             spender: Address which will spend the funds
             subtracted_value: Amount of tokens to decrease allowance by
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -218,7 +209,7 @@ class ERC20:
 
     # ================= HELPER METHODS =================
 
-    def convert_amount_to_float(self, amount: int) -> float:
+    async def convert_amount_to_float(self, amount: int) -> float:
         """
         Convert an amount in token base units to a human-readable float.
 
@@ -228,13 +219,12 @@ class ERC20:
         Returns:
             Human-readable amount as a float
         """
-        decimals = self.decimals()
+        decimals = await self.decimals()
         return amount / (10 ** decimals)
 
     def approve_max(
             self,
             spender: ChecksumAddress,
-            sender_address: ChecksumAddress,
             **kwargs
     ) -> TypedContractFunction[bool]:
         """
@@ -242,7 +232,6 @@ class ERC20:
 
         Args:
             spender: Address which will spend the funds
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -252,36 +241,26 @@ class ERC20:
         max_uint256 = 2 ** 256 - 1
         return self.approve(spender, max_uint256, **kwargs)
 
-    def has_sufficient_allowance(
-            self,
-            owner: ChecksumAddress,
-            spender: ChecksumAddress,
-            amount: int
-    ) -> bool:
-        """
-        Check if the spender has sufficient allowance to spend the given amount.
+    async def balance_of_async(self, account: ChecksumAddress) -> int:
+        """Get token balance for an account using async call."""
+        return await self.contract.functions.balanceOf(account).call()
 
-        Args:
-            owner: Address that owns the tokens
-            spender: Address that wants to spend the tokens
-            amount: Amount to check against the allowance
+    async def allowance_async(self, owner: ChecksumAddress, spender: ChecksumAddress) -> int:
+        """Get token allowance for a spender using async call."""
+        return await self.contract.functions.allowance(owner, spender).call()
 
-        Returns:
-            True if allowance is sufficient, False otherwise
-        """
-        current_allowance = self.allowance(owner, spender)
-        return current_allowance >= amount
+    async def total_supply_async(self) -> int:
+        """Get total token supply using async call."""
+        return await self.contract.functions.totalSupply().call()
 
-    def has_sufficient_balance(self, account: ChecksumAddress, amount: int) -> bool:
-        """
-        Check if an account has sufficient balance for a transaction.
+    async def name_async(self) -> str:
+        """Get token name using async call."""
+        return await self.contract.functions.name().call()
 
-        Args:
-            account: Address to check balance of
-            amount: Amount to check against the balance
+    async def symbol_async(self) -> str:
+        """Get token symbol using async call."""
+        return await self.contract.functions.symbol().call()
 
-        Returns:
-            True if balance is sufficient, False otherwise
-        """
-        current_balance = self.balance_of(account)
-        return current_balance >= amount
+    async def decimals_async(self) -> int:
+        """Get token decimals using async call."""
+        return await self.contract.functions.decimals().call()

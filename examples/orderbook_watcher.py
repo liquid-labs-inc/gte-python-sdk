@@ -11,7 +11,7 @@ import time
 from rich.console import Console
 from rich.live import Live
 from rich.table import Table
-from web3 import Web3
+from web3 import AsyncWeb3
 
 from gte_py import Client
 from gte_py.config import TESTNET_CONFIG
@@ -89,7 +89,7 @@ class OrderbookWatcher:
         self.table.rows = []
 
         # Get top of book prices
-        tob = self.clob.get_tob()
+        tob = asyncio.run(self.clob.get_tob())
         max_bid, min_ask = tob
 
         # Update title with market info
@@ -181,10 +181,10 @@ async def main():
     # Connect to Ethereum node
     if args.use_http or True:
         console.print(f"Connecting to MegaETH Testnet via HTTP: {TESTNET_CONFIG.rpc_http}")
-        web3 = Web3(Web3.HTTPProvider(TESTNET_CONFIG.rpc_http))
+        web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(TESTNET_CONFIG.rpc_http))
     else:
         console.print(f"Connecting to MegaETH Testnet via WebSocket: {TESTNET_CONFIG.rpc_ws}")
-        web3 = Web3(Web3.LegacyWebSocketProvider(TESTNET_CONFIG.rpc_ws))
+        web3 = AsyncWeb3(AsyncWeb3.LegacyWebSocketProvider(TESTNET_CONFIG.rpc_ws))
 
     if not web3.is_connected():
         console.print("[red]Failed to connect to Ethereum node![/red]")
@@ -194,7 +194,7 @@ async def main():
     client = Client(web3=web3, config=TESTNET_CONFIG)
 
     # Get market details
-    market_address = Web3.to_checksum_address(args.market)
+    market_address = AsyncWeb3.to_checksum_address(args.market)
 
     # Initialize ICLOB contract
     clob = ICLOB(web3, market_address)

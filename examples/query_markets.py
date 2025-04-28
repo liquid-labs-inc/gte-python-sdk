@@ -4,7 +4,7 @@ import asyncio
 from typing import Optional, List
 
 from eth_typing import ChecksumAddress
-from web3 import Web3
+from web3 import AsyncWeb3
 
 from gte_py import Client
 from gte_py.config import TESTNET_CONFIG
@@ -58,7 +58,7 @@ async def query_market_orderbook(client: Client, market: gte_py.models.Market) -
 
     try:
         # Get orderbook for the market
-        orderbook = await client.get_orderbook(market)
+        orderbook = await client.get_order_book(market)
 
         # Display bids
         print("Bids:")
@@ -112,8 +112,8 @@ async def main() -> None:
     """Run the market query example."""
     print("GTE Market Query Example")
 
-    # Initialize Web3
-    web3 = Web3(Web3.HTTPProvider(TESTNET_CONFIG.rpc_http))
+    # Initialize AsyncWeb3
+    web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(TESTNET_CONFIG.rpc_http))
 
     # Initialize client
     client = Client(

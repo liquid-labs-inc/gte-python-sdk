@@ -4,12 +4,12 @@ import asyncio
 import logging
 from typing import Optional
 
-from web3 import Web3
+from web3 import AsyncWeb3
 from web3.types import TxReceipt
 
 from gte_py import Client
 from gte_py.config import TESTNET_CONFIG
-from gte_py.models import OrderSide, TimeInForce, Market
+from gte_py.models import Side, TimeInForce, Market
 from gte_py.contracts.iclob_historical import CLOBHistoricalQuerier
 from utils import (
     print_separator,
@@ -37,10 +37,10 @@ async def approve_and_deposit_example(client: Client, market: Market, amount: fl
     )
 
     print("\nSending approval transaction...")
-    tx_funcs[0].send_wait(WALLET_PRIVATE_KEY)
+    await tx_funcs[0].send_wait(WALLET_PRIVATE_KEY)
 
     print("\nSending deposit transaction...")
-    tx_funcs[1].send_wait(WALLET_PRIVATE_KEY)
+    await tx_funcs[1].send_wait(WALLET_PRIVATE_KEY)
 
     # Now deposit the base token
     base = market.base_token_address
@@ -52,10 +52,10 @@ async def approve_and_deposit_example(client: Client, market: Market, amount: fl
     )
 
     print("\nSending approval transaction...")
-    tx_funcs[0].send_wait(WALLET_PRIVATE_KEY)
+    await tx_funcs[0].send_wait(WALLET_PRIVATE_KEY)
 
     print("\nSending deposit transaction...")
-    tx_funcs[1].send_wait(WALLET_PRIVATE_KEY)
+    await tx_funcs[1].send_wait(WALLET_PRIVATE_KEY)
 
 
 async def limit_order_example(client: Client, market: Market) -> None:
@@ -69,26 +69,28 @@ async def limit_order_example(client: Client, market: Market) -> None:
     print(f"Creating BUY limit order at price: {price}")
     tx_func = await client.place_limit_order(
         market=market,
-        side=OrderSide.BUY,
+        side=Side.BUY,
         amount=amount,
         price=price,
         time_in_force=TimeInForce.GTC,
     )
 
-    order = tx_func.send_wait(WALLET_PRIVATE_KEY)
+    # Use async version for sending transaction
+    order = await tx_func.send_wait(WALLET_PRIVATE_KEY)
     print(f"Order created: {order}")
     await get_order_status(client, market, order.order_id)
 
     print(f"Creating SELL limit order at price: {price}")
     tx_func = await client.place_limit_order(
         market=market,
-        side=OrderSide.SELL,
+        side=Side.SELL,
         amount=amount,
         price=price,
         time_in_force=TimeInForce.GTC,
     )
 
-    order = tx_func.send_wait(WALLET_PRIVATE_KEY)
+    # Use async version for sending transaction
+    order = await tx_func.send_wait(WALLET_PRIVATE_KEY)
     print(f"Order created: {order}")
     await get_order_status(client, market, order.order_id)
 
@@ -109,7 +111,7 @@ async def cancel_order_example(client: Client, market: Market, order_id: Optiona
     )
 
     print("\nSending transaction...")
-    receipt = tx_func.send_wait(WALLET_PRIVATE_KEY)
+    receipt = await tx_func.send_wait(WALLET_PRIVATE_KEY)
     return receipt
 
 
@@ -148,7 +150,7 @@ async def show_orders(client: Client, market: Market) -> None:
 
     except Exception as e:
         print(f"Couldn't fetch on-chain orders: {str(e)}")
-        print("This feature requires Web3 provider and a market with contract address")
+        print("This feature requires AsyncWeb3 provider and a market with contract address")
 
 
 async def display_recent_matches(client: Client, market: Market, block_range: int = 1000) -> None:
@@ -157,7 +159,7 @@ async def display_recent_matches(client: Client, market: Market, block_range: in
     
     try:
         # Get current block number
-        current_block = client._web3.eth.block_number
+        current_block = await client._web3.eth.block_number
         from_block = max(1, current_block - block_range)
         
         # Initialize the historical querier
@@ -183,54 +185,50 @@ async def main() -> None:
     """Run the on-chain trading examples."""
     network = TESTNET_CONFIG
 
-    print("Initializing Web3...")
-    web3 = Web3(Web3.HTTPProvider(network.rpc_http))
+    print("Initializing AsyncWeb3...")
+    web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(network.rpc_http))
 
     print("Connected to blockchain:")
-    print(f"Chain ID: {web3.eth.chain_id}")
+    print(f"Chain ID: {await web3.eth.chain_id}")
 
     # Check for required environment variables
     if not WALLET_ADDRESS or not WALLET_PRIVATE_KEY:
         raise ValueError("WALLET_ADDRESS and WALLET_PRIVATE_KEY must be set in .env file")
 
-    wallet_address = Web3.to_checksum_address(WALLET_ADDRESS)
+    wallet_address = AsyncWeb3.to_checksum_address(WALLET_ADDRESS)
 
-    # Initialize client with Web3
+    # Initialize client with AsyncWeb3
     print("Initializing GTE client...")
     client = Client(web3=web3, config=network, sender_address=wallet_address)
 
-    try:
-        # Get a market to work with
-        market = await display_market_info(client, MARKET_ADDRESS)
 
-        # Show balances
-        await show_balances(client, market)
+    # Get a market to work with
+    market = await display_market_info(client, MARKET_ADDRESS)
 
-        # Display recent order matches
-        await display_recent_matches(client, market)
+    # Show balances
+    await show_balances(client, market)
 
-        print("\nNOTE: For WETH wrapping and unwrapping examples, see wrap_weth.py")
+    # Display recent order matches
+    await display_recent_matches(client, market)
 
-        # Deposit tokens example
-        await approve_and_deposit_example(client, market, amount=1, price=1)
+    print("\nNOTE: For WETH wrapping and unwrapping examples, see wrap_weth.py")
 
-        # Check balances after deposit
-        await show_balances(client, market)
+    # Deposit tokens example
+    await approve_and_deposit_example(client, market, amount=1, price=1)
 
-        # Order examples
-        await limit_order_example(client, market)
+    # Check balances after deposit
+    await show_balances(client, market)
 
-        # Cancel an order
-        await cancel_order_example(client, market, order_id=None)
+    # Order examples
+    await limit_order_example(client, market)
 
-        # Show all orders
-        await show_orders(client, market)
+    # Cancel an order
+    await cancel_order_example(client, market, order_id=None)
 
-    except Exception as e:
-        print(f"Error during examples: {str(e)}")
+    # Show all orders
+    await show_orders(client, market)
 
-    finally:
-        await client.close()
+
 
 
 if __name__ == "__main__":

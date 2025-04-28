@@ -1,4 +1,3 @@
-\
 """
 Historical event querying module for CLOB contract events.
 
@@ -8,8 +7,8 @@ from the CLOB (Central Limit Order Book) contract.
 from typing import List, Optional
 
 from eth_typing import ChecksumAddress
-from web3 import Web3
-from web3.contract import ContractEvent
+from web3 import AsyncWeb3
+from web3.contract.contract import ContractEvent
 
 from .events import OrderMatchedEvent, parse_order_matched
 from .utils import load_abi
@@ -23,12 +22,12 @@ class CLOBHistoricalQuerier:
     from a CLOB contract within specified block ranges.
     """
 
-    def __init__(self, web3: Web3, contract_address: ChecksumAddress):
+    def __init__(self, web3: AsyncWeb3, contract_address: ChecksumAddress):
         """
         Initialize the CLOB historical querier.
 
         Args:
-            web3: Web3 instance connected to a provider.
+            web3: AsyncWeb3 instance connected to a provider.
             contract_address: Address of the CLOB contract.
         """
         self.web3 = web3
@@ -38,11 +37,11 @@ class CLOBHistoricalQuerier:
         self._order_matched_event: ContractEvent = self.contract.events.OrderMatched
 
     def query_order_matched(
-        self,
-        from_block: int,
-        to_block: int | str = "latest",
-        maker: Optional[ChecksumAddress] = None,
-        taker: Optional[ChecksumAddress] = None,
+            self,
+            from_block: int,
+            to_block: int | str = "latest",
+            maker: Optional[ChecksumAddress] = None,
+            taker: Optional[ChecksumAddress] = None,
     ) -> List[OrderMatchedEvent]:
         """
         Query historical OrderMatched events within a block range.
@@ -74,4 +73,3 @@ class CLOBHistoricalQuerier:
             # TODO: Add more specific error handling based on web3 exceptions
             print(f"Error querying OrderMatched events: {e}")
             return []
-

@@ -4,7 +4,7 @@ import logging
 from typing import TypeVar, List
 
 from eth_typing import ChecksumAddress
-from web3 import Web3
+from web3 import AsyncWeb3
 
 from .utils import TypedContractFunction, load_abi
 
@@ -21,14 +21,14 @@ class CLOBFactory:
 
     def __init__(
             self,
-            web3: Web3,
+            web3: AsyncWeb3,
             contract_address: ChecksumAddress,
     ):
         """
         Initialize the CLOBFactory wrapper.
 
         Args:
-            web3: Web3 instance connected to a provider
+            web3: AsyncWeb3 instance connected to a provider
             contract_address: Address of the CLOBFactory contract
         """
         self.web3 = web3
@@ -39,27 +39,27 @@ class CLOBFactory:
 
     # ================= READ METHODS =================
 
-    def owner(self) -> ChecksumAddress:
+    async def owner(self) -> ChecksumAddress:
         """Get the owner of the factory."""
-        return self.contract.functions.owner().call()
+        return await self.contract.functions.owner().call()
 
-    def beacon(self) -> ChecksumAddress:
+    async def beacon(self) -> ChecksumAddress:
         """Get the beacon address used for proxy contracts."""
-        return self.contract.functions.beacon().call()
+        return await self.contract.functions.beacon().call()
 
-    def get_fee_recipient(self) -> ChecksumAddress:
+    async def get_fee_recipient(self) -> ChecksumAddress:
         """Get the address that receives fees from CLOB markets."""
-        return self.contract.functions.getFeeRecipient().call()
+        return await self.contract.functions.getFeeRecipient().call()
 
-    def get_event_nonce(self) -> int:
+    async def get_event_nonce(self) -> int:
         """Get the current event nonce."""
-        return self.contract.functions.getEventNonce().call()
+        return await self.contract.functions.getEventNonce().call()
 
-    def max_num_orders(self) -> int:
+    async def max_num_orders(self) -> int:
         """Get the maximum number of orders per market."""
-        return self.contract.functions.maxNumOrders().call()
+        return await self.contract.functions.maxNumOrders().call()
 
-    def get_market_address(self, quote_token: ChecksumAddress, base_token: ChecksumAddress) -> ChecksumAddress:
+    async def get_market_address(self, quote_token: ChecksumAddress, base_token: ChecksumAddress) -> ChecksumAddress:
         """
         Get the address of a market given quote and base tokens.
 
@@ -70,9 +70,9 @@ class CLOBFactory:
         Returns:
             The address of the market
         """
-        return self.contract.functions.getMarketAddress(quote_token, base_token).call()
+        return await self.contract.functions.getMarketAddress(quote_token, base_token).call()
 
-    def is_market(self, market: ChecksumAddress) -> bool:
+    async def is_market(self, market: ChecksumAddress) -> bool:
         """
         Check if an address is a valid market created by this factory.
 
@@ -82,9 +82,9 @@ class CLOBFactory:
         Returns:
             True if the address is a market, False otherwise
         """
-        return self.contract.functions.isMarket(market).call()
+        return await self.contract.functions.isMarket(market).call()
 
-    def get_account_balance(self, account: ChecksumAddress, token: ChecksumAddress) -> int:
+    async def get_account_balance(self, account: ChecksumAddress, token: ChecksumAddress) -> int:
         """
         Get the balance of a token for an account.
 
@@ -95,9 +95,9 @@ class CLOBFactory:
         Returns:
             The balance amount
         """
-        return self.contract.functions.getAccountBalance(account, token).call()
+        return await self.contract.functions.getAccountBalance(account, token).call()
 
-    def get_fee_tier(self, account: ChecksumAddress) -> int:
+    async def get_fee_tier(self, account: ChecksumAddress) -> int:
         """
         Get the fee tier for an account.
 
@@ -107,9 +107,9 @@ class CLOBFactory:
         Returns:
             The fee tier enum value
         """
-        return self.contract.functions.getFeeTier(account).call()
+        return await self.contract.functions.getFeeTier(account).call()
 
-    def get_maker_fee_rate(self, fee_tier: int) -> int:
+    async def get_maker_fee_rate(self, fee_tier: int) -> int:
         """
         Get the maker fee rate for a fee tier.
 
@@ -119,9 +119,9 @@ class CLOBFactory:
         Returns:
             The maker fee rate in basis points
         """
-        return self.contract.functions.getMakerFeeRate(fee_tier).call()
+        return await self.contract.functions.getMakerFeeRate(fee_tier).call()
 
-    def get_taker_fee_rate(self, fee_tier: int) -> int:
+    async def get_taker_fee_rate(self, fee_tier: int) -> int:
         """
         Get the taker fee rate for a fee tier.
 
@@ -131,9 +131,9 @@ class CLOBFactory:
         Returns:
             The taker fee rate in basis points
         """
-        return self.contract.functions.getTakerFeeRate(fee_tier).call()
+        return await self.contract.functions.getTakerFeeRate(fee_tier).call()
 
-    def approved_operators(self, account: ChecksumAddress, operator: ChecksumAddress) -> bool:
+    async def approved_operators(self, account: ChecksumAddress, operator: ChecksumAddress) -> bool:
         """
         Check if an operator is approved for an account.
 
@@ -144,7 +144,7 @@ class CLOBFactory:
         Returns:
             True if the operator is approved, False otherwise
         """
-        return self.contract.functions.approvedOperators(account, operator).call()
+        return await self.contract.functions.approvedOperators(account, operator).call()
 
     # ================= WRITE METHODS =================
 
@@ -153,7 +153,6 @@ class CLOBFactory:
             base_token: ChecksumAddress,
             quote_token: ChecksumAddress,
             settings: dict,
-            sender_address: ChecksumAddress,
             **kwargs,
     ) -> TypedContractFunction[ChecksumAddress]:
         """
@@ -574,3 +573,69 @@ class CLOBFactory:
             "takerBaseAmount": taker_base_amount,
             "makerCredits": formatted_maker_credits
         }
+
+    async def owner_async(self) -> ChecksumAddress:
+        """Get the owner of the factory using async call."""
+        return await self.contract.functions.owner().call()
+
+    async def beacon_async(self) -> ChecksumAddress:
+        """Get the beacon address used for proxy contracts using async call."""
+        return await self.contract.functions.beacon().call()
+
+    async def get_fee_recipient_async(self) -> ChecksumAddress:
+        """Get the address that receives fees from CLOB markets using async call."""
+        return await self.contract.functions.getFeeRecipient().call()
+
+    async def get_event_nonce_async(self) -> int:
+        """Get the current event nonce using async call."""
+        return await self.contract.functions.getEventNonce().call()
+
+    async def max_num_orders_async(self) -> int:
+        """Get the maximum number of orders per market using async call."""
+        return await self.contract.functions.maxNumOrders().call()
+
+    async def get_market_address_async(self, quote_token: ChecksumAddress, base_token: ChecksumAddress) -> ChecksumAddress:
+        """
+        Get the address of the market for a specific token pair using async call.
+
+        Args:
+            quote_token: Address of the quote token
+            base_token: Address of the base token
+
+        Returns:
+            Address of the market contract
+        """
+        return await self.contract.functions.getMarketAddress(quote_token, base_token).call()
+
+    async def get_maker_fees_async(self) -> int:
+        """Get the maker fees as a packed uint256 using async call."""
+        return await self.contract.functions.makerFees().call()
+
+    async def get_taker_fees_async(self) -> int:
+        """Get the taker fees as a packed uint256 using async call."""
+        return await self.contract.functions.takerFees().call()
+
+    async def get_is_market_async(self, market_address: ChecksumAddress) -> bool:
+        """
+        Check if an address is a registered market using async call.
+
+        Args:
+            market_address: Address to check
+
+        Returns:
+            True if the address is a registered market, False otherwise
+        """
+        return await self.contract.functions.isMarket(market_address).call()
+
+    async def get_account_balance_async(self, account: ChecksumAddress, token: ChecksumAddress) -> int:
+        """
+        Get the account balance for a specific token using async call.
+
+        Args:
+            account: Address of the account
+            token: Address of the token
+
+        Returns:
+            Account balance in token atoms
+        """
+        return await self.contract.functions.getAccountBalance(account, token).call()

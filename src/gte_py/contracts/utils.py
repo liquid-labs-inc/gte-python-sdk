@@ -2,18 +2,18 @@ import importlib.resources as pkg_resources
 import json
 import logging
 import time
-import inspect
-from typing import Any, Generic, TypeVar, Callable, Dict, Tuple, Optional
+from typing import Any, Generic, TypeVar, Callable
 
 from eth_account import Account
 from eth_account.types import PrivateKeyType
 from hexbytes import HexBytes
-from web3.contract.contract import ContractFunction
+from web3 import AsyncWeb3
+from web3.contract.async_contract import AsyncContractFunction
 from web3.exceptions import ContractCustomError
 from web3.types import TxParams, EventData
 
 from gte_py.error import (
-    GTEError, InsufficientBalance, NotFactory, FOKNotFilled, UnauthorizedAmend,
+    InsufficientBalance, NotFactory, FOKNotFilled, UnauthorizedAmend,
     UnauthorizedCancel, InvalidAmend, OrderAlreadyExpired, InvalidAccountOrOperator,
     PostOnlyOrderWouldBeFilled, MaxOrdersInBookPostNotCompetitive, NonPostOnlyAmend,
     ZeroCostTrade, ZeroTrade, ZeroOrder
@@ -88,8 +88,9 @@ def convert_web3_error(error: ContractCustomError, cause: str) -> Exception:
     Convert a web3.exceptions.ContractCustomError into our custom exception.
     
     Args:
-        error: Web3 contract custom error
-        
+        error: AsyncWeb3 contract custom error
+        cause: The cause of the error, usually the function name or context
+
     Returns:
         A custom GTE exception
     """
@@ -111,8 +112,8 @@ class TypedContractFunction(Generic[T]):
     """Generic transaction wrapper with typed results and async support"""
     __slots__ = ["web3", "func_call", "params", "event", "event_parser", "result", "receipt", "tx_hash"]
 
-    def __init__(self, func_call: ContractFunction, params: TxParams | Any = None):
-        self.web3 = func_call.w3
+    def __init__(self, func_call: AsyncContractFunction, params: TxParams | Any = None):
+        self.web3: AsyncWeb3 = func_call.w3
         self.func_call = func_call  # Bound contract function (with arguments)
         self.params = params  # Transaction parameters
         self.event = None
@@ -127,12 +128,12 @@ class TypedContractFunction(Generic[T]):
         self.event_parser = parser
         return self
 
-    def call(self) -> T:
+    async def call(self) -> T:
         """Synchronous read operation"""
-        self.result = self.func_call.call(self.params)
+        self.result = await self.func_call.call(self.params)
         return self.result
 
-    def send(self, private_key: PrivateKeyType | None = None) -> HexBytes:
+    async def send(self, private_key: PrivateKeyType | None = None) -> HexBytes:
         """Synchronous write operation"""
         try:
             if private_key:
@@ -141,27 +142,27 @@ class TypedContractFunction(Generic[T]):
                 if 'from' not in tx:
                     tx['from'] = local_account.address
                 if 'nonce' not in tx:
-                    tx['nonce'] = self.web3.eth.get_transaction_count(local_account.address)
+                    tx['nonce'] = await self.web3.eth.get_transaction_count(local_account.address)
                 logger.info('Sending %s with %s', format_contract_function(self.func_call), tx)
-                tx = self.func_call.build_transaction(tx)
+                tx = await self.func_call.build_transaction(tx)
                 # Sign and send the transaction
                 signed = self.web3.eth.account.sign_transaction(tx, private_key)
-                self.tx_hash = self.web3.eth.send_raw_transaction(signed.raw_transaction)
+                self.tx_hash = await self.web3.eth.send_raw_transaction(signed.raw_transaction)
             else:
                 tx = self.params
                 logger.info('Sending %s with %s', format_contract_function(self.func_call), tx)
-                tx = self.func_call.build_transaction(tx)
+                tx = await self.func_call.build_transaction(tx)
                 # Send the transaction with default account
-                self.tx_hash = self.web3.eth.send_transaction(tx)
+                self.tx_hash = await self.web3.eth.send_transaction(tx)
 
             return self.tx_hash
         except ContractCustomError as e:
             raise convert_web3_error(e, format_contract_function(self.func_call)) from e
 
-    def build_transaction(self) -> TxParams:
-        return self.func_call.build_transaction(self.params)
+    async def build_transaction(self) -> TxParams:
+        return await self.func_call.build_transaction(self.params)
 
-    def retrieve(self) -> T:
+    async def retrieve(self) -> T:
         """
         Retrieves the result of a transaction.
 
@@ -185,7 +186,7 @@ class TypedContractFunction(Generic[T]):
             return None
         try:
             # Wait for the transaction to be mined
-            self.receipt = self.web3.eth.wait_for_transaction_receipt(self.tx_hash)
+            self.receipt = await self.web3.eth.wait_for_transaction_receipt(self.tx_hash)
             logs = self.event.process_receipt(self.receipt)
 
             if len(logs) == 0:
@@ -199,12 +200,12 @@ class TypedContractFunction(Generic[T]):
         except ContractCustomError as e:
             raise convert_web3_error(e, format_contract_function(self.func_call)) from e
 
-    def send_wait(self, private_key: PrivateKeyType | None = None) -> T:
-        self.send(private_key)
-        return self.retrieve()
+    async def send_wait(self, private_key: PrivateKeyType | None = None) -> T:
+        await self.send(private_key)
+        return await self.retrieve()
 
 
-def format_contract_function(func: ContractFunction) -> str:
+def format_contract_function(func: AsyncContractFunction) -> str:
     """
     Format a ContractFunction into a more readable string with parameter names and values.
     

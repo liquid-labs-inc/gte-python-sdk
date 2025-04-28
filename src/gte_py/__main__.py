@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timedelta
 
 import typer
-from web3 import Web3
+from web3 import AsyncWeb3
 
 from . import Client
 
@@ -312,7 +312,7 @@ def user_positions(user_address: str):
 
     async def _user_positions():
         nonlocal user_address
-        w3 = Web3(Web3.HTTPProvider("https://rpc.gte.network"))
+        w3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider("https://rpc.gte.network"))
         user_address = w3.to_checksum_address(user_address)
         async with Client(w3, user_address) as client:
             positions = await client.get_positions(user_address)

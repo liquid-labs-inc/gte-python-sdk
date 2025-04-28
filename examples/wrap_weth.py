@@ -3,7 +3,7 @@
 import asyncio
 from typing import Optional, Any, Dict, Union
 from eth_typing import HexStr
-from web3 import Web3
+from web3 import AsyncWeb3
 from web3.types import TxReceipt, Wei
 
 from gte_py import Client
@@ -17,7 +17,7 @@ from utils import (
 )
 
 
-async def wait_for_transaction(web3: Web3, tx_hash: HexStr, timeout: int = 120) -> TxReceipt:
+async def wait_for_transaction(web3: AsyncWeb3, tx_hash: HexStr, timeout: int = 120) -> TxReceipt:
     """Wait for a transaction to be mined."""
     start_time = asyncio.get_event_loop().time()
     while True:
@@ -34,29 +34,29 @@ async def wait_for_transaction(web3: Web3, tx_hash: HexStr, timeout: int = 120) 
         await asyncio.sleep(2)
 
 
-async def get_weth_balance(client: Client, web3: Web3, weth_address: str) -> None:
+async def get_weth_balance(client: Client, web3: AsyncWeb3, weth_address: str) -> None:
     """Get WETH balance of the wallet."""
     print_separator("WETH Balance")
 
     # Create WETH instance directly to check balance
     weth = WETH(web3, weth_address)
 
-    # Get WETH balance using the ERC20 balanceOf method
-    weth_balance_raw = weth.balance_of(WALLET_ADDRESS)
+    # Get WETH balance using the async ERC20 balanceOf method
+    weth_balance_raw = await weth.balance_of_async(WALLET_ADDRESS)
     weth_balance = weth.convert_amount_to_float(weth_balance_raw)
 
     # Get exchange balance through the client
     _, exchange_balance = await client.get_balance(weth_address)
 
     # Get native ETH balance
-    eth_balance = web3.from_wei(web3.eth.get_balance(WALLET_ADDRESS), 'ether')
+    eth_balance = web3.from_wei(await web3.eth.get_balance(WALLET_ADDRESS, 'latest'), 'ether')
 
     print(f"ETH Balance:   {eth_balance:.6f} ETH")
     print(f"WETH Balance:  {weth_balance:.6f} WETH (in wallet)")
     print(f"WETH Balance:  {exchange_balance:.6f} WETH (in exchange)")
 
 
-async def wrap_eth_example(client: Client, web3: Web3, weth_address: str, amount_eth: float = 0.01) -> TxReceipt:
+async def wrap_eth_example(client: Client, web3: AsyncWeb3, weth_address: str, amount_eth: float = 0.01) -> TxReceipt:
     """Example of wrapping ETH to WETH."""
     print_separator("Wrap ETH Example")
 
@@ -82,7 +82,7 @@ async def wrap_eth_example(client: Client, web3: Web3, weth_address: str, amount
         raise
 
 
-async def unwrap_eth_example(client: Client, web3: Web3, weth_address: str, amount_eth: float = 0.01) -> TxReceipt:
+async def unwrap_eth_example(client: Client, web3: AsyncWeb3, weth_address: str, amount_eth: float = 0.01) -> TxReceipt:
     """Example of unwrapping WETH back to ETH."""
     print_separator("Unwrap WETH Example")
 
@@ -112,8 +112,8 @@ async def main() -> None:
     """Run the WETH wrapping examples."""
     network = TESTNET_CONFIG
 
-    print("Initializing Web3...")
-    web3 = Web3(Web3.HTTPProvider(network.rpc_http))
+    print("Initializing AsyncWeb3...")
+    web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(network.rpc_http))
 
     if not web3.is_connected():
         raise ConnectionError(f"Failed to connect to RPC node at {network.rpc_http}")
@@ -129,9 +129,9 @@ async def main() -> None:
     # Check for wallet configuration
     if not WALLET_ADDRESS or not WALLET_PRIVATE_KEY:
         raise ValueError("WALLET_ADDRESS and WALLET_PRIVATE_KEY must be set in .env file")
-    wallet_address = Web3.to_checksum_address(WALLET_ADDRESS)
+    wallet_address = AsyncWeb3.to_checksum_address(WALLET_ADDRESS)
 
-    # Initialize client with Web3
+    # Initialize client with AsyncWeb3
     print("Initializing GTE client...")
     client = Client(web3=web3, config=network, sender_address=wallet_address)
 

@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 
 from dotenv import load_dotenv
-from web3 import Web3
+from web3 import AsyncWeb3
 
 from gte_py import Client
 
@@ -31,7 +31,7 @@ def format_timestamp(timestamp_ms):
     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 
-async def show_user_orders(client, user_address, market_address=None):
+async def show_user_orders(client: Client, user_address, market_address=None):
     """Show user orders."""
     print_separator("User Orders")
 
@@ -69,7 +69,7 @@ async def show_user_orders(client, user_address, market_address=None):
         print(f"  Status: {order.status.name}")
 
 
-async def show_user_trades(client, user_address, market_address=None):
+async def show_user_trades(client: Client, user_address, market_address=None):
     """Show user trades."""
     print_separator("User Trades")
 
@@ -87,12 +87,12 @@ async def show_user_trades(client, user_address, market_address=None):
         print(f"  Transaction: {trade.tx_hash}")
 
 
-async def show_order_book(client, market_address):
+async def show_order_book(client: Client, market_address):
     """Show order book snapshot."""
     print_separator("Order Book Snapshot")
 
     try:
-        # This only works with Web3 provider and contract address
+        # This only works with AsyncWeb3 provider and contract address
         book = await client.get_order_book_snapshot(market_address, depth=5)
 
         print("Asks (Sell Orders):")
@@ -109,15 +109,15 @@ async def show_order_book(client, market_address):
 
     except Exception as e:
         print(f"Couldn't fetch on-chain order book: {str(e)}")
-        print("This feature requires Web3 provider and a market with contract address")
+        print("This feature requires AsyncWeb3 provider and a market with contract address")
 
 
-async def show_user_balances(client, user_address, market_address):
+async def show_user_balances(client: Client, user_address, market_address):
     """Show user balances in the CLOB."""
     print_separator("User CLOB Balances")
 
     try:
-        # This only works with Web3 provider and contract address
+        # This only works with AsyncWeb3 provider and contract address
         balances = await client.get_user_balances(
             user_address=user_address, market_address=market_address
         )
@@ -132,7 +132,7 @@ async def show_user_balances(client, user_address, market_address):
 
     except Exception as e:
         print(f"Couldn't fetch on-chain balances: {str(e)}")
-        print("This feature requires Web3 provider and a market with contract address")
+        print("This feature requires AsyncWeb3 provider and a market with contract address")
 
 
 async def main():
@@ -145,10 +145,10 @@ async def main():
     web3 = None
     if RPC_URL and RPC_URL != "https://rpc-testnet.example.com":
         try:
-            web3 = Web3(Web3.HTTPProvider(RPC_URL))
-            print(f"Web3 Connected: {web3.is_connected()}")
+            web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(RPC_URL))
+            print(f"AsyncWeb3 Connected: {web3.is_connected()}")
         except Exception as e:
-            print(f"Couldn't initialize Web3: {e}")
+            print(f"Couldn't initialize AsyncWeb3: {e}")
             web3 = None
 
     client = Client(web3=web3, router_address=ROUTER_ADDRESS)
@@ -164,13 +164,13 @@ async def main():
         print(f"Using market: {market.pair} ({market.address})")
 
         # Run examples
-        await show_user_orders(client, USER_ADDRESS, market.address)
-        await show_user_trades(client, USER_ADDRESS, market.address)
+        await show_user_orders(client: Client, USER_ADDRESS, market.address)
+        await show_user_trades(client: Client, USER_ADDRESS, market.address)
 
         # These only work with on-chain markets
         if web3 and web3.is_connected() and market.contract_address:
-            await show_order_book(client, market.address)
-            await show_user_balances(client, USER_ADDRESS, market.address)
+            await show_order_book(client: Client, market.address)
+            await show_user_balances(client: Client, USER_ADDRESS, market.address)
 
     finally:
         await client.close()

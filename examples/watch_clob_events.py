@@ -6,7 +6,7 @@ import os
 from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
-from web3 import Web3
+from web3 import AsyncWeb3
 
 from gte_py import Client
 from gte_py.config import TESTNET_CONFIG
@@ -17,7 +17,7 @@ from gte_py.contracts.iclob_streaming import CLOBEventStreamer
 load_dotenv()
 
 # Configure these variables through environment or directly
-WALLET_ADDRESS = Web3.to_checksum_address(os.getenv("WALLET_ADDRESS"))
+WALLET_ADDRESS = AsyncWeb3.to_checksum_address(os.getenv("WALLET_ADDRESS"))
 MARKET_ADDRESS = os.getenv("MARKET_ADDRESS", "0xfaf0BB6F2f4690CA4319e489F6Dc742167B9fB10")  # MEOW/WETH
 
 
@@ -184,28 +184,28 @@ def watch_order_book_changes_blocking(streamer, duration_seconds=60):
 
 async def main():
     """Run the CLOB event watching examples."""
-    # Get configuration and Web3 connection
+    # Get configuration and AsyncWeb3 connection
     network = TESTNET_CONFIG
     
-    print("Initializing Web3...")
-    web3 = Web3(Web3.HTTPProvider(network.rpc_http))
+    print("Initializing AsyncWeb3...")
+    web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(network.rpc_http))
     
     print("Connected to blockchain:")
     print(f"Chain ID: {web3.eth.chain_id}")
-    print(f"Latest block: {web3.eth.block_number}")
+    print(f"Latest block: {await web3.eth.get_block_number()}")
     
-    # Initialize client with Web3
+    # Initialize client with AsyncWeb3
     print("Initializing GTE client...")
     client = Client(web3=web3, config=network, sender_address=WALLET_ADDRESS)
     
     # Initialize CLOB contract wrapper
     print(f"Initializing CLOB contract at {MARKET_ADDRESS}...")
-    clob = ICLOB(web3, Web3.to_checksum_address(MARKET_ADDRESS))
+    clob = ICLOB(web3, AsyncWeb3.to_checksum_address(MARKET_ADDRESS))
     
     # Initialize the event streamer
     print("Creating event streamer...")
     # Start from current block to avoid fetching historical events
-    current_block = web3.eth.block_number
+    current_block = await web3.eth.get_block_number()
     streamer = CLOBEventStreamer(clob, from_block=current_block - 100, poll_interval=1.0)
     
     # Example 1: Watch for all market activity for 30 seconds
