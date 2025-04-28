@@ -8,7 +8,7 @@ from eth_typing import ChecksumAddress, HexStr
 from tabulate import tabulate
 from web3 import AsyncWeb3
 
-from gte_py import Client
+from gte_py import Client, Order
 from gte_py.models import Market
 
 # Load environment variables from .env file
@@ -115,15 +115,17 @@ async def show_all_orders(client: Client, market: Market):
 
     try:
         # Get all orders for the market
-        orders = await client.execution.get_all_orders(market)
+        orders: List[Order] = await client.execution.get_live_orders(market)
 
         # Display order details
         for order in orders:
             print(f"Order ID: {order.order_id}")
-            print(f"  Side: {order.side.name}")
+            print(f"  Side: {order.side}")
             print(f"  Price: {order.price}")
             print(f"  Amount: {order.amount}")
             print(f"  Status: {order.status}")
+            print(f"  Order Type: {order.order_type}")
+            print(f"  Timestamp: {order.created_at}")
             print("-" * 20)
 
     except Exception as e:

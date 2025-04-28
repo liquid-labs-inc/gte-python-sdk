@@ -9,7 +9,6 @@ import os
 import time
 
 from rich.console import Console
-from rich.live import Live
 from rich.table import Table
 from web3 import AsyncWeb3
 
@@ -18,7 +17,7 @@ from gte_py.config import TESTNET_CONFIG
 from gte_py.contracts.iclob import ICLOB
 from gte_py.contracts.iclob_streaming import CLOBEventStreamer
 from gte_py.market import MarketClient
-from gte_py.models import Market, OrderBookSnapshot
+from gte_py.models import OrderBookSnapshot
 
 # Initialize console for rich text output
 console = Console()
@@ -54,10 +53,9 @@ class OrderbookWatcher:
         self.last_trade = None
 
         # Get market symbol information
-        self.base_token = self.clob.get_base_token()
-        self.quote_token = self.clob.get_quote_token()
-        self.market_symbol = f"{self.base_token[-4:]}_{self.quote_token[-4:]}"
-
+        self.base_token = None
+        self.quote_token = None
+        self.market_symbol = None
         # Initialize display table
         self.table = Table(title=f"Orderbook: {self.market_symbol}")
         self._setup_table()
@@ -65,6 +63,11 @@ class OrderbookWatcher:
         # Running state
         self.running = False
         self.task = None
+
+    async def init(self):
+        self.base_token = await self.clob.get_base_token()
+        self.quote_token = await self.clob.get_quote_token()
+        self.market_symbol = f"{self.base_token[-4:]}_{self.quote_token[-4:]}"
 
     def _setup_table(self):
         """Set up the table columns."""
@@ -128,6 +131,7 @@ class OrderbookWatcher:
 
     async def start(self, client: Client | None = None):
         """Start watching the orderbook."""
+        await self.init()
         self.running = True
         market = await client.get_market(self.market_address)
 
@@ -184,7 +188,7 @@ async def main():
         web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(TESTNET_CONFIG.rpc_http))
     else:
         console.print(f"Connecting to MegaETH Testnet via WebSocket: {TESTNET_CONFIG.rpc_ws}")
-        web3 = AsyncWeb3(AsyncWeb3.LegacyWebSocketProvider(TESTNET_CONFIG.rpc_ws))
+        web3 = AsyncWeb3(AsyncWeb3.WebSocketProvider(TESTNET_CONFIG.rpc_ws))
 
     if not web3.is_connected():
         console.print("[red]Failed to connect to Ethereum node![/red]")

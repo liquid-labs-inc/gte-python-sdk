@@ -327,6 +327,7 @@ class Order:
     time_in_force: TimeInForce
     status: OrderStatus
     created_at: int
+    owner: ChecksumAddress | None = None
 
     @property
     def datetime(self) -> datetime:

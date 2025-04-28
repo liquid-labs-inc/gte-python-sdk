@@ -556,8 +556,7 @@ class ExecutionClient:
             **kwargs
         )
 
-    # TODO: filter by address
-    async def get_all_orders(self, market: Market, address: ChecksumAddress | None = None) -> List[Order]:
+    async def get_live_orders(self, market: Market, address: ChecksumAddress | None = None) -> List[Order]:
         """
         Get all orders for a specific market and address.
 
@@ -592,9 +591,15 @@ class ExecutionClient:
                 address=address
             )))
             price_level = await clob.get_next_biggest_price(price_level, Side.SELL)
+
+        address = address or self._sender_address
         for task in tasks:
             try:
-                orders.extend(await task)
+                pl_orders = await task
+                for order in pl_orders:
+                    if order.owner != address:
+                        continue
+                    orders.append(order)
             except Exception as e:
                 logger.error(f"Error getting orders: {e}")
         return orders
@@ -814,10 +819,11 @@ class ExecutionClient:
             market_address=market.address,
             side=order_data.side,
             order_type=OrderType.LIMIT,
-            amount=order_data.amount / 10 ** market.base_decimals,
-            price=order_data.price / 10 ** market.quote_decimals,
+            amount=order_data.amount,
+            price=order_data.price,
             time_in_force=TimeInForce.GTC,  # Default
             status=status,
+            owner=order_data.owner,
             created_at=0  # Need to be retrieved from event timestamp
         )
 
