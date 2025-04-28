@@ -8,10 +8,9 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from web3 import AsyncWeb3
 
-from gte_py import Client
-from gte_py.config import TESTNET_CONFIG
-from gte_py.contracts.iclob import ICLOB
-from gte_py.contracts.iclob_streaming import CLOBEventStreamer
+from gte_py.api.contracts.iclob_streaming import CLOBEventStreamer
+from gte_py.clients import Client
+from gte_py.configs import TESTNET_CONFIG
 
 # Load environment variables from .env file
 load_dotenv()
@@ -85,50 +84,50 @@ def handle_order_matched(event):
 async def watch_account_orders(streamer, account, duration_seconds=60):
     """Watch for all orders from a specific account for a duration."""
     print_separator(f"Watching Orders for Account {account}")
-    
+
     print(f"Streaming events for {duration_seconds} seconds...")
-    
+
     # Create streams
     limit_stream = streamer.limit_order_processed_stream(account=account)
     fill_stream = streamer.fill_order_processed_stream(account=account)
-    
+
     # Set up handlers and exit conditions
     start_time = datetime.now()
     end_time = start_time + timedelta(seconds=duration_seconds)
-    
+
     exit_condition = lambda: datetime.now() >= end_time
-    
+
     # Set up async tasks
     tasks = [
         asyncio.create_task(process_stream_async(limit_stream, handle_limit_order, exit_condition)),
         asyncio.create_task(process_stream_async(fill_stream, handle_fill_order, exit_condition))
     ]
-    
+
     # Wait for tasks to complete
     await asyncio.gather(*tasks)
-    
+
     print(f"Finished watching account orders after {duration_seconds} seconds")
 
 
 async def watch_all_market_activity(streamer, duration_seconds=60):
     """Watch all market activity for a duration."""
     print_separator("Watching All Market Activity")
-    
+
     print(f"Streaming events for {duration_seconds} seconds...")
-    
+
     # Create streams for all event types
     limit_stream = streamer.limit_order_processed_stream()
     fill_stream = streamer.fill_order_processed_stream()
     cancel_stream = streamer.order_canceled_stream()
     amend_stream = streamer.order_amended_stream()
     match_stream = streamer.order_matched_stream()
-    
+
     # Set up handlers and exit conditions
     start_time = datetime.now()
     end_time = start_time + timedelta(seconds=duration_seconds)
-    
+
     exit_condition = lambda: datetime.now() >= end_time
-    
+
     # Set up async tasks
     tasks = [
         asyncio.create_task(process_stream_async(limit_stream, handle_limit_order, exit_condition)),
@@ -137,10 +136,10 @@ async def watch_all_market_activity(streamer, duration_seconds=60):
         asyncio.create_task(process_stream_async(amend_stream, handle_order_amended, exit_condition)),
         asyncio.create_task(process_stream_async(match_stream, handle_order_matched, exit_condition))
     ]
-    
+
     # Wait for tasks to complete
     await asyncio.gather(*tasks)
-    
+
     print(f"Finished watching market activity after {duration_seconds} seconds")
 
 
@@ -149,7 +148,7 @@ async def process_stream_async(stream, handler, exit_condition):
     # Get initial events
     for event in stream.get_all_entries():
         handler(event)
-    
+
     # Keep checking for new events until exit condition is met
     while not exit_condition():
         new_events = stream.get_new_entries()
@@ -161,24 +160,24 @@ async def process_stream_async(stream, handler, exit_condition):
 def watch_order_book_changes_blocking(streamer, duration_seconds=60):
     """Watch order book changes synchronously (blocking)."""
     print_separator("Watching Order Book Changes (Blocking)")
-    
+
     print(f"Streaming events for {duration_seconds} seconds...")
     print("Press Ctrl+C to stop early")
-    
+
     try:
         # Set an end time
         end_time = datetime.now() + timedelta(seconds=duration_seconds)
-        
+
         # Use the built-in watching function with a timeout
         def should_exit():
             return datetime.now() >= end_time
-        
+
         # Use the dedicated method that handles all event types
         streamer.watch_order_book_changes(exit_condition=should_exit)
-        
+
     except KeyboardInterrupt:
         print("\nStopped by user")
-    
+
     print(f"Finished watching order book changes")
 
 
@@ -186,38 +185,38 @@ async def main():
     """Run the CLOB event watching examples."""
     # Get configuration and AsyncWeb3 connection
     network = TESTNET_CONFIG
-    
+
     print("Initializing AsyncWeb3...")
     web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(network.rpc_http))
-    
+
     print("Connected to blockchain:")
     print(f"Chain ID: {web3.eth.chain_id}")
     print(f"Latest block: {await web3.eth.get_block_number()}")
-    
+
     # Initialize client with AsyncWeb3
     print("Initializing GTE client...")
     client = Client(web3=web3, config=network, sender_address=WALLET_ADDRESS)
-    
+
     # Initialize CLOB contract wrapper
     print(f"Initializing CLOB contract at {MARKET_ADDRESS}...")
-    clob = ICLOB(web3, AsyncWeb3.to_checksum_address(MARKET_ADDRESS))
-    
+    clob = client.clob.get_clob(AsyncWeb3.to_checksum_address(MARKET_ADDRESS))
+
     # Initialize the event streamer
     print("Creating event streamer...")
     # Start from current block to avoid fetching historical events
     current_block = await web3.eth.get_block_number()
     streamer = CLOBEventStreamer(clob, from_block=current_block - 100, poll_interval=1.0)
-    
+
     # Example 1: Watch for all market activity for 30 seconds
     await watch_all_market_activity(streamer, duration_seconds=30)
-    
+
     # Example 2: Watch for specific account activity for 30 seconds
     await watch_account_orders(streamer, WALLET_ADDRESS, duration_seconds=30)
-    
+
     # Example 3: Watch order book changes (blocking for 30 seconds)
     # Uncomment to use this example:
     # watch_order_book_changes_blocking(streamer, duration_seconds=30)
-    
+
     print("\nAll examples completed. Exiting.")
 
 

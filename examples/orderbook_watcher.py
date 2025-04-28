@@ -1,6 +1,11 @@
 """Simple example demonstrating how to watch a market's orderbook using WebSocket ETH RPC."""
 from dotenv import load_dotenv
 
+from gte_py.api.contracts.iclob import ICLOB
+from gte_py.api.contracts.iclob_streaming import CLOBEventStreamer
+from gte_py.clients import Client, MarketClient
+from gte_py.configs import TESTNET_CONFIG
+
 load_dotenv()
 import argparse
 import asyncio
@@ -12,11 +17,6 @@ from rich.console import Console
 from rich.table import Table
 from web3 import AsyncWeb3
 
-from gte_py import Client
-from gte_py.config import TESTNET_CONFIG
-from gte_py.contracts.iclob import ICLOB
-from gte_py.contracts.iclob_streaming import CLOBEventStreamer
-from gte_py.market import MarketClient
 from gte_py.models import OrderBookSnapshot
 
 # Initialize console for rich text output
@@ -133,22 +133,14 @@ class OrderbookWatcher:
         """Start watching the orderbook."""
         await self.init()
         self.running = True
-        market = await client.get_market(self.market_address)
+        market = await client.info.get_market(self.market_address)
 
         # Initialize MarketClient if we have a client
         async def refresh_snapshot():
             while self.running:
-                if client:
-                    # await self.market_client.connect()
-                    self.market_client = MarketClient(market, TESTNET_CONFIG)
-                    snapshot = await self.market_client.get_order_book_snapshot(self.depth)
-
-                    self.update_book(snapshot)
-
-                else:
-                    # Use RPC only
-                    book = self.streamer.get_order_book_snapshot(self.depth)
-                    self.update_book(book)
+                self.market_client = MarketClient(market, TESTNET_CONFIG)
+                snapshot = await self.market_client.get_order_book_snapshot(market, self.depth)
+                self.update_book(snapshot)
                 await asyncio.sleep(self.poll_interval)
 
         asyncio.create_task(refresh_snapshot())
@@ -201,7 +193,7 @@ async def main():
     market_address = AsyncWeb3.to_checksum_address(args.market)
 
     # Initialize ICLOB contract
-    clob = ICLOB(web3, market_address)
+    clob = client.clob.get_clob(market_address)
 
     # Create and start the watcher
     watcher = OrderbookWatcher(clob, depth=args.depth)

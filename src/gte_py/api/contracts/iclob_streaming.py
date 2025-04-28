@@ -27,7 +27,7 @@ from .events import (
     parse_order_canceled,
     parse_order_matched
 )
-from ..models import OrderBookSnapshot
+from gte_py.models import OrderBookSnapshot
 
 T = TypeVar('T')
 

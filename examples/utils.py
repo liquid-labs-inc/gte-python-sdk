@@ -8,8 +8,8 @@ from eth_typing import ChecksumAddress, HexStr
 from tabulate import tabulate
 from web3 import AsyncWeb3
 
-from gte_py import Client, Order
-from gte_py.models import Market
+from gte_py.clients import Client
+from gte_py.models import Market, Order
 
 # Load environment variables from .env file
 load_dotenv()
@@ -76,7 +76,7 @@ async def display_market_info(client: Client, market_address: ChecksumAddress) -
     """Get and display market information."""
 
     print(f"Using market: {market_address}")
-    market = await client.get_market(market_address)
+    market = await client.info.get_market(market_address)
 
     print(f"Market: {market.pair}")
     print(f"Base token: {market.base_asset.symbol} ({market.base_token_address})")
@@ -97,8 +97,8 @@ async def show_balances(client: Client, market: Market) -> None:
 
     print(f"Getting balances for {market.base_asset.symbol} and {market.quote_asset.symbol}...")
 
-    base_wallet, base_exchange = await client.get_balance(base_token)
-    quote_wallet, quote_exchange = await client.get_balance(quote_token)
+    base_wallet, base_exchange = await client.account.get_balance(base_token)
+    quote_wallet, quote_exchange = await client.account.get_balance(quote_token)
 
     print(f"{market.base_asset.symbol} balances:")
     print(f"  Wallet: {base_wallet:.6f}")
@@ -115,7 +115,7 @@ async def show_all_orders(client: Client, market: Market):
 
     try:
         # Get all orders for the market
-        orders: List[Order] = await client.execution.get_live_orders(market)
+        orders: List[Order] = await client.execution.get_open_orders(market)
 
         # Display order details
         for order in orders:

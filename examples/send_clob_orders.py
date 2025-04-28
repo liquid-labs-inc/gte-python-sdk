@@ -8,10 +8,11 @@ from web3 import AsyncWeb3
 from web3.types import TxReceipt
 
 from examples.utils import show_all_orders
-from gte_py import Client
-from gte_py.config import TESTNET_CONFIG
+from gte_py.api.contracts.iclob_historical import CLOBHistoricalQuerier
+from gte_py.clients import Client
+from gte_py.configs import TESTNET_CONFIG
 from gte_py.models import Side, TimeInForce, Market
-from gte_py.contracts.iclob_historical import CLOBHistoricalQuerier
+
 from utils import (
     print_separator,
     display_market_info,
@@ -31,7 +32,7 @@ async def approve_and_deposit_example(client: Client, market: Market, amount: fl
     print(f"Creating transaction to approve and deposit {amount} {market.quote_asset.symbol}...")
 
     # Get deposit transactions - this returns a list containing [approve_tx, deposit_tx]
-    tx_funcs = await client.deposit_to_market(
+    tx_funcs = client.account.deposit_to_market(
         token_address=quote,
         amount=market.round_quote_to_ticks_int(amount * price),
         gas=100000,
@@ -46,7 +47,7 @@ async def approve_and_deposit_example(client: Client, market: Market, amount: fl
     # Now deposit the base token
     base = market.base_token_address
     print(f"Creating transaction to approve and deposit {amount} {market.base_asset.symbol}...")
-    tx_funcs = await client.deposit_to_market(
+    tx_funcs = client.account.deposit_to_market(
         token_address=base,
         amount=market.round_base_to_lots_int(amount),
         gas=100000,
@@ -68,7 +69,7 @@ async def limit_order_example(client: Client, market: Market) -> None:
     amount = market.round_base_to_lots_int(market.lot_size)
 
     print(f"Creating BUY limit order at price: {price}")
-    tx_func = await client.place_limit_order(
+    tx_func = await client.execution.place_limit_order(
         market=market,
         side=Side.BUY,
         amount=amount,
@@ -82,7 +83,7 @@ async def limit_order_example(client: Client, market: Market) -> None:
     await get_order_status(client, market, order.order_id)
 
     print(f"Creating SELL limit order at price: {price}")
-    tx_func = await client.place_limit_order(
+    tx_func = await client.execution.place_limit_order(
         market=market,
         side=Side.SELL,
         amount=amount,
@@ -105,7 +106,7 @@ async def cancel_order_example(client: Client, market: Market, order_id: Optiona
         order_id = 12345
 
     print(f"Creating cancel transaction for order ID {order_id}...")
-    tx_func = await client.cancel_order(
+    tx_func = await client.execution.cancel_order(
         market=market,
         order_id=order_id,
         gas=200000,
@@ -121,14 +122,14 @@ async def get_order_status(client: Client, market: Market, order_id: int) -> Non
     print_separator("Order Status Example")
 
     try:
-        order = await client.get_order(market, order_id=order_id)
+        order = await client.execution.get_order(market, order_id=order_id)
 
         print(f"Order ID: {order.order_id}")
         print(f"Market: {market.pair}")
         print(f"Side: {order.side.name}")
         print(f"Price: {order.price}")
         print(f"Amount: {order.amount}")
-        print(f"Status: {getattr(order, 'status', 'N/A')}")
+        print(f"Status: {order.status}")
 
     except Exception as e:
         print(f"Couldn't fetch on-chain order status: {str(e)}")
@@ -139,7 +140,7 @@ async def show_orders(client: Client, market: Market) -> None:
     print_separator("User Orders")
 
     try:
-        orders = await client.get_orders(market_address=market.address)
+        orders = await client.execution.get_orders(market)
 
         print(f"Orders for market {market.pair}:")
         for order in orders:
@@ -157,27 +158,27 @@ async def show_orders(client: Client, market: Market) -> None:
 async def display_recent_matches(client: Client, market: Market, block_range: int = 1000) -> None:
     """Fetch and display recent order matches for the market."""
     print_separator("Recent Order Matches")
-    
+
     try:
         # Get current block number
         current_block = await client._web3.eth.block_number
         from_block = max(1, current_block - block_range)
-        
+
         # Initialize the historical querier
         historical_querier = CLOBHistoricalQuerier(client._web3, market.address)
-        
+
         # Fetch recent order matches
         matches = historical_querier.query_order_matched(from_block=from_block)
-        
+
         if not matches:
             print(f"No order matches found in the last {block_range} blocks")
             return
-        
+
         print(f"Found {len(matches)} recent order matches:")
         for i, match in enumerate(matches, 1):
             print(f"\nMatch #{i}:")
             print(f"  Block: {match.block_number}")
-    
+
     except Exception as e:
         print(f"Error fetching recent order matches: {str(e)}")
 
@@ -201,7 +202,6 @@ async def main() -> None:
     # Initialize client with AsyncWeb3
     print("Initializing GTE client...")
     client = Client(web3=web3, config=network, sender_address=wallet_address)
-
 
     # Get a market to work with
     market = await display_market_info(client, MARKET_ADDRESS)
@@ -230,8 +230,6 @@ async def main() -> None:
 
     # Show all orders
     await show_orders(client, market)
-
-
 
 
 if __name__ == "__main__":

@@ -11,180 +11,24 @@ from web3.exceptions import LogTopicError
 from web3.providers import WebSocketProvider
 from web3.types import EventData
 
-from .contracts.erc20 import ERC20
-from .contracts.events import OrderCanceledEvent
-from .contracts.factory import CLOBFactory
-from .contracts.iclob import ICLOB
-from .contracts.structs import (
+from gte_py.api.contracts.erc20 import ERC20
+from gte_py.api.contracts.events import OrderCanceledEvent
+from gte_py.api.contracts.factory import CLOBFactory
+from gte_py.api.contracts.iclob import ICLOB
+from gte_py.api.contracts.structs import (
     Side,
     Settlement,
     LimitOrderType,
     FillOrderType,
     CLOBOrder
 )
-from .contracts.utils import get_current_timestamp, TypedContractFunction
-from .contracts.weth import WETH  # Add import for WETH class
-from .models import Market, Order, OrderStatus, Side, OrderType, TimeInForce, Trade
+from gte_py.api.contracts.utils import get_current_timestamp, TypedContractFunction
+from gte_py.api.contracts.weth import WETH
+from gte_py.clients.iclob import CLOBClient
+from gte_py.clients.token import TokenClient
+from gte_py.models import Market, Order, OrderStatus, Side, OrderType, TimeInForce, Trade
 
 logger = logging.getLogger(__name__)
-
-
-class SubscriptionManager:
-    """Manages event subscriptions for streaming data."""
-
-    def __init__(self, web3: AsyncWeb3):
-        """
-        Initialize the subscription manager.
-
-        Args:
-            web3: AsyncWeb3 instance with WebsocketProvider
-        """
-        self._web3 = web3
-        self._subscriptions: dict[str, dict[str, Any]] = {}
-        self._running_tasks: dict[str, asyncio.Task] = {}
-
-        # Check if websocket provider
-        if not isinstance(web3.provider, WebSocketProvider):
-            logger.warning(
-                "AsyncWeb3 provider is not a WebsocketProvider. Streaming functionality will be limited."
-            )
-
-    async def subscribe(
-            self,
-            subscription_id: str,
-            contract: ICLOB,
-            event_name: str,
-            callback: Callable[[EventData], None],
-            argument_filters: dict[str, Any] = None,
-            polling_interval: float = 2.0,
-    ) -> str:
-        """
-        Subscribe to contract events.
-
-        Args:
-            subscription_id: Unique identifier for this subscription
-            contract: Contract to subscribe to
-            event_name: Name of the event to subscribe to
-            callback: Function to call with each event
-            argument_filters: Filters to apply to events
-            polling_interval: Polling interval for non-websocket providers
-
-        Returns:
-            Subscription ID
-        """
-        if subscription_id in self._subscriptions:
-            # Unsubscribe existing subscription with this ID
-            await self.unsubscribe(subscription_id)
-
-        self._subscriptions[subscription_id] = {
-            "contract": contract,
-            "event_name": event_name,
-            "callback": callback,
-            "argument_filters": argument_filters or {},
-            "polling_interval": polling_interval,
-            "last_block": self._web3.eth.block_number,
-        }
-
-        # Start event listener
-        if isinstance(self._web3.provider, WebSocketProvider):
-            task = asyncio.create_task(self._ws_listen_for_events(subscription_id))
-        else:
-            task = asyncio.create_task(self._poll_for_events(subscription_id))
-
-        self._running_tasks[subscription_id] = task
-        return subscription_id
-
-    async def unsubscribe(self, subscription_id: str) -> None:
-        """
-        Unsubscribe from events.
-
-        Args:
-            subscription_id: ID of the subscription to cancel
-        """
-        if subscription_id in self._running_tasks:
-            task = self._running_tasks[subscription_id]
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-            del self._running_tasks[subscription_id]
-
-        if subscription_id in self._subscriptions:
-            del self._subscriptions[subscription_id]
-
-    async def _ws_listen_for_events(self, subscription_id: str) -> None:
-        """
-        Listen for events using websocket subscription.
-
-        Args:
-            subscription_id: ID of the subscription
-        """
-        if subscription_id not in self._subscriptions:
-            return
-
-        sub_info = self._subscriptions[subscription_id]
-        contract = sub_info["contract"]
-        event_name = sub_info["event_name"]
-        callback = sub_info["callback"]
-        filters = sub_info["argument_filters"]
-
-        event = getattr(contract.contract.events, event_name)
-        event_filter = None
-        try:
-            event_filter = await event.create_filter(fromBlock="latest", argument_filters=filters)
-
-            while True:
-                try:
-                    for event in event_filter.get_new_entries():
-                        asyncio.create_task(callback(event))
-                except LogTopicError as e:
-                    logger.error(f"Error processing events: {e}")
-
-                await asyncio.sleep(0.1)
-        except asyncio.CancelledError:
-            # Clean up the filter when cancelled
-            await event_filter.uninstall()
-            raise
-
-    async def _poll_for_events(self, subscription_id: str) -> None:
-        """
-        Poll for events using eth_getLogs for non-websocket providers.
-
-        Args:
-            subscription_id: ID of the subscription
-        """
-        if subscription_id not in self._subscriptions:
-            return
-
-        sub_info = self._subscriptions[subscription_id]
-        contract = sub_info["contract"]
-        event_name = sub_info["event_name"]
-        callback = sub_info["callback"]
-        filters = sub_info["argument_filters"]
-        interval = sub_info["polling_interval"]
-
-        event = getattr(contract.contract.events, event_name)
-
-        try:
-            while True:
-                current_block = await self._web3.eth.block_number
-                from_block = sub_info["last_block"] + 1
-
-                if current_block >= from_block:
-                    events = event.get_logs(
-                        fromBlock=from_block, toBlock=current_block, argument_filters=filters
-                    )
-
-                    for event_data in events:
-                        asyncio.create_task(callback(event_data))
-
-                    # Update last processed block
-                    sub_info["last_block"] = current_block
-
-                await asyncio.sleep(interval)
-        except asyncio.CancelledError:
-            raise
 
 
 class ExecutionClient:
@@ -199,7 +43,11 @@ class ExecutionClient:
     EVENT_ORDER_CANCELED = "OrderCanceled"
     EVENT_ORDER_MATCHED = "OrderMatched"
 
-    def __init__(self, web3: AsyncWeb3, sender_address: ChecksumAddress, factory_address: ChecksumAddress):
+    def __init__(self, web3: AsyncWeb3,
+                 sender_address: ChecksumAddress,
+                 clob: CLOBClient,
+                 token: TokenClient
+                 ):
         """
         Initialize the execution client.
 
@@ -209,119 +57,9 @@ class ExecutionClient:
             factory_address: Address of the GTE Factory contract
         """
         self._web3 = web3
-        self._clob_clients: Dict[ChecksumAddress, ICLOB] = {}
-        self._token_clients: Dict[ChecksumAddress, ERC20] = {}
-        self._weth_clients: Dict[ChecksumAddress, WETH] = {}
-        self._factory: Optional[CLOBFactory] = None
+        self._iclob = clob
+        self.token = token
         self._sender_address = sender_address
-        self._subscription_manager: Optional[SubscriptionManager] = None
-
-        # Create factory client
-        self._factory = CLOBFactory(web3=web3, contract_address=factory_address)
-
-        # Initialize subscription manager if using websocket provider
-        if isinstance(web3.provider, WebSocketProvider):
-            self._subscription_manager = SubscriptionManager(web3)
-
-    def _get_clob(self, contract_address: ChecksumAddress) -> ICLOB:
-        """
-        Get or create an ICLOB contract instance.
-
-        Args:
-            contract_address: CLOB contract address
-
-        Returns:
-            ICLOB contract instance
-
-        Raises:
-            ValueError: If AsyncWeb3 is not configured
-        """
-        if not self._web3:
-            raise ValueError("AsyncWeb3 provider not configured. Cannot interact with contracts.")
-
-        if contract_address not in self._clob_clients:
-            self._clob_clients[contract_address] = ICLOB(
-                web3=self._web3, contract_address=contract_address
-            )
-        return self._clob_clients[contract_address]
-
-    def _get_token(self, token_address: ChecksumAddress) -> ERC20:
-        """
-        Get or create an ERC20 token contract instance.
-        
-        Args:
-            token_address: Token contract address
-            
-        Returns:
-            ERC20 contract instance
-        """
-        if not self._web3:
-            raise ValueError("AsyncWeb3 provider not configured. Cannot interact with contracts.")
-
-        if token_address not in self._token_clients:
-            self._token_clients[token_address] = ERC20(
-                web3=self._web3, contract_address=token_address
-            )
-        return self._token_clients[token_address]
-
-    def _get_weth(self, weth_address: ChecksumAddress) -> WETH:
-        """
-        Get or create a WETH contract instance.
-        
-        Args:
-            weth_address: WETH token contract address
-            
-        Returns:
-            WETH contract instance
-        """
-        if not self._web3:
-            raise ValueError("AsyncWeb3 provider not configured. Cannot interact with contracts.")
-
-        if weth_address not in self._weth_clients:
-            self._weth_clients[weth_address] = WETH(
-                web3=self._web3, contract_address=weth_address
-            )
-        return self._weth_clients[weth_address]
-
-    async def wrap_eth(
-            self,
-            weth_address: ChecksumAddress,
-            amount_eth: float,
-            **kwargs
-    ) -> TypedContractFunction:
-        """
-        Wrap ETH to get WETH.
-        
-        Args:
-            weth_address: Address of the WETH contract
-            amount_eth: Amount of ETH to wrap (as a float, e.g., 1.5 ETH)
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-            
-        Returns:
-            TypedContractFunction that can be used to execute the transaction
-        """
-        weth = self._get_weth(weth_address)
-        return weth.deposit_eth(amount_eth, **kwargs)
-
-    async def unwrap_eth(
-            self,
-            weth_address: ChecksumAddress,
-            amount_eth: float,
-            **kwargs
-    ) -> TypedContractFunction:
-        """
-        Unwrap WETH to get ETH.
-        
-        Args:
-            weth_address: Address of the WETH contract
-            amount_eth: Amount of WETH to unwrap (as a float, e.g., 1.5 ETH)
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-            
-        Returns:
-            TypedContractFunction that can be used to execute the transaction
-        """
-        weth = self._get_weth(weth_address)
-        return weth.withdraw_eth(amount_eth, **kwargs)
 
     async def place_limit_order(
             self,
@@ -349,7 +87,7 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
         # Get the CLOB contract
-        clob = self._get_clob(market.address)
+        clob = self._iclob.get_clob(market.address)
 
         # Convert model types to contract types
         contract_side = Side.BUY if side == Side.BUY else Side.SELL
@@ -438,7 +176,7 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
         # Get the CLOB contract
-        clob = self._get_clob(market.address)
+        clob = self._iclob.get_clob(market.address)
 
         # Convert model types to contract types
         contract_side = Side.BUY if side == Side.BUY else Side.SELL
@@ -490,7 +228,7 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
         # Get the CLOB contract
-        clob = self._get_clob(market.address)
+        clob = self._iclob.get_clob(market.address)
 
         # Get the current order
         order = await clob.get_order(order_id)
@@ -541,7 +279,7 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
         # Get the CLOB contract
-        clob = self._get_clob(market.address)
+        clob = self._iclob.get_clob(market.address)
 
         # Create cancel args
         args = clob.create_cancel_args(
@@ -556,7 +294,7 @@ class ExecutionClient:
             **kwargs
         )
 
-    async def get_live_orders(self, market: Market, address: ChecksumAddress | None = None) -> List[Order]:
+    async def get_open_orders(self, market: Market, address: ChecksumAddress | None = None) -> List[Order]:
         """
         Get all orders for a specific market and address.
 
@@ -567,7 +305,7 @@ class ExecutionClient:
         Returns:
             List of Order objects
         """
-        clob = self._get_clob(market.address)
+        clob = self._iclob.get_clob(market.address)
         best_bid, best_ask = await clob.get_tob()
         orders = []
         # Get all orders for the bid and ask price levels
@@ -622,7 +360,7 @@ class ExecutionClient:
         Returns:
             List of Order objects
         """
-        clob = self._get_clob(market.address)
+        clob = self._iclob.get_clob(market.address)
         orders = []
         (num, head, tail) = await clob.get_limit(price, side)
         order_id = head
@@ -633,12 +371,11 @@ class ExecutionClient:
             order_id = order.nextOrderId
         return orders
 
-    # TODO: testing cancel all orders
     async def cancel_all_orders(
             self,
             market: Market,
             **kwargs
-    ) -> TypedContractFunction:
+    ):
         """
         Cancel all orders for the current user on a specific market.
         
@@ -650,109 +387,13 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
         # Get the CLOB contract
-        clob = self._get_clob(market.address)
 
-        # Get all active orders for the user
-        next_order_id = clob.get_next_order_id()
-        orders = await self.get_user_orders_from_events(
-            user_address=self._sender_address,
-            market_address=market.address,
-            from_block=self._web3.eth.block_number - 10000,  # Last 10000 blocks
-            to_block="latest"
-        )
+        orders = await self.get_open_orders(market, **kwargs)
+        for order in orders:
+            if order.status != OrderStatus.OPEN:
+                continue
+            await self.cancel_order(market, order.order_id, **kwargs)
 
-        # Filter for open orders
-        open_order_ids = [int(order.order_id) for order in orders if order.status == OrderStatus.OPEN]
-
-        if not open_order_ids:
-            # No orders to cancel
-            raise ValueError("No open orders to cancel")
-
-        # Create cancel args
-        args = clob.create_cancel_args(
-            order_ids=open_order_ids,
-            settlement=Settlement.INSTANT
-        )
-
-        # Return the transaction
-        return clob.cancel(
-            account=self._sender_address,
-            args=args,
-            **kwargs
-        )
-
-    async def deposit_to_market(
-            self,
-            token_address: ChecksumAddress,
-            amount: int,
-            **kwargs
-    ) -> List[TypedContractFunction]:
-        """
-        Deposit tokens to the exchange for trading.
-        
-        Args:
-            token_address: Address of token to deposit
-            amount: Amount to deposit
-            **kwargs: Additional transaction parameters
-            
-        Returns:
-            List of TypedContractFunction objects (approve and deposit)
-        """
-        if not self._factory:
-            raise ValueError("Factory not initialized")
-
-        token = self._get_token(token_address)
-        amount_in_atoms = amount
-
-        # First approve the factory to spend tokens
-        approve_tx = token.approve(
-            spender=self._factory.address,
-            amount=amount_in_atoms,
-            **kwargs
-        )
-
-        # Then deposit the tokens
-        deposit_tx = self._factory.deposit(
-            account=self._sender_address,
-            token=token_address,
-            amount=amount_in_atoms,
-            from_operator=False,
-            **kwargs
-        )
-
-        return [approve_tx, deposit_tx]
-
-    async def withdraw_from_market(
-            self,
-            token_address: ChecksumAddress,
-            amount: int,
-            **kwargs
-    ) -> TypedContractFunction:
-        """
-        Withdraw tokens from the exchange.
-        
-        Args:
-            token_address: Address of token to withdraw
-            amount: Amount to withdraw
-            **kwargs: Additional transaction parameters
-            
-        Returns:
-            TypedContractFunction for the withdraw transaction
-        """
-        if not self._factory:
-            raise ValueError("Factory not initialized")
-
-        token = self._get_token(token_address)
-        amount_in_atoms = amount
-
-        # Withdraw the tokens
-        return self._factory.withdraw(
-            account=self._sender_address,
-            token=token_address,
-            amount=amount_in_atoms,
-            to_operator=False,
-            **kwargs
-        )
 
     async def get_balance(
             self,

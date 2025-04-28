@@ -2,15 +2,13 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from eth_typing import ChecksumAddress
-from eth_utils import to_wei
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
-from gte_py.contracts.structs import Side as ContractSide
+from gte_py.api.contracts import Side as ContractSide
 
 
 class MarketType(Enum):
@@ -266,8 +264,8 @@ class Position:
 class PriceLevel:
     """Price level in orderbook."""
 
-    price: float
-    size: float
+    price: int
+    size: int
     count: int
 
 

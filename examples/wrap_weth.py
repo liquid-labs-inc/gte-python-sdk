@@ -1,37 +1,18 @@
 """Example of wrapping and unwrapping ETH with the GTE client."""
 
 import asyncio
-from typing import Optional, Any, Dict, Union
-from eth_typing import HexStr
+
+from eth_utils import to_wei
 from web3 import AsyncWeb3
-from web3.types import TxReceipt, Wei
+from web3.types import TxReceipt
 
-from gte_py import Client
-from gte_py.config import TESTNET_CONFIG
-from gte_py.contracts.weth import WETH
-
+from gte_py.clients import Client
+from gte_py.configs import TESTNET_CONFIG
 from utils import (
-    print_separator, 
-    WALLET_ADDRESS, 
+    print_separator,
+    WALLET_ADDRESS,
     WALLET_PRIVATE_KEY
 )
-
-
-async def wait_for_transaction(web3: AsyncWeb3, tx_hash: HexStr, timeout: int = 120) -> TxReceipt:
-    """Wait for a transaction to be mined."""
-    start_time = asyncio.get_event_loop().time()
-    while True:
-        try:
-            receipt = web3.eth.get_transaction_receipt(tx_hash)
-            if receipt is not None:
-                return receipt
-        except Exception:
-            pass
-
-        if asyncio.get_event_loop().time() - start_time > timeout:
-            raise TimeoutError(f"Transaction not mined after {timeout} seconds")
-
-        await asyncio.sleep(2)
 
 
 async def get_weth_balance(client: Client, web3: AsyncWeb3, weth_address: str) -> None:
@@ -39,14 +20,14 @@ async def get_weth_balance(client: Client, web3: AsyncWeb3, weth_address: str) -
     print_separator("WETH Balance")
 
     # Create WETH instance directly to check balance
-    weth = WETH(web3, weth_address)
+    weth = client.token.get_weth(weth_address)
 
     # Get WETH balance using the async ERC20 balanceOf method
     weth_balance_raw = await weth.balance_of_async(WALLET_ADDRESS)
     weth_balance = weth.convert_amount_to_float(weth_balance_raw)
 
     # Get exchange balance through the client
-    _, exchange_balance = await client.get_balance(weth_address)
+    _, exchange_balance = await client.account.get_balance(weth_address)
 
     # Get native ETH balance
     eth_balance = web3.from_wei(await web3.eth.get_balance(WALLET_ADDRESS, 'latest'), 'ether')
@@ -66,17 +47,17 @@ async def wrap_eth_example(client: Client, web3: AsyncWeb3, weth_address: str, a
         # Explicitly add nonce to avoid missing nonce errors
         nonce = web3.eth.get_transaction_count(WALLET_ADDRESS)
 
-        tx_func = await client.wrap_eth(
+        tx_func = client.account.wrap_eth(
             weth_address=weth_address,
-            amount_eth=amount_eth,
+            amount_eth=to_wei(amount_eth, 'ether'),
             gas=100000,
             nonce=nonce
         )
 
         print("Transaction created")
         print("\nSending transaction...")
-        receipt = tx_func.send(WALLET_PRIVATE_KEY)
-        return receipt
+        await tx_func.send(WALLET_PRIVATE_KEY)
+        return tx_func.tx_hash
     except Exception as e:
         print(f"Error wrapping ETH: {str(e)}")
         raise
@@ -92,9 +73,9 @@ async def unwrap_eth_example(client: Client, web3: AsyncWeb3, weth_address: str,
         # Explicitly add nonce to avoid missing nonce errors
         nonce = web3.eth.get_transaction_count(WALLET_ADDRESS)
 
-        tx_func = await client.unwrap_eth(
+        tx_func = await client.account.unwrap_eth(
             weth_address=weth_address,
-            amount_eth=amount_eth,
+            amount_eth=to_wei(amount_eth, 'ether'),
             gas=100000,
             nonce=nonce
         )
@@ -142,7 +123,6 @@ async def main() -> None:
         # Wrap ETH to WETH
         amount_to_wrap = 0.01  # Small amount for testing
         receipt = await wrap_eth_example(client, web3, TESTNET_CONFIG.weth_address, amount_eth=amount_to_wrap)
-        print(f"Transaction hash: {receipt.transactionHash.hex()}")
 
         # Wait a bit for the transaction to be fully processed
         print("\nWaiting for transaction to be fully processed...")
@@ -154,7 +134,6 @@ async def main() -> None:
         # Unwrap WETH back to ETH
         print("\nNow unwrapping the same amount...")
         receipt = await unwrap_eth_example(client, web3, TESTNET_CONFIG.weth_address, amount_eth=amount_to_wrap)
-        print(f"Transaction hash: {receipt.transactionHash.hex()}")
 
         # Wait a bit for the transaction to be fully processed
         print("\nWaiting for transaction to be fully processed...")
@@ -165,7 +144,7 @@ async def main() -> None:
 
     except Exception as e:
         print(f"Error during examples: {str(e)}")
-    
+
     finally:
         await client.close()
 
