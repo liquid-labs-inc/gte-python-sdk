@@ -120,6 +120,7 @@ async def show_all_orders(client: Client, market: Market):
         # Display order details
         for order in orders:
             print(f"Order ID: {order.order_id}")
+            print(f"  Owner: {order.owner}")
             print(f"  Side: {order.side}")
             print(f"  Price: {order.price}")
             print(f"  Amount: {order.amount}")
