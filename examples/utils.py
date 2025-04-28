@@ -17,7 +17,9 @@ load_dotenv()
 # Common environment variables
 WALLET_ADDRESS = AsyncWeb3.to_checksum_address(os.getenv("WALLET_ADDRESS"))
 WALLET_PRIVATE_KEY = HexStr(os.getenv("WALLET_PRIVATE_KEY"))
-MARKET_ADDRESS = AsyncWeb3.to_checksum_address(os.getenv("MARKET_ADDRESS", "0xfaf0BB6F2f4690CA4319e489F6Dc742167B9fB10"))  # MEOW/WETH
+MARKET_ADDRESS = AsyncWeb3.to_checksum_address(
+    os.getenv("MARKET_ADDRESS", "0xfaf0BB6F2f4690CA4319e489F6Dc742167B9fB10"))  # MEOW/WETH
+
 
 def print_separator(title: str) -> None:
     """Print a section separator."""
@@ -25,11 +27,13 @@ def print_separator(title: str) -> None:
     print(title)
     print("=" * 50)
 
+
 def format_price(price: Optional[float]) -> str:
     """Format price for display."""
     if price is None:
         return "N/A"
     return f"{price:.8f}"
+
 
 def format_market_table(markets: List[Market], title: str) -> None:
     """Format and print a table of markets."""
@@ -59,16 +63,17 @@ def format_market_table(markets: List[Market], title: str) -> None:
     print(tabulate(rows, headers=headers, tablefmt="grid"))
     print(f"Total: {len(markets)} markets")
 
+
 def get_web3_wallet() -> str:
     """Create a AsyncWeb3 instance and get wallet address."""
     if not WALLET_ADDRESS:
         raise ValueError("WALLET_ADDRESS not found in environment")
-    
+
     return AsyncWeb3.to_checksum_address(WALLET_ADDRESS)
+
 
 async def display_market_info(client: Client, market_address: ChecksumAddress) -> Market:
     """Get and display market information."""
-
 
     print(f"Using market: {market_address}")
     market = await client.get_market(market_address)
@@ -80,6 +85,7 @@ async def display_market_info(client: Client, market_address: ChecksumAddress) -
     print(f"Lot size: {market.lot_size_in_base}")
 
     return market
+
 
 async def show_balances(client: Client, market: Market) -> None:
     """Display token balances for a market."""
@@ -102,31 +108,24 @@ async def show_balances(client: Client, market: Market) -> None:
     print(f"  Wallet: {quote_wallet:.6f}")
     print(f"  Exchange: {quote_exchange:.6f}")
 
-async def show_balances_async(client, market):
-    """Show balances using async calls."""
-    print_separator("User Balances")
+
+async def show_all_orders(client: Client, market: Market):
+    """Show all orders for a market."""
+    print_separator("All Orders")
 
     try:
-        # Get on-chain balances
-        base_token_address = market.base_token_address
-        quote_token_address = market.quote_token_address
-        
-        # Use async balance methods if available
-        wallet_base, exchange_base = await client.get_balance(
-            token_address=base_token_address
-        )
-        wallet_quote, exchange_quote = await client.get_balance(
-            token_address=quote_token_address
-        )
-        
-        print("On-chain balances:")
-        print(f"  {market.base_asset.symbol}:")
-        print(f"    Wallet: {wallet_base}")
-        print(f"    Exchange: {exchange_base}")
-        print(f"  {market.quote_asset.symbol}:")
-        print(f"    Wallet: {wallet_quote}")
-        print(f"    Exchange: {exchange_quote}")
-        
+        # Get all orders for the market
+        orders = await client.execution.get_all_orders(market)
+
+        # Display order details
+        for order in orders:
+            print(f"Order ID: {order.order_id}")
+            print(f"  Side: {order.side.name}")
+            print(f"  Price: {order.price}")
+            print(f"  Amount: {order.amount}")
+            print(f"  Status: {order.status}")
+            print("-" * 20)
+
     except Exception as e:
-        print(f"Couldn't fetch on-chain balances: {str(e)}")
+        print(f"Couldn't fetch on-chain orders: {str(e)}")
         print("This feature requires AsyncWeb3 provider and a market with contract address")

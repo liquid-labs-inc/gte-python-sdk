@@ -63,8 +63,8 @@ class CLOBHistoricalQuerier:
 
         try:
             raw_logs = self._order_matched_event.get_logs(
-                fromBlock=from_block,
-                toBlock=to_block,
+                from_block=from_block,
+                to_block=to_block,
                 argument_filters=argument_filters if argument_filters else None,
             )
             parsed_events = [parse_order_matched(log) for log in raw_logs]

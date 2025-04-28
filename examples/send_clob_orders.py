@@ -7,6 +7,7 @@ from typing import Optional
 from web3 import AsyncWeb3
 from web3.types import TxReceipt
 
+from examples.utils import show_all_orders
 from gte_py import Client
 from gte_py.config import TESTNET_CONFIG
 from gte_py.models import Side, TimeInForce, Market
@@ -207,6 +208,8 @@ async def main() -> None:
 
     # Show balances
     await show_balances(client, market)
+    # Display all orders
+    await show_all_orders(client, market)
 
     # Display recent order matches
     await display_recent_matches(client, market)

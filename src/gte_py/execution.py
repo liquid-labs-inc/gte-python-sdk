@@ -556,6 +556,7 @@ class ExecutionClient:
             **kwargs
         )
 
+    # TODO: filter by address
     async def get_all_orders(self, market: Market, address: ChecksumAddress | None = None) -> List[Order]:
         """
         Get all orders for a specific market and address.
@@ -572,28 +573,35 @@ class ExecutionClient:
         orders = []
         # Get all orders for the bid and ask price levels
         price_level = best_bid
+        tasks = []
+
         while price_level > 0:
-            orders += await self.get_orders_for_price_level(
+            tasks.append(asyncio.create_task(self.get_orders_for_price_level(
                 market=market,
                 price=price_level,
                 side=Side.BUY,
                 address=address
-            )
+            )))
             price_level = await clob.get_next_smallest_price(price_level, Side.BUY)
         price_level = best_ask
         while price_level > 0:
-            orders += await self.get_orders_for_price_level(
+            tasks.append(asyncio.create_task(self.get_orders_for_price_level(
                 market=market,
                 price=price_level,
                 side=Side.SELL,
                 address=address
-            )
+            )))
             price_level = await clob.get_next_biggest_price(price_level, Side.SELL)
+        for task in tasks:
+            try:
+                orders.extend(await task)
+            except Exception as e:
+                logger.error(f"Error getting orders: {e}")
         return orders
 
     async def get_orders_for_price_level(self,
                                          market: Market,
-                                         price: float,
+                                         price: int,
                                          side: Side,
                                          address: ChecksumAddress | None = None
                                          ) -> List[Order]:
@@ -611,8 +619,7 @@ class ExecutionClient:
         """
         clob = self._get_clob(market.address)
         orders = []
-        pl = int(price * 10 ** market.quote_decimals)
-        (num, head, tail) = await clob.get_limit(pl, side)
+        (num, head, tail) = await clob.get_limit(price, side)
         order_id = head
         for i in range(num):
             order = await clob.get_order(order_id)

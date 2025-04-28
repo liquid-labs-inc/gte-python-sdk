@@ -56,10 +56,10 @@ class Client:
         self._market_info = MarketService(web3=self._web3, router_address=config.router_address)
 
         if not sender_address:
-            self._execution_client = None
+            self.execution = None
         else:
             # Initialize execution client for trading operations
-            self._execution_client = ExecutionClient(
+            self.execution = ExecutionClient(
                 web3=self._web3,
                 sender_address=sender_address,
                 factory_address=config.clob_manager_address,
@@ -291,10 +291,10 @@ class Client:
         Returns:
             Order object or None if not found
         """
-        if not self._execution_client:
+        if not self.execution:
             raise ValueError("Execution client not initialized. Sender address is required.")
 
-        return await self._execution_client.get_order(market=market, order_id=order_id)
+        return await self.execution.get_order(market=market, order_id=order_id)
 
     async def place_limit_order(
             self,
@@ -324,10 +324,10 @@ class Client:
         Raises:
             ValueError: If execution client is not initialized or parameters are invalid
         """
-        if not self._execution_client:
+        if not self.execution:
             raise ValueError("Execution client not initialized. Sender address is required.")
 
-        return await self._execution_client.place_limit_order(
+        return await self.execution.place_limit_order(
             market=market,
             side=side,
             amount=amount,
@@ -361,10 +361,10 @@ class Client:
         Raises:
             ValueError: If execution client is not initialized
         """
-        if not self._execution_client:
+        if not self.execution:
             raise ValueError("Execution client not initialized. Sender address is required.")
 
-        return await self._execution_client.place_market_order(
+        return await self.execution.place_market_order(
             market=market,
             side=side,
             amount=amount,
@@ -392,10 +392,10 @@ class Client:
         Raises:
             ValueError: If execution client is not initialized
         """
-        if not self._execution_client:
+        if not self.execution:
             raise ValueError("Execution client not initialized. Sender address is required.")
 
-        return await self._execution_client.cancel_order(
+        return await self.execution.cancel_order(
             market=market,
             order_id=order_id,
             **kwargs,
@@ -419,10 +419,10 @@ class Client:
         Raises:
             ValueError: If execution client is not initialized
         """
-        if not self._execution_client:
+        if not self.execution:
             raise ValueError("Execution client not initialized. Sender address is required.")
 
-        return await self._execution_client.cancel_all_orders(
+        return await self.execution.cancel_all_orders(
             market=market,
             **kwargs,
         )
@@ -451,10 +451,10 @@ class Client:
         Raises:
             ValueError: If execution client is not initialized
         """
-        if not self._execution_client:
+        if not self.execution:
             raise ValueError("Execution client not initialized. Sender address is required.")
 
-        return await self._execution_client.amend_order(
+        return await self.execution.amend_order(
             market=market,
             order_id=order_id,
             new_amount=new_amount,
@@ -482,10 +482,10 @@ class Client:
         Raises:
             ValueError: If execution client is not initialized
         """
-        if not self._execution_client:
+        if not self.execution:
             raise ValueError("Execution client not initialized. Sender address is required.")
 
-        return await self._execution_client.deposit_to_market(
+        return await self.execution.deposit_to_market(
             token_address=token_address,
             amount=amount,
             **kwargs,
@@ -511,10 +511,10 @@ class Client:
         Raises:
             ValueError: If execution client is not initialized
         """
-        if not self._execution_client:
+        if not self.execution:
             raise ValueError("Execution client not initialized. Sender address is required.")
 
-        return await self._execution_client.withdraw_from_market(
+        return await self.execution.withdraw_from_market(
             token_address=token_address,
             amount=amount,
             **kwargs,
@@ -538,10 +538,10 @@ class Client:
         Raises:
             ValueError: If execution client is not initialized
         """
-        if not self._execution_client:
+        if not self.execution:
             raise ValueError("Execution client not initialized. Sender address is required.")
 
-        return await self._execution_client.get_balance(
+        return await self.execution.get_balance(
             token_address=token_address,
             account=account or self._sender_address,
         )
@@ -566,10 +566,10 @@ class Client:
         Raises:
             ValueError: If execution client is not initialized
         """
-        if not self._execution_client:
+        if not self.execution:
             raise ValueError("Execution client not initialized. Sender address is required.")
 
-        return await self._execution_client.wrap_eth(
+        return await self.execution.wrap_eth(
             weth_address=weth_address,
             amount_eth=amount_eth,
             **kwargs,
@@ -595,10 +595,10 @@ class Client:
         Raises:
             ValueError: If execution client is not initialized
         """
-        if not self._execution_client:
+        if not self.execution:
             raise ValueError("Execution client not initialized. Sender address is required.")
 
-        return await self._execution_client.unwrap_eth(
+        return await self.execution.unwrap_eth(
             weth_address=weth_address,
             amount_eth=amount_eth,
             **kwargs,
@@ -625,10 +625,10 @@ class Client:
         Raises:
             ValueError: If execution client is not initialized
         """
-        if not self._execution_client:
+        if not self.execution:
             raise ValueError("Execution client not initialized. Sender address is required.")
 
-        return await self._execution_client.stream_user_orders(
+        return await self.execution.stream_user_orders(
             user_address=user_address or self._sender_address,
             market_address=market_address,
             callback=callback,
@@ -652,10 +652,10 @@ class Client:
         Raises:
             ValueError: If execution client is not initialized
         """
-        if not self._execution_client:
+        if not self.execution:
             raise ValueError("Execution client not initialized. Sender address is required.")
 
-        return await self._execution_client.stream_market_trades(
+        return await self.execution.stream_market_trades(
             market_address=market.address,
             callback=callback,
         )
@@ -680,11 +680,11 @@ class Client:
         Raises:
             ValueError: If execution client is not initialized
         """
-        if not self._execution_client:
+        if not self.execution:
             raise ValueError("Execution client not initialized. Sender address is required.")
 
         market_address = market.address if market else None
-        return await self._execution_client.stream_user_trades(
+        return await self.execution.stream_user_trades(
             user_address=user_address or self._sender_address,
             market_address=market_address,
             callback=callback,
@@ -700,10 +700,10 @@ class Client:
         Raises:
             ValueError: If execution client is not initialized
         """
-        if not self._execution_client:
+        if not self.execution:
             raise ValueError("Execution client not initialized. Sender address is required.")
 
-        await self._execution_client.unsubscribe(subscription_id)
+        await self.execution.unsubscribe(subscription_id)
 
     async def get_order_book_snapshot(
             self,
@@ -720,7 +720,7 @@ class Client:
         Returns:
             Dictionary with bids and asks arrays
         """
-        if not self._execution_client:
+        if not self.execution:
             raise ValueError("Execution client not initialized. Sender address is required.")
 
-        return await self._execution_client.get_order_book_snapshot(market=market, depth=depth)
+        return await self.execution.get_order_book_snapshot(market=market, depth=depth)
