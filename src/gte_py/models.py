@@ -8,7 +8,7 @@ from typing import Any, List, Optional, Tuple
 from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
-from gte_py.api.contracts import Side as ContractSide
+from gte_py.api.chain import Side as ContractSide
 
 
 class MarketType(Enum):

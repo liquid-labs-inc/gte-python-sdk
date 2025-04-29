@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from web3 import AsyncWeb3
 
-from gte_py.api.contracts.iclob_streaming import CLOBEventStreamer
+from gte_py.api.chain.iclob_streaming import CLOBEventStreamer
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
 

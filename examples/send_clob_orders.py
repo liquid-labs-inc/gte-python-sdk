@@ -8,7 +8,7 @@ from web3 import AsyncWeb3
 from web3.types import TxReceipt
 
 from examples.utils import show_all_orders
-from gte_py.api.contracts.iclob_historical import CLOBHistoricalQuerier
+from gte_py.api.chain.iclob_historical import CLOBHistoricalQuerier
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
 from gte_py.models import Side, TimeInForce, Market

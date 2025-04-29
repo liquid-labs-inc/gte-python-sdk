@@ -1,11 +1,11 @@
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 
-from gte_py.api.contracts.erc20 import ERC20
-from gte_py.api.contracts.factory import CLOBFactory
-from gte_py.api.contracts.iclob import ICLOB
-from gte_py.api.contracts.router import Router
-from gte_py.api.contracts.weth import WETH
+from gte_py.api.chain.erc20 import ERC20
+from gte_py.api.chain.factory import CLOBFactory
+from gte_py.api.chain.iclob import ICLOB
+from gte_py.api.chain.router import Router
+from gte_py.api.chain.weth import WETH
 
 
 class TokenClient:

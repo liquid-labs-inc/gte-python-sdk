@@ -17,7 +17,7 @@ from gte_py.models import Candle, OrderbookUpdate, PriceLevel, Trade, OrderBookS
 logger = logging.getLogger(__name__)
 
 
-class MarketClient:
+class OrderbookClient:
     """WebSocket-based client for real-time market data."""
 
     def __init__(self, config: NetworkConfig, info: InfoClient):

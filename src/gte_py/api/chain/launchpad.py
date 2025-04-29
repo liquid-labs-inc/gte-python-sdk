@@ -2,7 +2,7 @@ from eth_typing import Address, ChecksumAddress
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
 
-from gte_py.api.contracts.utils import TypedContractFunction, load_abi
+from gte_py.api.chain.utils import TypedContractFunction, load_abi
 
 
 class LaunchpadError(Exception):

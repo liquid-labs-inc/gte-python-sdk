@@ -2,7 +2,7 @@ from typing import List
 
 from eth_typing import ChecksumAddress
 
-from gte_py.api.contracts.utils import TypedContractFunction
+from gte_py.api.chain.utils import TypedContractFunction
 from gte_py.clients.iclob import CLOBClient
 from gte_py.clients.token import TokenClient
 

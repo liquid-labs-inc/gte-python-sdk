@@ -11,19 +11,19 @@ from web3.exceptions import LogTopicError
 from web3.providers import WebSocketProvider
 from web3.types import EventData
 
-from gte_py.api.contracts.erc20 import ERC20
-from gte_py.api.contracts.events import OrderCanceledEvent
-from gte_py.api.contracts.factory import CLOBFactory
-from gte_py.api.contracts.iclob import ICLOB
-from gte_py.api.contracts.structs import (
+from gte_py.api.chain.erc20 import ERC20
+from gte_py.api.chain.events import OrderCanceledEvent
+from gte_py.api.chain.factory import CLOBFactory
+from gte_py.api.chain.iclob import ICLOB
+from gte_py.api.chain.structs import (
     Side,
     Settlement,
     LimitOrderType,
     FillOrderType,
     CLOBOrder
 )
-from gte_py.api.contracts.utils import get_current_timestamp, TypedContractFunction
-from gte_py.api.contracts.weth import WETH
+from gte_py.api.chain.utils import get_current_timestamp, TypedContractFunction
+from gte_py.api.chain.weth import WETH
 from gte_py.clients.iclob import CLOBClient
 from gte_py.clients.token import TokenClient
 from gte_py.models import Market, Order, OrderStatus, Side, OrderType, TimeInForce, Trade
