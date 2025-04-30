@@ -4,7 +4,7 @@ import logging
 
 import aiohttp
 
-from ..models import OrderBookSnapshot
+from gte_py.models import OrderBookSnapshot
 
 logger = logging.getLogger(__name__)
 
