@@ -36,7 +36,7 @@ class CLOBHistoricalQuerier:
         self.contract = self.web3.eth.contract(address=self.address, abi=loaded_abi)
         self._order_matched_event: ContractEvent = self.contract.events.OrderMatched
 
-    def query_order_matched(
+    async def query_order_matched(
             self,
             from_block: int,
             to_block: int | str = "latest",
@@ -61,15 +61,10 @@ class CLOBHistoricalQuerier:
         if taker:
             argument_filters["taker"] = taker
 
-        try:
-            raw_logs = self._order_matched_event.get_logs(
-                from_block=from_block,
-                to_block=to_block,
-                argument_filters=argument_filters if argument_filters else None,
-            )
-            parsed_events = [parse_order_matched(log) for log in raw_logs]
-            return parsed_events
-        except Exception as e:
-            # TODO: Add more specific error handling based on web3 exceptions
-            print(f"Error querying OrderMatched events: {e}")
-            return []
+        raw_logs = await self._order_matched_event.get_logs(
+            from_block=from_block,
+            to_block=to_block,
+            argument_filters=argument_filters if argument_filters else None,
+        )
+        parsed_events = [parse_order_matched(log) for log in raw_logs]
+        return parsed_events

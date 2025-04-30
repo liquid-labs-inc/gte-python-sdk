@@ -151,7 +151,7 @@ async def display_recent_matches(client: Client, market: Market, block_range: in
         historical_querier = CLOBHistoricalQuerier(client._web3, market.address)
 
         # Fetch recent order matches
-        matches = historical_querier.query_order_matched(from_block=from_block)
+        matches = await historical_querier.query_order_matched(from_block=from_block)
 
         if not matches:
             print(f"No order matches found in the last {block_range} blocks")
