@@ -79,35 +79,66 @@ class RestApi:
         """
         return await self._request("GET", "/v1/health")
 
-    # Assets endpoints
-    async def get_assets(
-            self, creator: str | None = None, limit: int = 100, offset: int = 0
+    # Info endpoint
+    async def get_info(self) -> dict:
+        """Get GTE info.
+
+        Returns:
+            Dict: GTE information including stats
+        """
+        return await self._request("GET", "/v1/info")
+
+    # Token endpoints
+    async def get_tokens(
+            self,
+            metadata: bool = False,
+            creator: str | None = None,
+            market_type: str | None = None,
+            limit: int = 100,
+            offset: int = 0
     ) -> dict:
-        """Get list of assets.
+        """Get list of tokens supported on GTE.
 
         Args:
+            metadata: Returns tokens with metadata
             creator: Returns assets created by the given user address
+            market_type: Filters assets by the given market type (amm, launchpad)
             limit: Range 1-1000
             offset: Min value 0
 
         Returns:
-            Dict: List of assets
+            Dict: List of tokens
         """
-        params: dict = {"limit": limit, "offset": offset}
+        params: dict = {"limit": limit, "offset": offset, "metadata": metadata}
         if creator:
             params["creator"] = creator
-        return await self._request("GET", "/v1/assets", params=params)
+        if market_type:
+            params["marketType"] = market_type
+        return await self._request("GET", "/v1/tokens", params=params)
 
-    async def get_asset(self, asset_address: str) -> dict:
-        """Get asset by address.
+    async def search_tokens(self, query: str, limit: int = 100) -> dict:
+        """Search tokens based on name or symbol.
 
         Args:
-            asset_address: EVM address of the asset
+            query: Search query
+            limit: Range 1-1000
 
         Returns:
-            Dict: Asset information
+            Dict: List of matching tokens
         """
-        return await self._request("GET", f"/v1/assets/{asset_address}")
+        params: dict = {"q": query, "limit": limit}
+        return await self._request("GET", "/v1/tokens/search", params=params)
+
+    async def get_token(self, token_address: str | ChecksumAddress) -> dict:
+        """Get token metadata by address.
+
+        Args:
+            token_address: EVM address of the token
+
+        Returns:
+            Dict: Token metadata information
+        """
+        return await self._request("GET", f"/v1/tokens/{token_address}")
 
     # Markets endpoints
     async def get_markets(
@@ -115,8 +146,9 @@ class RestApi:
             limit: int = 100,
             offset: int = 0,
             market_type: str | None = None,
-            asset: str | None = None,
-            price: float | None = None,
+            sort_by: str = "marketCap",
+            token_address: str | None = None,
+            newly_graduated: bool = False,
     ) -> dict:
         """Get list of markets.
 
@@ -124,22 +156,23 @@ class RestApi:
             limit: Range 1-1000
             offset: Min value 0
             market_type: Filter by market type (amm, launchpad)
-            asset: Address of the base asset to filter by
-            price: Returns markets with price less than given value
+            sort_by: Sort markets in descending order (marketCap, createdAt, volume)
+            token_address: Filter markets by the specified token address
+            newly_graduated: Returns newly graduated markets
 
         Returns:
             Dict: List of markets
         """
-        params: dict = {"limit": limit, "offset": offset}
+        params: dict = {"limit": limit, "offset": offset, "sortBy": sort_by}
         if market_type:
             params["marketType"] = market_type
-        if asset:
-            params["asset"] = asset
-        if price is not None:
-            params["price"] = price
+        if token_address:
+            params["tokenAddress"] = token_address
+        if newly_graduated:
+            params["newlyGraduated"] = newly_graduated
         return await self._request("GET", "/v1/markets", params=params)
 
-    async def get_market(self, market_address: ChecksumAddress) -> dict:
+    async def get_market(self, market_address: str | ChecksumAddress) -> dict:
         """Get market by address.
 
         Args:
@@ -152,7 +185,7 @@ class RestApi:
 
     async def get_candles(
             self,
-            market_address: ChecksumAddress,
+            market_address: str | ChecksumAddress,
             interval: str,
             start_time: int,
             end_time: int | None = None,
@@ -162,7 +195,7 @@ class RestApi:
 
         Args:
             market_address: EVM address of the market
-            interval: Interval of the candle (1s, 30s, 1m, 3m, 5m, 15m, 30m, 1h, 4h, 6h, 8h, 12h, 1d, 1w)
+            interval: Interval of the candle (1s, 15s, 30s, 1m, 3m, 5m, 15m, 30m, 1h, 4h, 1d, 1w)
             start_time: Start time in milliseconds
             end_time: End time in milliseconds
             limit: Range 1-1000
@@ -175,7 +208,7 @@ class RestApi:
             params["endTime"] = end_time
         return await self._request("GET", f"/v1/markets/{market_address}/candles", params=params)
 
-    async def get_trades(self, market_address: ChecksumAddress, limit: int = 100, offset: int = 0) -> dict:
+    async def get_trades(self, market_address: str | ChecksumAddress, limit: int = 100, offset: int = 0) -> dict:
         """Get trades for a market.
 
         Args:
@@ -189,33 +222,7 @@ class RestApi:
         params = {"limit": limit, "offset": offset}
         return await self._request("GET", f"/v1/markets/{market_address}/trades", params=params)
 
-    # Users endpoints
-    async def get_user_positions(self, user_address: ChecksumAddress) -> dict:
-        """Get LP positions for a user.
-
-        Args:
-            user_address: EVM address of the user
-
-        Returns:
-            Dict: List of LP positions
-        """
-        return await self._request("GET", f"/v1/users/{user_address}/positions")
-
-    async def get_user_assets(self, user_address: ChecksumAddress, limit: int = 100, offset: int = 0) -> dict:
-        """Get assets held by a user.
-
-        Args:
-            user_address: EVM address of the user
-            limit: Range 1-1000
-            offset: Min value 0
-
-        Returns:
-            Dict: List of assets held by the user
-        """
-        params = {"limit": limit, "offset": offset}
-        return await self._request("GET", f"/v1/users/{user_address}/assets", params=params)
-
-    async def get_order_book(self, market_address: ChecksumAddress, limit: int = 5) -> dict:
+    async def get_order_book(self, market_address: str | ChecksumAddress, limit: int = 10) -> dict:
         """Get order book snapshot for a market.
 
         Args:
@@ -228,7 +235,8 @@ class RestApi:
         params = {"limit": limit}
         return await self._request("GET", f"/v1/markets/{market_address}/book", params=params)
 
-    async def get_order_book_snapshot(self, market_address: ChecksumAddress, limit: int = 5) -> OrderBookSnapshot:
+    async def get_order_book_snapshot(self, market_address: str | ChecksumAddress,
+                                      limit: int = 10) -> OrderBookSnapshot:
         """Get typed order book snapshot for a market.
 
         Args:
@@ -257,3 +265,96 @@ class RestApi:
             timestamp=response.get("timestamp", 0),
             market_address=market_address
         )
+
+    # Users endpoints
+    async def get_user_lp_positions(self, user_address: str | ChecksumAddress) -> dict:
+        """Get LP positions for a user.
+
+        Args:
+            user_address: EVM address of the user
+
+        Returns:
+            Dict: List of LP positions
+        """
+        return await self._request("GET", f"/v1/users/{user_address}/lppositions")
+
+    async def get_user_portfolio(self, user_address: str | ChecksumAddress) -> dict:
+        """Get user's portfolio.
+
+        Args:
+            user_address: EVM address of the user
+
+        Returns:
+            Dict: User portfolio including token balances
+        """
+        return await self._request("GET", f"/v1/users/{user_address}/portfolio")
+
+    async def get_user_trades(
+            self,
+            user_address: str | ChecksumAddress,
+            market_address: str | ChecksumAddress | None = None
+    ) -> dict:
+        """Get trades for a user.
+
+        Args:
+            user_address: EVM address of the user
+            market_address: EVM address of the market (optional)
+
+        Returns:
+            Dict: List of user trades
+        """
+        params = {}
+        if market_address:
+            params["market_address"] = market_address
+        return await self._request("GET", f"/v1/users/{user_address}/trades", params=params)
+
+    async def get_user_open_orders(
+            self,
+            user_address: str | ChecksumAddress,
+            market_address: str | ChecksumAddress
+    ) -> dict:
+        """Get open orders for a user.
+
+        Args:
+            user_address: EVM address of the user
+            market_address: EVM address of the market
+
+        Returns:
+            Dict: List of user's open orders
+        """
+        params = {"market_address": market_address}
+        return await self._request("GET", f"/v1/users/{user_address}/open_orders", params=params)
+
+    async def get_user_filled_orders(
+            self,
+            user_address: str | ChecksumAddress,
+            market_address: str | ChecksumAddress
+    ) -> dict:
+        """Get filled orders for a user.
+
+        Args:
+            user_address: EVM address of the user
+            market_address: EVM address of the market
+
+        Returns:
+            Dict: List of user's filled orders
+        """
+        params = {"market_address": market_address}
+        return await self._request("GET", f"/v1/users/{user_address}/filled_orders", params=params)
+
+    async def get_user_order_history(
+            self,
+            user_address: str | ChecksumAddress,
+            market_address: str | ChecksumAddress
+    ) -> dict:
+        """Get order history for a user.
+
+        Args:
+            user_address: EVM address of the user
+            market_address: EVM address of the market
+
+        Returns:
+            Dict: List of user's order history
+        """
+        params = {"market_address": market_address}
+        return await self._request("GET", f"/v1/users/{user_address}/order_history", params=params)
