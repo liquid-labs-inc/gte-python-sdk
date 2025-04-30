@@ -195,7 +195,7 @@ async def main():
 
     # Initialize client with AsyncWeb3
     print("Initializing GTE client...")
-    client = Client(web3=web3, config=network, sender_address=WALLET_ADDRESS)
+    client = Client(web3=web3, config=network, account=WALLET_ADDRESS)
 
     # Initialize CLOB contract wrapper
     print(f"Initializing CLOB contract at {MARKET_ADDRESS}...")

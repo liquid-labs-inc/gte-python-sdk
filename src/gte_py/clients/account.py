@@ -9,7 +9,7 @@ from gte_py.clients.token import TokenClient
 
 class AccountClient:
     def __init__(self,
-                 sender_address: ChecksumAddress,
+                 account: ChecksumAddress,
                  clob: CLOBClient, token: TokenClient):
         """
         Initialize the account client.
@@ -18,32 +18,32 @@ class AccountClient:
             clob: CLOBClient instance
             token: TokenClient instance
         """
-        self._sender_address = sender_address
+        self._account = account
         self.clob = clob
         self.token = token
 
-    def wrap_eth(
+    async def wrap_eth(
             self,
             weth_address: ChecksumAddress,
             amount: int,
             **kwargs
-    ) -> TypedContractFunction:
-        return self.token.get_weth(weth_address).deposit_eth(amount, **kwargs)
+    ):
+        return await self.token.get_weth(weth_address).deposit_eth(amount, **kwargs).send_wait()
 
-    def unwrap_eth(
+    async def unwrap_eth(
             self,
             weth_address: ChecksumAddress,
             amount: int,
             **kwargs
-    ) -> TypedContractFunction:
-        return self.token.get_weth(weth_address).withdraw_eth(amount, **kwargs)
+    ):
+        return await self.token.get_weth(weth_address).withdraw_eth(amount, **kwargs).send_wait()
 
-    def deposit_to_market(
+    async def deposit_to_market(
             self,
             token_address: ChecksumAddress,
             amount: int,
             **kwargs
-    ) -> List[TypedContractFunction]:
+    ):
         """
         Deposit tokens to the exchange for trading.
 
@@ -60,22 +60,20 @@ class AccountClient:
         amount_in_atoms = amount
 
         # First approve the factory to spend tokens
-        approve_tx = token.approve(
+        await token.approve(
             spender=self.clob._clob_factory_address,
             amount=amount_in_atoms,
             **kwargs
-        )
+        ).send_wait()
 
         # Then deposit the tokens
-        deposit_tx = self.clob.clob_factory.deposit(
-            account=self._sender_address,
+        await self.clob.clob_factory.deposit(
+            account=self._account,
             token=token_address,
             amount=amount_in_atoms,
             from_operator=False,
             **kwargs
-        )
-
-        return [approve_tx, deposit_tx]
+        ).send_wait()
 
     async def withdraw_from_market(
             self,
@@ -96,10 +94,10 @@ class AccountClient:
         """
 
         # Withdraw the tokens
-        return self.clob.clob_factory.withdraw(
-            account=self._sender_address,
+        return await self.clob.clob_factory.withdraw(
+            account=self._account,
             token=token_address,
             amount=amount,
             to_operator=False,
             **kwargs
-        )
+        ).send_wait()

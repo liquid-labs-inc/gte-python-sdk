@@ -4,11 +4,11 @@ import asyncio
 import logging
 from typing import Optional
 
-from web3 import AsyncWeb3
 from web3.types import TxReceipt
 
 from examples.utils import show_all_orders
 from gte_py.api.chain.iclob_historical import CLOBHistoricalQuerier
+from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
 from gte_py.models import Side, TimeInForce, Market
@@ -32,32 +32,20 @@ async def approve_and_deposit_example(client: Client, market: Market, amount: fl
     print(f"Creating transaction to approve and deposit {amount} {market.quote_asset.symbol}...")
 
     # Get deposit transactions - this returns a list containing [approve_tx, deposit_tx]
-    tx_funcs = client.account.deposit_to_market(
+    await client.account.deposit_to_market(
         token_address=quote,
         amount=market.round_quote_to_ticks_int(amount * price),
         gas=100000,
     )
 
-    print("\nSending approval transaction...")
-    await tx_funcs[0].send_wait(WALLET_PRIVATE_KEY)
-
-    print("\nSending deposit transaction...")
-    await tx_funcs[1].send_wait(WALLET_PRIVATE_KEY)
-
     # Now deposit the base token
     base = market.base_token_address
     print(f"Creating transaction to approve and deposit {amount} {market.base_asset.symbol}...")
-    tx_funcs = client.account.deposit_to_market(
+    await client.account.deposit_to_market(
         token_address=base,
         amount=market.round_base_to_lots_int(amount),
         gas=100000,
     )
-
-    print("\nSending approval transaction...")
-    await tx_funcs[0].send_wait(WALLET_PRIVATE_KEY)
-
-    print("\nSending deposit transaction...")
-    await tx_funcs[1].send_wait(WALLET_PRIVATE_KEY)
 
 
 async def limit_order_example(client: Client, market: Market) -> None:
@@ -78,7 +66,7 @@ async def limit_order_example(client: Client, market: Market) -> None:
     )
 
     # Use async version for sending transaction
-    order = await tx_func.send_wait(WALLET_PRIVATE_KEY)
+    order = await tx_func.send_wait()
     print(f"Order created: {order}")
     await get_order_status(client, market, order.order_id)
 
@@ -92,7 +80,7 @@ async def limit_order_example(client: Client, market: Market) -> None:
     )
 
     # Use async version for sending transaction
-    order = await tx_func.send_wait(WALLET_PRIVATE_KEY)
+    order = await tx_func.send_wait()
     print(f"Order created: {order}")
     await get_order_status(client, market, order.order_id)
 
@@ -113,7 +101,7 @@ async def cancel_order_example(client: Client, market: Market, order_id: Optiona
     )
 
     print("\nSending transaction...")
-    receipt = await tx_func.send_wait(WALLET_PRIVATE_KEY)
+    receipt = await tx_func.send_wait()
     return receipt
 
 
@@ -188,20 +176,15 @@ async def main() -> None:
     network = TESTNET_CONFIG
 
     print("Initializing AsyncWeb3...")
-    web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(network.rpc_http))
+    web3 = make_web3(network, WALLET_ADDRESS, WALLET_PRIVATE_KEY)
 
     print("Connected to blockchain:")
     print(f"Chain ID: {await web3.eth.chain_id}")
 
-    # Check for required environment variables
-    if not WALLET_ADDRESS or not WALLET_PRIVATE_KEY:
-        raise ValueError("WALLET_ADDRESS and WALLET_PRIVATE_KEY must be set in .env file")
-
-    wallet_address = AsyncWeb3.to_checksum_address(WALLET_ADDRESS)
-
     # Initialize client with AsyncWeb3
     print("Initializing GTE client...")
-    client = Client(web3=web3, config=network, sender_address=wallet_address)
+
+    client = Client(web3=web3, config=network, account=WALLET_ADDRESS)
     await client.init()
     # Get a market to work with
     market = await display_market_info(client, MARKET_ADDRESS)

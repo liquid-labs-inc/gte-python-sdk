@@ -37,7 +37,7 @@ class ExecutionClient:
     EVENT_ORDER_MATCHED = "OrderMatched"
 
     def __init__(self, web3: AsyncWeb3,
-                 sender_address: ChecksumAddress,
+                 main_account: ChecksumAddress,
                  clob: CLOBClient,
                  token: TokenClient
                  ):
@@ -46,14 +46,14 @@ class ExecutionClient:
 
         Args:
             web3: AsyncWeb3 instance for on-chain interactions
-            sender_address: Address to send transactions from
+            main_account: Address to send transactions from
         """
         self._web3 = web3
         self.clob = clob
         self.token = token
-        self._sender_address = sender_address
+        self.main_account = main_account
 
-    async def place_limit_order(
+    async def place_limit_order_tx(
             self,
             market: Market,
             side: Side,
@@ -112,7 +112,7 @@ class ExecutionClient:
 
             # Return the transaction
             return clob.post_fill_order(
-                account=self._sender_address,
+                account=self.main_account,
                 args=args,
                 **kwargs
             )
@@ -140,12 +140,33 @@ class ExecutionClient:
 
             # Return the transaction
             return clob.post_limit_order(
-                account=self._sender_address,
+                account=self.main_account,
                 args=args,
                 **kwargs
             )
 
-    async def place_market_order(
+    async def place_limit_order(
+            self,
+            market: Market,
+            side: Side,
+            amount: int,
+            price: int,
+            time_in_force: TimeInForce = TimeInForce.GTC,
+            client_order_id: int = 0,
+            **kwargs
+    ) -> Order:
+        tx = await self.place_limit_order_tx(
+            market=market,
+            side=side,
+            amount=amount,
+            price=price,
+            time_in_force=time_in_force,
+            client_order_id=client_order_id,
+            **kwargs
+        )
+        return await tx.send_wait()
+
+    async def place_market_order_tx(
             self,
             market: Market,
             side: Side,
@@ -193,12 +214,45 @@ class ExecutionClient:
 
         # Return the transaction
         return clob.post_fill_order(
-            account=self._sender_address,
+            account=self.main_account,
             args=args,
             **kwargs
         )
 
-    async def amend_order(
+    async def place_market_order(
+            self,
+            market: Market,
+            side: Side,
+            amount: int,
+            amount_is_base: bool = True,
+            slippage: float = 0.01,
+            **kwargs
+    ):
+        """
+        Place a market order on the CLOB.
+
+        Args:
+            market: Market to place the order on
+            side: Order side (BUY or SELL)
+            amount: Order amount in base tokens if amount_is_base is True, otherwise in quote tokens
+            amount_is_base: Whether the amount is in base tokens
+            slippage: Slippage percentage for price limit
+            **kwargs: Additional transaction parameters
+
+        Returns:
+            Order object representing the placed order
+        """
+        tx = await self.place_market_order_tx(
+            market=market,
+            side=side,
+            amount=amount,
+            amount_is_base=amount_is_base,
+            slippage=slippage,
+            **kwargs
+        )
+        return await tx.send_wait()
+
+    async def amend_order_tx(
             self,
             market: Market,
             order_id: int,
@@ -248,12 +302,28 @@ class ExecutionClient:
 
         # Return the transaction
         return clob.amend(
-            account=self._sender_address,
+            account=self.main_account,
             args=args,
             **kwargs
         )
 
-    async def cancel_order(
+    async def amend_order(
+            self,
+            market: Market,
+            order_id: int,
+            new_amount: Optional[float] = None,
+            new_price: Optional[float] = None,
+            **kwargs
+    ):
+        tx = await self.amend_order_tx(
+            market=market,
+            order_id=order_id,
+            new_amount=new_amount,
+            new_price=new_price,
+            **kwargs)
+        return await tx.send_wait()
+
+    async def cancel_order_tx(
             self,
             market: Market,
             order_id: int,
@@ -281,10 +351,23 @@ class ExecutionClient:
 
         # Return the transaction
         return clob.cancel(
-            account=self._sender_address,
+            account=self.main_account,
             args=args,
             **kwargs
         )
+
+    async def cancel_order(
+            self,
+            market: Market,
+            order_id: int,
+            **kwargs
+    ):
+        tx = await self.cancel_order_tx(
+            market=market,
+            order_id=order_id,
+            **kwargs
+        )
+        return await tx.send_wait()
 
     async def get_open_orders(self, market: Market, address: ChecksumAddress | None = None) -> List[Order]:
         """
@@ -322,7 +405,7 @@ class ExecutionClient:
             )))
             price_level = await clob.get_next_biggest_price(price_level, Side.SELL)
 
-        address = address or self._sender_address
+        address = address or self.main_account
         for task in tasks:
             try:
                 pl_orders = await task
@@ -386,7 +469,6 @@ class ExecutionClient:
                 continue
             await self.cancel_order(market, order.order_id, **kwargs)
 
-
     async def get_balance(
             self,
             token_address: ChecksumAddress,
@@ -403,7 +485,7 @@ class ExecutionClient:
             Tuple of (wallet_balance, exchange_balance) in human-readable format
         """
 
-        account = account or self._sender_address
+        account = account or self.main_account
         token = self.token.get_erc20(token_address)
 
         # Get wallet balance

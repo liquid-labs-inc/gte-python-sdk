@@ -25,7 +25,7 @@ class Client:
             self,
             web3: AsyncWeb3,
             config: NetworkConfig,
-            sender_address: ChecksumAddress | None = None,
+            account: ChecksumAddress | None = None,
     ):
         """
         Initialize the client.
@@ -33,7 +33,7 @@ class Client:
         Args:
             web3: AsyncWeb3 instance
             config: Network configuration
-            sender_address: Address to send transactions from (optional)
+            account: Address of main account
         """
         self.rest = RestApi(base_url=config.api_url)
         self._ws_url = config.ws_url
@@ -46,25 +46,25 @@ class Client:
         self.info = InfoClient(web3=self._web3, rest=self.rest, clob_client=self.clob, token_client=self.token)
         self.market: OrderbookClient = OrderbookClient(config, self.rest, self.info)
         self.account = AccountClient(
-            sender_address=sender_address,
+            account=account,
             clob=self.clob,
             token=self.token,
         )
         self.trades = TradesClient(config, self.rest)
 
-        if not sender_address:
+        if not account:
             self.execution = None
         else:
             # Initialize execution client for trading operations
             self.execution = ExecutionClient(
                 web3=self._web3,
-                sender_address=sender_address,
+                main_account=account,
                 clob=self.clob,
                 token=self.token,
 
             )
 
-        self._sender_address = sender_address
+        self._sender_address = account
 
     async def init(self):
         await self.clob.init()
