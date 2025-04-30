@@ -16,6 +16,7 @@ dependencies = [
     "aiohttp>=3.8.0",
     "web3~=7.10.0",
     "urllib3~=1.26",
+    "dateutils",
 ]
 requires-python = ">=3.10"
 

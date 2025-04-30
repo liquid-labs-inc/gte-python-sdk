@@ -1,0 +1,1078 @@
+openapi: 3.0.0
+info:
+  title: GTE API
+  version: "0.1.0"
+  description: API for GTE trading and historical data
+  contact:
+    name: API Support
+    url: https://docs.gte.xyz
+    email: support@liquidlabs.inc
+
+servers:
+  - url: https://api-testnet.gte.xyz/v1
+    description: GTE API Testnet HTTP Server
+  - url: wss://api-testnet.gte.xyz/ws
+    description: GTE API Testnet WebSocket Server
+
+components:
+  schemas:
+    EvmAddress:
+      type: string
+      pattern: '^0x[a-fA-F0-9]{40}$'
+      description: EVM address
+
+    EvmTxnHash:
+      type: string
+      pattern: '^0x[a-fA-F0-9]{64}$'
+      description: EVM transaction hash
+
+    Token:
+      type: object
+      required: [address, decimals, name, symbol, totalSupply, logoUri, priceUsd, volume1HrUsd, volume24HrUsd, marketCapUsd]
+      properties:
+        address:
+          $ref: "#/components/schemas/EvmAddress"
+        decimals:
+          type: integer
+          description: Number of decimals for the token
+        name:
+          type: string
+          description: Name of the token
+        symbol:
+          type: string
+          description: Symbol of the token
+        totalSupply:
+          type: number
+          format: double
+          description: Total supply of the token
+        logoUri:
+          type: string
+          nullable: true
+          description: URI of the token's logo
+        priceUsd:
+          type: number
+          format: double
+          description: Price of token in USD
+        volume1HrUsd:
+          type: number
+          format: double
+          description: 1 hour volume in USD
+        volume24HrUsd:
+          type: number
+          format: double
+          description: 24 hour volume in USD
+        marketCapUsd:
+          type: number
+          format: double
+          description: Token market cap in USD
+
+    MarketType:
+      type: string
+      enum: [bonding-curve, amm, clob-spot, perps]
+      description: Type of the market
+
+    TokenMetadata:
+      allOf:
+        - $ref: "#/components/schemas/Token"
+        - type: object
+          required: [createdAt, numHolders, creator, description, socials, displayMarkets]
+          properties:
+            createdAt:
+              type: integer
+              format: int64
+              description: Timestamp of the token creation
+            numHolders:
+              type: integer
+              format: int64
+              minimum: 0
+              description: Number of holders of the token
+            creator:
+              $ref: "#/components/schemas/EvmAddress"
+              nullable: true
+            description:
+              type: string
+              nullable: true
+              description: Token description
+            displayMarkets:
+              type: array
+              description: Top markets to display per market type
+              items:
+                type: object
+                required: [marketType, marketAddress]
+                properties:
+                  marketType:
+                    $ref: "#/components/schemas/MarketType"
+                  marketAddress:
+                    $ref: "#/components/schemas/EvmAddress"
+            socials:
+              type: object
+              required: [website, discord, telegram, x]
+              properties:
+                website:
+                  type: string
+                  description: URL of the token's website
+                  nullable: true
+                discord:
+                  type: string
+                  description: URL of the token's discord
+                  nullable: true
+                telegram:
+                  type: string
+                  description: URL of the token's telegram
+                  nullable: true
+                x:
+                  type: string
+                  description: URL of the token's X/Twitter
+                  nullable: true
+
+    TokenBalance:
+      type: object
+      required: [token, balance, balanceUsd, realizedPnlUsd, unrealizedPnlUsd]
+      properties:
+        token:
+          $ref: "#/components/schemas/Token"
+        balance:
+          type: number
+          format: double
+          description: Balance of the asset
+        balanceUsd:
+          type: number
+          format: double
+          description: Balance of the asset in USD
+        realizedPnlUsd:
+          type: number
+          format: double
+          description: Realized pnl in USD
+        unrealizedPnlUsd:
+          type: number
+          format: double
+          description: Unrealized pnl in USD
+
+    Market:
+      type: object
+      required: [marketType, address, baseToken, quoteToken, price, priceUsd, volume24hrUsd, volume1HrUsd, marketCapUsd, createdAt, tvlUsd]
+      properties:
+        marketType:
+          $ref: "#/components/schemas/MarketType"
+        address:
+          $ref: "#/components/schemas/EvmAddress"
+          description: EVM address of the market
+        baseToken:
+          $ref: "#/components/schemas/Token"
+          description: Base token of the market. On AMMs, this token comes first in the pair
+        quoteToken:
+          $ref: "#/components/schemas/Token"
+          description: Quote token of the market. On AMMs, this token comes second in the pair
+        price:
+          type: number
+          format: double
+          description: Price of the base token in quote tokens.
+        priceUsd:
+          type: number
+          format: double
+          description: Price of the base token in USD.
+        volume24HrUsd:
+          type: number
+          format: double
+          description: Volume of the market in the last 24 hours in USD
+        volume1HrUsd:
+          type: number
+          format: double
+          description: Volume of the market in the last 1 hour in USD
+        marketCapUsd:
+          type: number
+          format: double
+          description: Market cap of the market in USD
+        createdAt:
+          type: integer
+          format: int64
+          description: Timestamp of when the market was deployed in UTC millis
+        tvlUsd:
+          type: number
+          nullable: true
+          format: double
+          description: TVL of the market in Usd. Null if not applicable.
+
+    TradeSide:
+      type: string
+      enum: [buy, sell]
+      description: Side of the trade
+
+    Trade:
+      type: object
+      description: Trades in Launchpad and AMM markets.
+      required: [timestamp, txnHash, maker, taker, price, size, side]
+      properties:
+        timestamp:
+          type: integer
+          format: int64
+          description: Timestamp of the trade in milliseconds
+        txnHash:
+          $ref: "#/components/schemas/EvmTxnHash"
+          description: Transaction hash of the trade
+        maker:
+          $ref: "#/components/schemas/EvmAddress"
+          description: EVM address of the maker
+        taker:
+          $ref: "#/components/schemas/EvmAddress"
+          description: EVM address of the taker
+        price:
+          type: number
+          format: double
+          description: Price of the trade in quote tokens
+        size:
+          type: number
+          format: double
+          description: Size of the trade in base tokens
+        side:
+          $ref: "#/components/schemas/TradeSide"
+          description: Side of the trade by the taker
+
+    Candle:
+      type: object
+      required: [timestamp, open, high, low, close, volume]
+      properties:
+        timestamp:
+          type: integer
+          format: int64
+          description: Start time of the candle in milliseconds
+        open:
+          type: number
+          format: double
+          description: Open price of the candle (in quote asset)
+        high:
+          type: number
+          format: double
+          description: High price of the candle (in quote asset)
+        low:
+          type: number
+          format: double
+          description: Low price of the candle (in quote asset)
+        close:
+          type: number
+          format: double
+          description: Close price of the candle (in quote asset)
+        volume:
+          type: number
+          format: double
+          description: Volume of the candle (in base asset)
+
+    CandleInterval:
+      type: string
+      enum: [1s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m, 20m, 30m, 1h, 4h, 1d, 1w]
+      description: Interval of the candle
+
+    LpPosition:
+      type: object
+      required: [market, balance, shareOfPool, apr, token0Amount, token1Amount]
+      properties:
+        market:
+          $ref: "#/components/schemas/Market"
+          description: Market in which the LP position is held
+        balance:
+          type: number
+          format: double
+          description: Amount of LP tokens a user holds
+        shareOfPool:
+          type: number
+          format: float
+          description: Percentage of the pool of the position
+        apr:
+          type: number
+          format: float
+          description: APR of the liquidity pool
+        token0Amount:
+          type: string
+          description: Amount of token0 in LP
+        token1Amount:
+          type: string
+          description: Amount of token1 in Lp
+
+    # CLOB
+    OrderSide:
+      type: string
+      enum: [bid, ask]
+      description: Side of the order
+
+    OrderType:
+      type: string
+      enum: [limit, fill]
+
+    OrderStatus:
+      type: string
+      enum: [filled, open, canceled]
+
+    BasicOrder:
+      type: object
+      properties:
+        orderId:
+          type: string
+        marketAddress:
+          $ref: "#/components/schemas/EvmAddress"
+        side:
+          $ref: "#/components/schemas/OrderSide"
+
+    OpenOrder:
+      allOf:
+        - $ref: "#/components/schemas/BasicOrder"
+        - type: object
+          required: [originalSize, limitPrice, sizeFilled, placedAt]
+          properties:
+            originalSize:
+              type: string
+              description: Original size of the order in base token
+            limitPrice:
+              type: string
+              description: Limit price of the order in quote token
+            sizeFilled:
+              type: string
+              description: Size filled in base token
+            placedAt:
+              type: integer
+              format: int64
+              description: Timestamp of when the order was first placed in UTC millis
+
+    FilledOrder:
+      allOf:
+        - $ref: "#/components/schemas/BasicOrder"
+        - type: object
+          required: [txnHash, filledAt, price, sizeFilled]
+          properties:
+            txnHash:
+              $ref: "#/components/schemas/EvmTxnHash"
+            filledAt:
+              type: integer
+              format: int64
+              description: Timestamp of when the order was filled in UTC millis
+            price:
+              type: string
+              description: Price in which the order was filled in quote tokens
+            sizeFilled:
+              type: string
+              description: Size filled in base token
+
+    Order:
+      allOf:
+        - $ref: "#/components/schemas/BasicOrder"
+        - type: object
+          required: [orderType, originalSize, limitPrice, placedAt]
+          properties:
+            orderType:
+              $ref: "#/components/schemas/OrderType"
+            originalSize:
+              type: string
+              description: Original size of the order in base token
+            limitPrice:
+              type: string
+              description: Limit price of the order in quote token
+            placedAt:
+              type: integer
+              format: int64
+              description: Timestamp of when the order was first placed in UTC millis
+
+    BookLevel:
+      type: object
+      required: [price, size, number]
+      properties:
+        price:
+          type: string
+          description: Price of the level
+        size:
+          type: string
+          description: Size of the level
+        number:
+          type: number
+          description: Number of orders at the level
+
+    Book:
+      type: object
+      required: [asks, bids, timestamp]
+      properties:
+        asks:
+          type: array
+          items:
+            $ref: "#/components/schemas/BookLevel"
+        bids:
+          type: array
+          items:
+            $ref: "#/components/schemas/BookLevel"
+        timestamp:
+          type: integer
+          format: int64
+
+    ErrorResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          description: Error message
+
+    ServerHealthResponse:
+      type: object
+      required: [status, timestamp]
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+          description: Status of the API
+        timestamp:
+          type: integer
+          format: int64
+          description: Timestamp of the health check in UTC millis
+
+    GTEInfoResponse:
+      type: object
+      required: [totalMarkets, launchedTokens, volume24HrUsd, volumeTotalUsd]
+      properties:
+        totalMarkets:
+          type: integer
+          format: int64
+        launchedTokens:
+          type: integer
+          format: int64
+        volume24HrUsd:
+          type: number
+          format: double
+          description: Total 24hr volume on GTE in USD
+        volumeTotalUsd:
+          type: number
+          format: double
+          description: Total volume on GTE in USD
+
+    GetTokenListResponse:
+      description: List of tokens. Returns TokenMetadata if `metadata` query is `true`
+      type: array
+      items:
+        oneOf:
+          - $ref: "#/components/schemas/Token"
+          - $ref: "#/components/schemas/TokenMetadata"
+
+
+    GetMarketListResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/Market"
+
+
+    GetMarketCandlesResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/Candle"
+
+
+    GetMarketBookResponse:
+      $ref: "#/components/schemas/Book"
+
+    GetTradeListResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/Trade"
+
+
+    GetUserLpPositionsResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/LpPosition"
+
+    GetUserPortfolioResponse:
+      type: object
+      required: [tokens, totalUsdBalance]
+      properties:
+        tokens:
+          type: array
+          items:
+            $ref: "#/components/schemas/TokenBalance"
+        totalUsdBalance:
+          type: number
+          format: double
+          description: User's total USD balance
+
+    GetUserOpenOrdersResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/OpenOrder"
+
+    GetUserFilledOrdersResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/FilledOrder"
+
+    GetUserOrderHistoryResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/Order"
+
+
+paths:
+  /health:
+    get:
+      operationId: GetServerHealth
+      summary: Get API health status
+      responses:
+        "200":
+          description: Health check response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerHealthResponse"
+  /info:
+    get:
+      operationId: GetGTEInfo
+      summary: Get GTE info
+      responses:
+        "200":
+          description: GTE info response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GTEInfoResponse"
+  /tokens:
+    get:
+      tags:
+        - tokens
+      operationId: GetTokens
+      summary: Get list of tokens supported on GTE
+      parameters:
+        - name: metadata
+          in: query
+          description: Returns tokens with metadata
+          schema:
+            type: boolean
+            default: false
+        - name: creator
+          in: query
+          description: Returns assets created by the given user address
+          schema:
+            $ref: "#/components/schemas/EvmAddress"
+        - name: marketType
+          in: query
+          description: Filters assets by the given market type
+          schema:
+            $ref: "#/components/schemas/MarketType"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+            format: uint
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+            format: uint
+      responses:
+        "200":
+          description: List of assets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetTokenListResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tokens/search:
+    get:
+      tags:
+        - tokens
+      operationId: SearchTokens
+      summary: Search tokens based on name or symbol
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+            format: uint
+      responses:
+        "200":
+          description: List of tokens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetTokenListResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tokens/{token_address}:
+    get:
+      tags:
+        - tokens
+      operationId: GetTokenByAddress
+      summary: Get token metadata by address
+      parameters:
+        - name: token_address
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/EvmAddress"
+      responses:
+        "200":
+          description: Token details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenMetadata"
+        "404":
+          description: Token not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /markets:
+    get:
+      tags:
+        - markets
+      operationId: GetMarkets
+      summary: Get list of markets
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+            format: uint
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+            format: uint
+        - name: marketType
+          in: query
+          description: Filter by market type. If empty, all market types will be returned
+          schema:
+            $ref: "#/components/schemas/MarketType"
+        - name: sortBy
+          in: query
+          description: Sort markets in descending order
+          schema:
+            type: string
+            enum: ["marketCap", "createdAt", "volume"]
+            default: "marketCap"
+        - name: tokenAddress
+          in: query
+          description: Filter markets by the specified token address
+          schema:
+            $ref: "#/components/schemas/EvmAddress"
+        - name: newlyGraduated
+          in: query
+          description: Returns newly graduated markets. Ignores `sortBy` if `true`
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: List of markets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetMarketListResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /markets/{market_address}:
+    get:
+      tags:
+        - markets
+      operationId: GetMarketByAddress
+      summary: Get market by address
+      parameters:
+        - name: market_address
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/EvmAddress"
+      responses:
+        "200":
+          description: Market
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Market"
+        "404":
+          description: Market not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+
+  /markets/{market_address}/candles:
+    get:
+      tags:
+        - markets
+      operationId: GetMarketCandles
+      summary: Get candles for a market
+      parameters:
+        - name: market_address
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/EvmAddress"
+        - name: interval
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/CandleInterval"
+        - name: startTime
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: endTime
+          in: query
+          description: If not supplied, the current time will be used
+          schema:
+            type: integer
+            format: int64
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 500
+            minimum: 1
+            maximum: 1000
+            format: uint
+      responses:
+        "200":
+          description: List of candles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetMarketCandlesResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Market not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /markets/{market_address}/trades:
+    get:
+      tags:
+        - markets
+      operationId: GetMarketTrades
+      summary: Get trades for a market
+      parameters:
+        - name: market_address
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/EvmAddress"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            format: uint
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+            format: uint
+      responses:
+        "200":
+          description: List of trades
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetTradeListResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Market not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /markets/{market_address}/book:
+    get:
+      tags:
+        - markets
+      operationId: GetMarketBook
+      summary: Get L2 orderbook for a market
+      parameters:
+        - name: market_address
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/EvmAddress"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+            format: uint
+      responses:
+        "200":
+          description: L2 orderbook
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetMarketBookResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Market not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/{user_address}/lppositions:
+    get:
+      tags:
+        - users
+      operationId: GetUserLpPositions
+      summary: Get LP positions for a user
+      parameters:
+        - name: user_address
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/EvmAddress"
+      responses:
+        "200":
+          description: List of user's LP positions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetUserLpPositionsResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/{user_address}/portfolio:
+    get:
+      tags:
+        - users
+      operationId: GetUserPortfolio
+      summary: Get user's portfolio
+      parameters:
+        - name: user_address
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/EvmAddress"
+      responses:
+        "200":
+          description: User's portfolio
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetUserPortfolioResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/{user_address}/trades:
+    get:
+      tags:
+        - users
+      operationId: GetUserTrades
+      summary: Get user trades. Returns all trades from all markets if `market_address` is empty.
+      parameters:
+        - name: user_address
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/EvmAddress"
+        - name: market_address
+          in: query
+          schema:
+             $ref: "#/components/schemas/EvmAddress"
+      responses:
+        "200":
+          description: List of user's trades
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetTradeListResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User or market not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/{user_address}/open_orders:
+    get:
+      tags:
+        - users
+      operationId: GetUserOpenOrder
+      summary: Get open orders for a user
+      parameters:
+        - name: user_address
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/EvmAddress"
+        - name: market_address
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/EvmAddress"
+      responses:
+        "200":
+          description: List of user's open orders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetUserOpenOrdersResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User or market not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/{user_address}/filled_orders:
+    get:
+      tags:
+        - users
+      operationId: GetUserFilledOrder
+      summary: Get filled orders for a user
+      parameters:
+        - name: user_address
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/EvmAddress"
+        - name: market_address
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/EvmAddress"
+      responses:
+        "200":
+          description: List of user's filled orders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetUserFilledOrdersResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User or market not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+
+  /users/{user_address}/order_history:
+    get:
+      tags:
+        - users
+      operationId: GetUserOrderHistory
+      summary: Get order history for a user
+      parameters:
+        - name: user_address
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/EvmAddress"
+        - name: market_address
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/EvmAddress"
+      responses:
+        "200":
+          description: List of user's order history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetUserOrderHistoryResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User or market not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+
