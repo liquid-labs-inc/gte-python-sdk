@@ -118,7 +118,7 @@ async def show_orders(client: Client, market: Market) -> None:
     print_separator("User Orders")
 
     try:
-        orders = await client.execution.get_orders(market)
+        orders = await client.execution.get_open_orders(market)
 
         print(f"Orders for market {market.pair}:")
         for order in orders:
