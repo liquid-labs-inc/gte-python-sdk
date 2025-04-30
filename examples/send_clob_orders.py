@@ -57,7 +57,7 @@ async def limit_order_example(client: Client, market: Market) -> None:
     amount = market.round_base_to_lots_int(market.lot_size)
 
     print(f"Creating BUY limit order at price: {price}")
-    tx_func = await client.execution.place_limit_order(
+    order = await client.execution.place_limit_order(
         market=market,
         side=Side.BUY,
         amount=amount,
@@ -65,13 +65,11 @@ async def limit_order_example(client: Client, market: Market) -> None:
         time_in_force=TimeInForce.GTC,
     )
 
-    # Use async version for sending transaction
-    order = await tx_func.send_wait()
     print(f"Order created: {order}")
     await get_order_status(client, market, order.order_id)
 
     print(f"Creating SELL limit order at price: {price}")
-    tx_func = await client.execution.place_limit_order(
+    order = await client.execution.place_limit_order(
         market=market,
         side=Side.SELL,
         amount=amount,
@@ -79,9 +77,6 @@ async def limit_order_example(client: Client, market: Market) -> None:
         time_in_force=TimeInForce.GTC,
     )
 
-    # Use async version for sending transaction
-    order = await tx_func.send_wait()
-    print(f"Order created: {order}")
     await get_order_status(client, market, order.order_id)
 
 

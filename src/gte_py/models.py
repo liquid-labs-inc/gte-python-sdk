@@ -320,8 +320,8 @@ class Order:
     market_address: str
     side: Side
     order_type: OrderType
-    amount: float
-    price: float | None
+    amount: int
+    price: int | None
     time_in_force: TimeInForce
     status: OrderStatus
     created_at: int

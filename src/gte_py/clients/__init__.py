@@ -61,6 +61,7 @@ class Client:
                 main_account=account,
                 clob=self.clob,
                 token=self.token,
+                rest=self.rest
 
             )
 
