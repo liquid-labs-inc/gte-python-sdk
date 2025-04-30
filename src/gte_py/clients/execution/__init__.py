@@ -422,6 +422,11 @@ class ExecutionClient:
 
         return wallet_balance, exchange_balance
 
+    async def get_order(self, market: Market, order_id: int) -> Order:
+        clob = self.clob.get_clob(market.address)
+        order = await clob.get_order(order_id)
+        return self._convert_contract_order_to_model(market, order)
+
     async def get_open_orders(self, market: Market, address: ChecksumAddress | None = None) -> List[Order]:
         """
         Get all orders for a specific market and address from the chain directly.

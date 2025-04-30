@@ -48,14 +48,14 @@ async def approve_and_deposit_example(client: Client, market: Market, amount: fl
     )
 
 
-async def limit_order_example(client: Client, market: Market) -> None:
+async def limit_order_example(client: Client, market: Market) -> list[int]:
     """Example of creating a limit order."""
     print_separator("Limit Order Example")
 
     # Current market price (or estimate)
     price = market.round_quote_to_ticks_int(market.tick_size)
     amount = market.round_base_to_lots_int(market.lot_size)
-
+    results = []
     print(f"Creating BUY limit order at price: {price}")
     order = await client.execution.place_limit_order(
         market=market,
@@ -64,6 +64,7 @@ async def limit_order_example(client: Client, market: Market) -> None:
         price=price,
         time_in_force=TimeInForce.GTC,
     )
+    results.append(order.order_id)
 
     print(f"Order created: {order}")
     await get_order_status(client, market, order.order_id)
@@ -76,28 +77,22 @@ async def limit_order_example(client: Client, market: Market) -> None:
         price=price,
         time_in_force=TimeInForce.GTC,
     )
+    results.append(order.order_id)
 
     await get_order_status(client, market, order.order_id)
+    return results
 
 
-async def cancel_order_example(client: Client, market: Market, order_id: Optional[int] = None) -> Optional[TxReceipt]:
+async def cancel_order_example(client: Client, market: Market, order_id: int = None) -> Optional[TxReceipt]:
     """Example of cancelling an order."""
     print_separator("Cancel Order Example")
 
-    if not order_id:
-        print("No order ID provided, using example ID")
-        order_id = 12345
 
     print(f"Creating cancel transaction for order ID {order_id}...")
-    tx_func = await client.execution.cancel_order(
+    await client.execution.cancel_order(
         market=market,
         order_id=order_id,
-        gas=200000,
     )
-
-    print("\nSending transaction...")
-    receipt = await tx_func.send_wait()
-    return receipt
 
 
 async def get_order_status(client: Client, market: Market, order_id: int) -> None:
@@ -201,10 +196,9 @@ async def main() -> None:
     await show_balances(client, market)
 
     # Order examples
-    await limit_order_example(client, market)
-
-    # Cancel an order
-    await cancel_order_example(client, market, order_id=None)
+    order_ids = await limit_order_example(client, market)
+    for order_id in order_ids:
+        await cancel_order_example(client, market, order_id)
 
     # Show all orders
     await show_orders(client, market)
