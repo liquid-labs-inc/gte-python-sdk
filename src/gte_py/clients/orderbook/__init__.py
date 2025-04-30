@@ -12,7 +12,7 @@ from gte_py.api.rest import RestApi
 from gte_py.api.ws import WebSocketApi
 from gte_py.clients import InfoClient
 from gte_py.configs import NetworkConfig
-from gte_py.models import Candle, OrderbookUpdate, PriceLevel, Trade, OrderBookSnapshot, Market
+from gte_py.models import Candle, OrderbookUpdate, PriceLevel, OrderBookSnapshot, Market
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 class OrderbookClient:
     """WebSocket-based client for real-time market data."""
 
-    def __init__(self, config: NetworkConfig, info: InfoClient):
+    def __init__(self, config: NetworkConfig,
+                 rest: RestApi,
+                 info: InfoClient):
         """Initialize the client.
 
         Args:
@@ -28,10 +30,9 @@ class OrderbookClient:
             info: InfoClient instance for market information
         """
         self._ws_client = WebSocketApi(ws_url=config.ws_url)
-        self._rest_client = RestApi(base_url=config.api_url)
+        self._rest = rest
         self._info_client = info
         self._trade_callbacks = []
-        self._candle_callbacks = {}  # Keyed by interval
         self._orderbook_callbacks = []
         self._last_trade = None
         self._last_candle = {}  # Keyed by interval
@@ -46,55 +47,6 @@ class OrderbookClient:
         """Close the WebSocket connection."""
         await self._ws_client.close()
 
-    # Trade methods
-    async def subscribe_trades(self, market: Market, callback: Callable[[Trade], Any] | None = None):
-        """Subscribe to real-time trades.
-
-        Args:
-            callback: Function to call when a trade is received
-        """
-        if callback:
-            self._trade_callbacks.append(callback)
-
-        if not self._trade_callbacks:
-            # If no callbacks, add a dummy one to store the last trade
-            self._trade_callbacks.append(lambda trade: setattr(self, "_last_trade", trade))
-
-        # Define handler for raw trade messages
-        async def handle_trade_message(data):
-            if data.get("s") != "trades":
-                return
-
-            trade_data = data.get("d", {})
-            trade = Trade(
-                market_address=trade_data.get("m"),
-                side=trade_data.get("sd"),
-                price=float(trade_data.get("px")),
-                size=float(trade_data.get("sz")),
-                timestamp=trade_data.get("t"),
-                tx_hash=trade_data.get("h"),
-                trade_id=trade_data.get("id"),
-            )
-
-            self._last_trade = trade
-
-            for cb in self._trade_callbacks:
-                try:
-                    await cb(trade) if asyncio.iscoroutinefunction(cb) else cb(trade)
-                except Exception as e:
-                    logger.error(f"Error in trade callback: {e}")
-
-        await self._ws_client.subscribe_trades([market.address], handle_trade_message)
-
-    async def unsubscribe_trades(self, market: Market):
-        """Unsubscribe from real-time trades."""
-        await self._ws_client.unsubscribe_trades([market.address])
-        self._trade_callbacks = []
-
-    @property
-    def last_trade(self) -> Trade | None:
-        """Get the most recent trade."""
-        return self._last_trade
 
     def get_last_candle(self, interval: str = "1m") -> Candle | None:
         """Get the most recent candle for the specified interval."""
@@ -154,7 +106,7 @@ class OrderbookClient:
                 asks=asks,
             )
 
-            self._orderbook_state = update
+            self._orderbook_state[market.address] = update
 
             for cb in self._orderbook_callbacks:
                 try:
@@ -195,5 +147,5 @@ class OrderbookClient:
         Returns:
             OrderBookSnapshot containing bids and asks with prices and sizes
         """
-        async with self._rest_client as client:
+        async with self._rest as client:
             return await client.get_order_book_snapshot(market.address, limit=depth)

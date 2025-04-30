@@ -3,6 +3,7 @@ import json
 import logging
 
 import aiohttp
+from eth_typing import ChecksumAddress
 
 from gte_py.models import OrderBookSnapshot
 
@@ -138,7 +139,7 @@ class RestApi:
             params["price"] = price
         return await self._request("GET", "/v1/markets", params=params)
 
-    async def get_market(self, market_address: str) -> dict:
+    async def get_market(self, market_address: ChecksumAddress) -> dict:
         """Get market by address.
 
         Args:
@@ -151,7 +152,7 @@ class RestApi:
 
     async def get_candles(
             self,
-            market_address: str,
+            market_address: ChecksumAddress,
             interval: str,
             start_time: int,
             end_time: int | None = None,
@@ -174,7 +175,7 @@ class RestApi:
             params["endTime"] = end_time
         return await self._request("GET", f"/v1/markets/{market_address}/candles", params=params)
 
-    async def get_trades(self, market_address: str, limit: int = 100, offset: int = 0) -> dict:
+    async def get_trades(self, market_address: ChecksumAddress, limit: int = 100, offset: int = 0) -> dict:
         """Get trades for a market.
 
         Args:
@@ -189,7 +190,7 @@ class RestApi:
         return await self._request("GET", f"/v1/markets/{market_address}/trades", params=params)
 
     # Users endpoints
-    async def get_user_positions(self, user_address: str) -> dict:
+    async def get_user_positions(self, user_address: ChecksumAddress) -> dict:
         """Get LP positions for a user.
 
         Args:
@@ -200,7 +201,7 @@ class RestApi:
         """
         return await self._request("GET", f"/v1/users/{user_address}/positions")
 
-    async def get_user_assets(self, user_address: str, limit: int = 100, offset: int = 0) -> dict:
+    async def get_user_assets(self, user_address: ChecksumAddress, limit: int = 100, offset: int = 0) -> dict:
         """Get assets held by a user.
 
         Args:
@@ -214,7 +215,7 @@ class RestApi:
         params = {"limit": limit, "offset": offset}
         return await self._request("GET", f"/v1/users/{user_address}/assets", params=params)
 
-    async def get_order_book(self, market_address: str, limit: int = 5) -> dict:
+    async def get_order_book(self, market_address: ChecksumAddress, limit: int = 5) -> dict:
         """Get order book snapshot for a market.
 
         Args:
@@ -227,7 +228,7 @@ class RestApi:
         params = {"limit": limit}
         return await self._request("GET", f"/v1/markets/{market_address}/book", params=params)
 
-    async def get_order_book_snapshot(self, market_address: str, limit: int = 5) -> OrderBookSnapshot:
+    async def get_order_book_snapshot(self, market_address: ChecksumAddress, limit: int = 5) -> OrderBookSnapshot:
         """Get typed order book snapshot for a market.
 
         Args:

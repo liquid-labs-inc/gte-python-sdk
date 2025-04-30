@@ -17,7 +17,7 @@ async def query_specific_market(client: Client, market_address: ChecksumAddress)
 
     # Get a specific market by address
     print(f"Fetching market with address: {market_address}")
-    market = await client.info.get_market(market_address)
+    market = await client.info.get_market_by_address(market_address)
 
     # Display market information
     print(f"Market: {market.pair} ({market.address})")
@@ -50,6 +50,23 @@ async def query_specific_market(client: Client, market_address: ChecksumAddress)
     return market
 
 
+async def query_market_trades(client: Client, market_address: ChecksumAddress) -> None:
+    """Query trades for a specific market."""
+    print_separator("Market Trades Query")
+
+    # Get trades for the market
+    trades = await client.trades.get_trades(market_address)
+
+    # Display trade information
+    print(f"Trades for market {market_address}:")
+    for trade in trades:
+        print(f"  Trade ID: {trade.id}")
+        print(f"  Price: {trade.price}")
+        print(f"  Amount: {trade.amount}")
+        print(f"  Side: {trade.side.value}")
+        print(f"  Timestamp: {trade.timestamp}")
+
+
 async def main() -> None:
     """Run the market query example."""
     print("GTE Market Query Example")
@@ -65,6 +82,7 @@ async def main() -> None:
 
     market_address = MARKET_ADDRESS
     market = await query_specific_market(client, market_address)
+    # await query_market_trades(client, market_address)
 
 
 if __name__ == "__main__":
