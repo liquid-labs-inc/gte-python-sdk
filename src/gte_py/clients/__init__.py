@@ -35,6 +35,8 @@ class Client:
             config: Network configuration
             account: Address of main account
         """
+        account = account or web3.eth.default_account
+
         self.rest = RestApi(base_url=config.api_url)
         self._ws_url = config.ws_url
         self.config: NetworkConfig = config
@@ -45,11 +47,15 @@ class Client:
         self.token = TokenClient(self._web3)
         self.info = InfoClient(web3=self._web3, rest=self.rest, clob_client=self.clob, token_client=self.token)
         self.market: OrderbookClient = OrderbookClient(config, self.rest, self.info)
-        self.account = AccountClient(
-            account=account,
-            clob=self.clob,
-            token=self.token,
-        )
+        if not account:
+            self.account = None
+        else:
+            self.account = AccountClient(
+                account=account,
+                clob=self.clob,
+                token=self.token,
+                rest=self.rest
+            )
         self.trades = TradesClient(config, self.rest)
 
         if not account:
@@ -62,7 +68,6 @@ class Client:
                 clob=self.clob,
                 token=self.token,
                 rest=self.rest
-
             )
 
         self._sender_address = account

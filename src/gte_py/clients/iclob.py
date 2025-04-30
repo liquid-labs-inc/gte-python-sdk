@@ -30,6 +30,16 @@ class CLOBClient:
         # Get and initialize CLOB factory
         self._clob_factory_address = await self._router.get_clob_factory()
         self.clob_factory = CLOBFactory(web3=self._web3, contract_address=self._clob_factory_address)
+    def get_factory_address(self) -> ChecksumAddress:
+        """
+        Get the address of the CLOB factory.
+
+        Returns:
+            Address of the CLOB factory
+        """
+        if not self._clob_factory_address:
+            raise ValueError("CLOB factory address is not initialized. call init() first.")
+        return self._clob_factory_address
 
     def get_clob(self, clob_address: ChecksumAddress) -> ICLOB:
         """
