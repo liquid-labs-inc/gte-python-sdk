@@ -64,6 +64,9 @@ class Client:
 
         self._sender_address = sender_address
 
+    async def init(self):
+        await self.clob.init()
+
     async def __aenter__(self):
         """Enter async context."""
         await self._rest.__aenter__()

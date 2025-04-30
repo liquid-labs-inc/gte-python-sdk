@@ -202,7 +202,7 @@ async def main() -> None:
     # Initialize client with AsyncWeb3
     print("Initializing GTE client...")
     client = Client(web3=web3, config=network, sender_address=wallet_address)
-
+    await client.init()
     # Get a market to work with
     market = await display_market_info(client, MARKET_ADDRESS)
 
