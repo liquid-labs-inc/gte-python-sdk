@@ -97,8 +97,8 @@ async def show_balances(client: Client, market: Market) -> None:
 
     print(f"Getting balances for {market.base_asset.symbol} and {market.quote_asset.symbol}...")
 
-    base_wallet, base_exchange = await client.account.get_balance(base_token)
-    quote_wallet, quote_exchange = await client.account.get_balance(quote_token)
+    base_wallet, base_exchange = await client.execution.get_balance(base_token)
+    quote_wallet, quote_exchange = await client.execution.get_balance(quote_token)
 
     print(f"{market.base_asset.symbol} balances:")
     print(f"  Wallet: {base_wallet:.6f}")

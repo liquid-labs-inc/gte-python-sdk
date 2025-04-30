@@ -2,19 +2,13 @@
 
 import asyncio
 import logging
-from collections.abc import Callable
-from typing import Any, Optional, List, Dict, Tuple
+from typing import Optional, List, Tuple
 
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
-from web3.exceptions import LogTopicError
-from web3.providers import WebSocketProvider
 from web3.types import EventData
 
-from gte_py.api.chain.erc20 import ERC20
 from gte_py.api.chain.events import OrderCanceledEvent
-from gte_py.api.chain.factory import CLOBFactory
-from gte_py.api.chain.iclob import ICLOB
 from gte_py.api.chain.structs import (
     Side,
     Settlement,
@@ -23,7 +17,6 @@ from gte_py.api.chain.structs import (
     CLOBOrder
 )
 from gte_py.api.chain.utils import get_current_timestamp, TypedContractFunction
-from gte_py.api.chain.weth import WETH
 from gte_py.clients.iclob import CLOBClient
 from gte_py.clients.token import TokenClient
 from gte_py.models import Market, Order, OrderStatus, Side, OrderType, TimeInForce, Trade
@@ -54,10 +47,9 @@ class ExecutionClient:
         Args:
             web3: AsyncWeb3 instance for on-chain interactions
             sender_address: Address to send transactions from
-            factory_address: Address of the GTE Factory contract
         """
         self._web3 = web3
-        self._iclob = clob
+        self.clob = clob
         self.token = token
         self._sender_address = sender_address
 
@@ -87,7 +79,7 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
         # Get the CLOB contract
-        clob = self._iclob.get_clob(market.address)
+        clob = self.clob.get_clob(market.address)
 
         # Convert model types to contract types
         contract_side = Side.BUY if side == Side.BUY else Side.SELL
@@ -176,7 +168,7 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
         # Get the CLOB contract
-        clob = self._iclob.get_clob(market.address)
+        clob = self.clob.get_clob(market.address)
 
         # Convert model types to contract types
         contract_side = Side.BUY if side == Side.BUY else Side.SELL
@@ -228,7 +220,7 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
         # Get the CLOB contract
-        clob = self._iclob.get_clob(market.address)
+        clob = self.clob.get_clob(market.address)
 
         # Get the current order
         order = await clob.get_order(order_id)
@@ -279,7 +271,7 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
         # Get the CLOB contract
-        clob = self._iclob.get_clob(market.address)
+        clob = self.clob.get_clob(market.address)
 
         # Create cancel args
         args = clob.create_cancel_args(
@@ -305,7 +297,7 @@ class ExecutionClient:
         Returns:
             List of Order objects
         """
-        clob = self._iclob.get_clob(market.address)
+        clob = self.clob.get_clob(market.address)
         best_bid, best_ask = await clob.get_tob()
         orders = []
         # Get all orders for the bid and ask price levels
@@ -360,7 +352,7 @@ class ExecutionClient:
         Returns:
             List of Order objects
         """
-        clob = self._iclob.get_clob(market.address)
+        clob = self.clob.get_clob(market.address)
         orders = []
         (num, head, tail) = await clob.get_limit(price, side)
         order_id = head
@@ -410,24 +402,22 @@ class ExecutionClient:
         Returns:
             Tuple of (wallet_balance, exchange_balance) in human-readable format
         """
-        if not self._factory:
-            raise ValueError("Factory not initialized")
 
         account = account or self._sender_address
-        token = self._get_token(token_address)
+        token = self.token.get_erc20(token_address)
 
         # Get wallet balance
         wallet_balance_raw = await token.balance_of(account)
         wallet_balance = await token.convert_amount_to_float(wallet_balance_raw)
 
         # Get exchange balance
-        exchange_balance_raw = await self._factory.get_account_balance(account, token_address)
+        exchange_balance_raw = await self.clob.clob_factory.get_account_balance(account, token_address)
         exchange_balance = await token.convert_amount_to_float(exchange_balance_raw)
 
-        return (wallet_balance, exchange_balance)
+        return wallet_balance, exchange_balance
 
     async def get_order(self, market: Market, order_id: int) -> Order:
-        clob = self._get_clob(market.address)
+        clob = self.clob.get_clob(market.address)
         order = await clob.get_order(order_id)
         return self._convert_contract_order_to_model(market, order)
 
