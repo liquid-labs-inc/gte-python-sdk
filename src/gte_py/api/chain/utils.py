@@ -57,7 +57,7 @@ def load_abi(abi_name: str) -> list[dict[str, Any]]:
     # Look in the abi directory first
     abi_file = f"{abi_name}.json"
 
-    package_path = pkg_resources.files("gte_py.contracts.abi")
+    package_path = pkg_resources.files("gte_py.api.chain.abi")
     file_path = package_path.joinpath(abi_file)
     # Convert Traversable to string path
     str_path = str(file_path)

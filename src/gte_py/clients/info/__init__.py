@@ -7,7 +7,7 @@ from web3 import AsyncWeb3
 
 from gte_py.api.chain.iclob import ICLOB
 from gte_py.api.rest import RestApi
-from gte_py.clients import TokenClient
+from gte_py.clients.token import TokenClient
 from gte_py.clients.iclob import CLOBClient
 from gte_py.models import Asset, Market, MarketType
 
@@ -92,7 +92,7 @@ class InfoClient:
 
         return markets
 
-    async def get_market_info(self, clob: ICLOB) -> Market:
+    async def get_market(self, clob: ICLOB) -> Market:
         # Get market config for additional details
         factory, mask, quote, base, tick_size, lot_size = await clob.get_market_config()
 
@@ -131,7 +131,7 @@ class InfoClient:
 
         return market_info
 
-    async def get_market_info_by_address(self, address: ChecksumAddress) -> Market:
+    async def get_market_by_address(self, address: ChecksumAddress) -> Market:
         """Get market info by address."""
         clob = self._clob_client.get_clob(address)
-        return await self.get_market_info(clob)
+        return await self.get_market(clob)

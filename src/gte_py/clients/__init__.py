@@ -9,7 +9,7 @@ from .account import AccountClient
 from .execution import ExecutionClient
 from .iclob import CLOBClient
 from .info import InfoClient
-from .market import MarketClient
+from .orderbook import OrderbookClient
 from .token import TokenClient
 from ..api.rest import RestApi
 from ..configs import NetworkConfig
@@ -39,11 +39,11 @@ class Client:
         self.config: NetworkConfig = config
 
         self._web3 = web3
-        self.clob = CLOBClient(self._web3)
+        self.clob = CLOBClient(self._web3, config.router_address)
         # Initialize market service for fetching market information
         self.token = TokenClient(self._web3)
-        self.info = InfoClient(web3=self._web3, rest=self._rest, clob_client=self.clob)
-        self.market: MarketClient = MarketClient(config, self.info)
+        self.info = InfoClient(web3=self._web3, rest=self._rest, clob_client=self.clob, token_client=self.token)
+        self.market: OrderbookClient = OrderbookClient(config, self.info)
         self.account = AccountClient(
             sender_address=sender_address,
             clob=self.clob,
