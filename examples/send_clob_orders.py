@@ -45,7 +45,7 @@ async def approve_and_deposit_example(client: Client, market: Market, quantity: 
     )
 
 
-async def limit_order_example(client: Client, market: Market, amount: float, price: float) -> list[int]:
+async def limit_order_example(client: Client, market: Market, quantity: float, price: float) -> list[int]:
     """Example of creating a limit order."""
     print_separator("Limit Order Example")
 
@@ -54,8 +54,8 @@ async def limit_order_example(client: Client, market: Market, amount: float, pri
     order = await client.execution.place_limit_order(
         market=market,
         side=Side.BUY,
-        amount=amount,
-        price=price,
+        amount=market.base.convert_quantity_to_amount(quantity),
+        price=market.quote.convert_quantity_to_amount(price),
         time_in_force=TimeInForce.GTC,
         gas=50 * 10000000
     )
@@ -68,8 +68,8 @@ async def limit_order_example(client: Client, market: Market, amount: float, pri
     order = await client.execution.place_limit_order(
         market=market,
         side=Side.SELL,
-        amount=amount,
-        price=price,
+        amount=market.base.convert_quantity_to_amount(quantity),
+        price=market.quote.convert_quantity_to_amount(price),
         time_in_force=TimeInForce.GTC,
         gas=50 * 10000000
     )
@@ -195,7 +195,7 @@ async def main() -> None:
     await show_balances(client, market)
 
     # Order examples
-    order_ids = await limit_order_example(client, market, amount=amount, price=price)
+    order_ids = await limit_order_example(client, market, quantity=amount, price=price)
     for order_id in order_ids:
         await cancel_order_example(client, market, order_id)
 
