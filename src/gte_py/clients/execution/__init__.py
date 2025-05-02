@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Optional, List, Tuple, Dict, Any, Awaitable
 
 from eth_typing import ChecksumAddress
 from typing_extensions import Unpack
@@ -56,7 +56,7 @@ class ExecutionClient:
         self.token = token
         self.main_account = main_account
 
-    async def place_limit_order_tx(
+    def place_limit_order_tx(
         self,
         market: Market,
         side: Side,
@@ -144,7 +144,7 @@ class ExecutionClient:
             # Return the transaction
             return clob.post_limit_order(account=self.main_account, args=args, **kwargs)
 
-    async def place_limit_order(
+    def place_limit_order(
         self,
         market: Market,
         side: Side,
@@ -153,8 +153,8 @@ class ExecutionClient:
         time_in_force: TimeInForce = TimeInForce.GTC,
         client_order_id: int = 0,
         **kwargs: Unpack[TxParams],
-    ) -> Order:
-        tx = await self.place_limit_order_tx(
+    ) -> Awaitable[Order]:
+        tx = self.place_limit_order_tx(
             market=market,
             side=side,
             amount=amount,
@@ -163,7 +163,8 @@ class ExecutionClient:
             client_order_id=client_order_id,
             **kwargs,
         )
-        return await tx.send_wait()
+        tx.send_nowait()
+        return tx.retrieve()
 
     async def place_market_order_tx(
         self,

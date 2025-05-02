@@ -3,7 +3,7 @@ import importlib.resources as pkg_resources
 import json
 import logging
 import time
-from typing import Any, Generic, TypeVar, Callable, Tuple, Dict
+from typing import Any, Generic, TypeVar, Callable, Tuple, Dict, Awaitable
 
 from eth_account import Account
 from eth_account.types import PrivateKeyType
@@ -128,6 +128,13 @@ def lift_callable(func: Callable[[EventData], T | None]) -> Callable[[EventData]
 tx_id = 0
 
 
+def next_tx_id() -> int:
+    """Get the next transaction ID"""
+    global tx_id
+    tx_id += 1
+    return tx_id
+
+
 class TypedContractFunction(Generic[T]):
     """Generic transaction wrapper with typed results and async support"""
 
@@ -150,10 +157,10 @@ class TypedContractFunction(Generic[T]):
         self.event_parser: Callable[[EventData], T] | None = None
         self.result: T | None = None
         self.receipt: dict[str, Any] | None = None
-        self.tx_hash: HexBytes | None = None
+        self.tx_hash: HexBytes | Awaitable[HexBytes] | None = None
 
     def with_event(
-        self, event, parser: Callable[[EventData], T] | None = None
+            self, event, parser: Callable[[EventData], T] | None = None
     ) -> "TypedContractFunction[T]":
         """Set the event to listen for"""
         self.event = event
@@ -165,13 +172,30 @@ class TypedContractFunction(Generic[T]):
         self.result = await self.func_call.call(self.params)
         return self.result
 
-    async def send(self) -> HexBytes:
-        """Synchronous write operation"""
-        global tx_id
+    def send_nowait(self) -> Awaitable[HexBytes]:
+        """Asynchronous write operation"""
         try:
             tx = self.params
-            tx_id += 1
-            tx_id1 = tx_id
+            tx_id1 = next_tx_id()
+            logger.info(
+                "Sending tx#%d %s with %s", tx_id1, format_contract_function(self.func_call), tx
+            )
+            tx = self.func_call.build_transaction(tx)
+            # tx is auto signed
+            instance = Web3RequestManager.instances[
+                self.web3.eth.default_account
+            ]
+            self.tx_hash = instance.send_request(tx)
+            logger.info("tx#%d sent: %s", tx_id1, 'pending')
+            return self.tx_hash
+        except ContractCustomError as e:
+            raise convert_web3_error(e, format_contract_function(self.func_call)) from e
+
+    async def send(self) -> HexBytes:
+        """Synchronous write operation"""
+        try:
+            tx = self.params
+            tx_id1 = next_tx_id()
             logger.info(
                 "Sending tx#%d %s with %s", tx_id1, format_contract_function(self.func_call), tx
             )
@@ -209,6 +233,8 @@ class TypedContractFunction(Generic[T]):
 
         if self.tx_hash is None:
             raise ValueError("Transaction hash is None. Call send() first.")
+        if isinstance(self.tx_hash, Awaitable):
+            self.tx_hash = await self.tx_hash
         if self.event is None:
             return None
         try:
@@ -237,7 +263,7 @@ def format_contract_function(func: AsyncContractFunction) -> str:
     Format a ContractFunction into a more readable string with parameter names and values.
 
     Example output:
-    postLimitOrder(address: '0x1234...', order: {'amountInBase': 1.0, 'price': 1.0, 'cancelTimestamp': 0,
+    0x1234 postLimitOrder(address: '0x1234...', order: {'amountInBase': 1.0, 'price': 1.0, 'cancelTimestamp': 0,
                                                 'side': <Side.SELL: 1>, 'clientOrderId': 0,
                                                 'limitOrderType': <LimitOrderType.GOOD_TILL_CANCELLED: 0>,
                                                 'settlement': <Settlement.INSTANT: 1>})
@@ -277,10 +303,10 @@ def format_contract_function(func: AsyncContractFunction) -> str:
     return f"{func.address} {function_name}({', '.join(formatted_args)})"
 
 
-def make_web3(
-    network: NetworkConfig,
-    wallet_address: ChecksumAddress | None = None,
-    wallet_private_key: PrivateKeyType | None = None,
+async def make_web3(
+        network: NetworkConfig,
+        wallet_address: ChecksumAddress | None = None,
+        wallet_private_key: PrivateKeyType | None = None,
 ) -> AsyncWeb3:
     """
     Create an AsyncWeb3 instance with the specified network configuration.
@@ -300,6 +326,7 @@ def make_web3(
         account = Account.from_key(wallet_private_key)
         w3.eth.default_account = account.address
         w3.middleware_onion.inject(SignAndSendRawMiddlewareBuilder.build(account), layer=0)
+        await Web3RequestManager.ensure_instance(w3, account.address)
     return w3
 
 
@@ -308,7 +335,7 @@ class Web3RequestManager:
 
     @classmethod
     async def ensure_instance(
-        cls, web3: AsyncWeb3, account_address: ChecksumAddress
+            cls, web3: AsyncWeb3, account_address: ChecksumAddress
     ) -> "Web3RequestManager":
         """Ensure a singleton instance of Web3RequestManager for the given account address"""
         if account_address not in cls.instances:
@@ -319,7 +346,7 @@ class Web3RequestManager:
     def __init__(self, web3: AsyncWeb3, account_address: ChecksumAddress):
         self.web3 = web3
         self.account_address = account_address
-        self.request_queue: asyncio.Queue[Tuple[TxParams, asyncio.Future[HexBytes]]] = (
+        self.request_queue: asyncio.Queue[Tuple[TxParams | Awaitable[TxParams], asyncio.Future[HexBytes]]] = (
             asyncio.Queue()
         )
         self.pending_transactions: Dict[int, HexBytes] = {}  # {nonce: tx_hash}
@@ -374,6 +401,8 @@ class Web3RequestManager:
                 nonce = self.current_nonce
                 self.current_nonce += 1
             try:
+                if isinstance(tx, Awaitable):
+                    tx = await tx
                 tx_hash = await self._send_transaction(tx, Nonce(nonce))
                 future.set_result(tx_hash)
                 self.pending_transactions[nonce] = tx_hash
@@ -423,8 +452,8 @@ class Web3RequestManager:
             tx["nonce"] = nonce
         return await self.web3.eth.send_transaction(tx)
 
-    async def send_request(self, data: TxParams) -> HexBytes:
+    def send_request(self, data: TxParams | Awaitable[TxParams]) -> Awaitable[HexBytes]:
         """Public API to submit transactions"""
         future = asyncio.Future()
-        await self.request_queue.put((data, future))
-        return await future
+        self.request_queue.put_nowait((data, future))
+        return future

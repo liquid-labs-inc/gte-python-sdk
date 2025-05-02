@@ -102,7 +102,7 @@ async def main() -> None:
     network = TESTNET_CONFIG
 
     print("Initializing AsyncWeb3...")
-    web3 = make_web3(network, WALLET_ADDRESS, WALLET_PRIVATE_KEY)
+    web3 = await make_web3(network, WALLET_ADDRESS, WALLET_PRIVATE_KEY)
 
     print("Connected to blockchain:")
     print(f"Chain ID: {await web3.eth.chain_id}")
