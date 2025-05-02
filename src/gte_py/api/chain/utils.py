@@ -147,6 +147,7 @@ class TypedContractFunction(Generic[T]):
         "result",
         "receipt",
         "tx_hash",
+        "tx_id",
     ]
 
     def __init__(self, func_call: AsyncContractFunction, params: TxParams | Any = None):
@@ -158,6 +159,7 @@ class TypedContractFunction(Generic[T]):
         self.result: T | None = None
         self.receipt: dict[str, Any] | None = None
         self.tx_hash: HexBytes | Awaitable[HexBytes] | None = None
+        self.tx_id = next_tx_id()
 
     def with_event(
             self, event, parser: Callable[[EventData], T] | None = None
@@ -172,13 +174,12 @@ class TypedContractFunction(Generic[T]):
         self.result = await self.func_call.call(self.params)
         return self.result
 
-    def send_nowait(self) -> Awaitable[HexBytes]:
+    def send_nowait(self, _show_pending: bool = True) -> Awaitable[HexBytes]:
         """Asynchronous write operation"""
         try:
             tx = self.params
-            tx_id1 = next_tx_id()
             logger.info(
-                "Sending tx#%d %s with %s", tx_id1, format_contract_function(self.func_call), tx
+                "Sending tx#%d %s with %s", self.tx_id, format_contract_function(self.func_call), tx
             )
             tx = self.func_call.build_transaction(tx)
             # tx is auto signed
@@ -186,29 +187,18 @@ class TypedContractFunction(Generic[T]):
                 self.web3.eth.default_account
             ]
             self.tx_hash = instance.send_request(tx)
-            logger.info("tx#%d sent: %s", tx_id1, 'pending')
+            if _show_pending:
+                logger.info("tx#%d sent: %s", self.tx_id, 'pending')
+
             return self.tx_hash
         except ContractCustomError as e:
             raise convert_web3_error(e, format_contract_function(self.func_call)) from e
 
     async def send(self) -> HexBytes:
         """Synchronous write operation"""
-        try:
-            tx = self.params
-            tx_id1 = next_tx_id()
-            logger.info(
-                "Sending tx#%d %s with %s", tx_id1, format_contract_function(self.func_call), tx
-            )
-            tx = await self.func_call.build_transaction(tx)
-            # tx is auto signed
-            instance = await Web3RequestManager.ensure_instance(
-                self.web3, self.web3.eth.default_account
-            )
-            self.tx_hash = await instance.send_request(tx)
-            logger.info("tx#%d sent: %s", tx_id1, self.tx_hash.hex())
-            return self.tx_hash
-        except ContractCustomError as e:
-            raise convert_web3_error(e, format_contract_function(self.func_call)) from e
+        self.tx_hash = await self.send_nowait(_show_pending=False)
+        logger.info("tx#%d sent: %s", self.tx_id, self.tx_hash.hex())
+        return self.tx_hash
 
     async def build_transaction(self) -> TxParams:
         return await self.func_call.build_transaction(self.params)
@@ -233,11 +223,12 @@ class TypedContractFunction(Generic[T]):
 
         if self.tx_hash is None:
             raise ValueError("Transaction hash is None. Call send() first.")
-        if isinstance(self.tx_hash, Awaitable):
-            self.tx_hash = await self.tx_hash
-        if self.event is None:
-            return None
         try:
+            if isinstance(self.tx_hash, Awaitable):
+                self.tx_hash = await self.tx_hash
+                logger.info(f'tx_hash: {self.tx_hash.hex()}')
+            if self.event is None:
+                return None
             # Wait for the transaction to be mined
             self.receipt = await self.web3.eth.wait_for_transaction_receipt(self.tx_hash)
             logs = self.event.process_receipt(self.receipt)

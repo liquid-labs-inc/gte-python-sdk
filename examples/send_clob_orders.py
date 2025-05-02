@@ -6,7 +6,7 @@ from typing import Optional
 
 from web3.types import TxReceipt
 
-from examples.utils import show_all_orders
+# from examples.utils import show_all_orders
 from gte_py.api.chain.iclob_historical import CLOBHistoricalQuerier
 from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client
@@ -59,10 +59,11 @@ async def limit_order_example(client: Client, market: Market, quantity: float, p
         time_in_force=TimeInForce.GTC,
         gas=50 * 10000000
     )
-    results.append(order.order_id)
-
     print(f"Order created: {order}")
-    await get_order_status(client, market, order.order_id)
+    if order:
+        results.append(order.order_id)
+        await get_order_status(client, market, order.order_id)
+
 
     print(f"Creating SELL limit order at price: {price}")
     order = await client.execution.place_limit_order(
@@ -73,9 +74,11 @@ async def limit_order_example(client: Client, market: Market, quantity: float, p
         time_in_force=TimeInForce.GTC,
         gas=50 * 10000000
     )
-    results.append(order.order_id)
+    print(f"Order created: {order}")
+    if order:
+        results.append(order.order_id)
+        await get_order_status(client, market, order.order_id)
 
-    await get_order_status(client, market, order.order_id)
     return results
 
 
