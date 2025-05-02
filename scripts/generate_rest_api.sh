@@ -1,4 +1,8 @@
 #!/bin/bash -xe
+echo "Using https://github.com/OpenAPITools/openapi-generator-cli"
+if [ ! -d "openapi-generator-cli" ]; then
+  npm install -g @openapitools/openapi-generator-cli
+fi
 
 TEMP_REST_API_CLIENT_DIR=temp_gte_api_client
 echo "generate rest api client"
