@@ -87,14 +87,14 @@ class ExecutionClient:
         # Convert model types to contract types
         contract_side = Side.BUY if side == Side.BUY else Side.SELL
 
-        if not market.check_lot_size(amount):
-            raise ValueError(
-                f"Amount is not multiples of lot size: {amount} (lot size: {market.lot_size})"
-            )
-        if not market.check_tick_size(price):
-            raise ValueError(
-                f"Price is not multiples of tick size: {price} (tick size: {market.tick_size})"
-            )
+        # if not market.check_lot_size(amount):
+        #     raise ValueError(
+        #         f"Amount is not multiples of lot size: {amount} (lot size: {market.lot_size})"
+        #     )
+        # if not market.check_tick_size(price):
+        #     raise ValueError(
+        #         f"Price is not multiples of tick size: {price} (tick size: {market.tick_size})"
+        #     )
 
         # For IOC and FOK orders, we use the fill order API which has different behavior
         if time_in_force in [TimeInForce.IOC, TimeInForce.FOK]:
@@ -370,13 +370,13 @@ class ExecutionClient:
 
         # Get wallet balance
         wallet_balance_raw = await token.balance_of(account)
-        wallet_balance = await token.convert_amount_to_float(wallet_balance_raw)
+        wallet_balance = await token.convert_amount_to_quantity(wallet_balance_raw)
 
         # Get exchange balance
         exchange_balance_raw = await self.clob.clob_factory.get_account_balance(
             account, token_address
         )
-        exchange_balance = await token.convert_amount_to_float(exchange_balance_raw)
+        exchange_balance = await token.convert_amount_to_quantity(exchange_balance_raw)
 
         return wallet_balance, exchange_balance
 

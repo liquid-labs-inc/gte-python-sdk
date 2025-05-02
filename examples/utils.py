@@ -18,7 +18,7 @@ load_dotenv()
 WALLET_ADDRESS = AsyncWeb3.to_checksum_address(os.getenv("WALLET_ADDRESS"))
 WALLET_PRIVATE_KEY = HexStr(os.getenv("WALLET_PRIVATE_KEY"))
 MARKET_ADDRESS = AsyncWeb3.to_checksum_address(
-    os.getenv("MARKET_ADDRESS", "0xfaf0BB6F2f4690CA4319e489F6Dc742167B9fB10"))  # MEOW/WETH
+    os.getenv("MARKET_ADDRESS", "0x0F3642714B9516e3d17a936bAced4de47A6FFa5F"))  # gBTC/cUSD
 
 
 def print_separator(title: str) -> None:
@@ -92,7 +92,8 @@ async def show_balances(client: Client, market: Market) -> None:
     print_separator("Token Balances")
 
     print(f"Getting balances for {market.base.symbol} and {market.quote.symbol}...")
-
+    wei = await client.account.get_eth_balance()
+    print("ETH balance:", AsyncWeb3.from_wei(wei, "ether"))
     base_wallet, base_exchange = await client.execution.get_balance(market.base.address)
     quote_wallet, quote_exchange = await client.execution.get_balance(market.quote.address)
 
@@ -121,12 +122,12 @@ async def display_token_balances(client: Client, token_address: str) -> None:
         # Get wallet and exchange balances
         token = client.token.get_erc20(token_address)
         exchange_balance = await client.account.get_token_balance(token_address)
-        exchange_balance = await token.convert_amount_to_float(exchange_balance)
+        exchange_balance = await token.convert_amount_to_quantity(exchange_balance)
 
         token_balance = await token.balance_of(WALLET_ADDRESS)
-        token_balance = await token.convert_amount_to_float(token_balance)
+        token_balance = await token.convert_amount_to_quantity(token_balance)
         allowance = await token.allowance(WALLET_ADDRESS, client.config.router_address)
-        allowance = await token.convert_amount_to_float(allowance)
+        allowance = await token.convert_amount_to_quantity(allowance)
         print(f"Token Name:    {await token.name()}")
         print(f"Token Balance:    {token_balance:.6f}")
         print(f"Exchange Balance: {exchange_balance:.6f}")

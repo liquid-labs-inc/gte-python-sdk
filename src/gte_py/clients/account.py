@@ -32,8 +32,17 @@ class AccountClient:
         self._config = config
         self._account = account
         self._clob = clob
+        self._web3 = clob._web3
         self._token = token
         self._rest = rest
+    async def get_eth_balance(self) -> int:
+        """
+        Get the user's ETH balance.
+
+        Returns:
+            User's ETH balance in wei
+        """
+        return await self._web3.eth.get_balance(self._account)
 
     async def wrap_eth(
             self, weth_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
@@ -69,7 +78,7 @@ class AccountClient:
                 await self.wrap_eth(
                     weth_address=token_address,
                     amount=wrap_amount,
-
+                    **kwargs
                 )
 
         # First approve the factory to spend tokens

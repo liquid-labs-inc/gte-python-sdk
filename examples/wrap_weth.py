@@ -24,7 +24,7 @@ async def get_weth_balance(client: Client, web3: AsyncWeb3, weth_address: str) -
 
     # Get WETH balance using the async ERC20 balanceOf method
     weth_balance_raw = await weth.balance_of(WALLET_ADDRESS)
-    weth_balance = await weth.convert_amount_to_float(weth_balance_raw)
+    weth_balance = await weth.convert_amount_to_quantity(weth_balance_raw)
 
     # Get exchange balance through the client
     exchange_balance = await client.account.get_token_balance(weth_address)

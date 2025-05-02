@@ -196,7 +196,7 @@ class ERC20:
 
     # ================= HELPER METHODS =================
 
-    async def convert_amount_to_float(self, amount: int) -> float:
+    async def convert_amount_to_quantity(self, amount: int) -> float:
         """
         Convert an amount in token base units to a human-readable float.
 
@@ -206,6 +206,7 @@ class ERC20:
         Returns:
             Human-readable amount as a float
         """
+        assert isinstance(amount, int), f"Amount {amount} must be an integer"
         decimals = await self.decimals()
         return amount / (10 ** decimals)
 

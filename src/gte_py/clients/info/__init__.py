@@ -116,9 +116,9 @@ class InfoClient:
             base=base_asset,
             quote=quote_asset,
             tick_size=tick_size,
-            tick_size_float=await quote_contract.convert_amount_to_float(tick_size),
+            tick_size_float=await quote_contract.convert_amount_to_quantity(tick_size),
             lot_size=lot_size,
-            lot_size_float=await base_contract.convert_amount_to_float(lot_size),
+            lot_size_float=await base_contract.convert_amount_to_quantity(lot_size),
         )
 
         return market_info

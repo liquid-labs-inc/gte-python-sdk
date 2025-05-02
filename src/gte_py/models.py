@@ -62,9 +62,15 @@ class Asset:
     media_uri: str | None = None
     balance: float | None = None
 
-    def convert_float_to_int(self, amount: float) -> int:
+    def convert_amount_to_quantity(self, amount: int) -> float:
+        """Convert amount in base units to float."""
+        assert isinstance(amount, int), f"amount {amount} is not an integer"
+        return amount / (10 ** self.decimals)
+
+    def convert_quantity_to_amount(self, quantity: float) -> int:
         """Convert amount in float to base units."""
-        return int(amount * (10 ** self.decimals))
+        assert isinstance(quantity, float), f"quantity {quantity} is not a float"
+        return int(quantity * (10 ** self.decimals))
 
     @classmethod
     def from_api(cls, data: dict[str, Any], with_balance: bool = False) -> "Asset":
@@ -104,7 +110,6 @@ class Market:
     lot_size_float: float
     price: float | None = None
     volume_24h: float | None = None
-
 
     def round_quote_to_ticks_int(self, price: float) -> int:
         """Convert price to integer based on tick size."""

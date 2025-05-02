@@ -5,7 +5,7 @@ from typing import Dict, Any, List
 
 from web3 import AsyncWeb3
 
-from examples.utils import MARKET_ADDRESS, display_token_balances
+from examples.utils import MARKET_ADDRESS, display_token_balances, show_balances
 from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
@@ -119,10 +119,8 @@ async def main() -> None:
         # Display LP positions
         await display_lp_positions(client)
 
-        await display_token_balances(client, network.weth_address)
         market = await client.info.get_market(MARKET_ADDRESS)
-        await display_token_balances(client, market.base.address)
-        await display_token_balances(client, market.quote.address)
+        await show_balances(client, market)
 
 
 if __name__ == "__main__":

@@ -23,23 +23,25 @@ from utils import (
 )
 
 
-async def approve_and_deposit_example(client: Client, market: Market, amount: float, price: float) -> None:
+async def approve_and_deposit_example(client: Client, market: Market, quantity: float, price: float) -> None:
     """Example of approving and depositing tokens to the exchange."""
     print_separator("Approve and Deposit Tokens Example")
 
     # Get the quote token address
-    print(f"Creating transaction to approve and deposit {amount} {market.quote.symbol}...")
+    print(f"Creating transaction to approve and deposit {quantity} {market.quote.symbol}...")
     # Get deposit transactions - this returns a list containing [approve_tx, deposit_tx]
     await client.account.ensure_deposit(
         token_address=market.quote.address,
-        amount=market.quote.convert_float_to_int(amount * price),
+        amount=market.quote.convert_quantity_to_amount(quantity * price),
+        gas=50 * 10000000
     )
 
     # Now deposit the base token
-    print(f"Creating transaction to approve and deposit {amount} {market.base.symbol}...")
+    print(f"Creating transaction to approve and deposit {quantity} {market.base.symbol}...")
     await client.account.ensure_deposit(
         token_address=market.base.address,
-        amount=market.round_base_to_lots_int(amount),
+        amount=market.base.convert_quantity_to_amount(quantity),
+        gas=50 * 10000000
     )
 
 
@@ -175,7 +177,7 @@ async def main() -> None:
     # Show balances
     await show_balances(client, market)
     # Display all orders
-    await show_all_orders(client, market)
+    # await show_all_orders(client, market)
 
     # Display recent order matches
     await display_recent_matches(client, market)
@@ -183,11 +185,11 @@ async def main() -> None:
     print("\nNOTE: For WETH wrapping and unwrapping examples, see wrap_weth.py")
 
     bid, ask = await client.orderbook.get_tob(market)
-    price = market.base.convert_float_to_int(bid)
+    price = market.base.convert_amount_to_quantity(bid)
     amount = 0.1
 
     # Deposit tokens example
-    await approve_and_deposit_example(client, market, amount=amount, price=price)
+    await approve_and_deposit_example(client, market, quantity=amount, price=price)
 
     # Check balances after deposit
     await show_balances(client, market)
