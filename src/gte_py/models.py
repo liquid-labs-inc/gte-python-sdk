@@ -62,6 +62,10 @@ class Asset:
     media_uri: str | None = None
     balance: float | None = None
 
+    def convert_float_to_int(self, amount: float) -> int:
+        """Convert amount in float to base units."""
+        return int(amount * (10 ** self.decimals))
+
     @classmethod
     def from_api(cls, data: dict[str, Any], with_balance: bool = False) -> "Asset":
         """Create an Asset object from API response data."""
@@ -92,18 +96,15 @@ class Market:
 
     address: ChecksumAddress
     market_type: MarketType
-    base_asset: Asset
-    quote_asset: Asset
+    base: Asset
+    quote: Asset
     tick_size: int
     tick_size_float: float
     lot_size: int
     lot_size_float: float
-    base_decimals: int = 18
-    quote_decimals: int = 18
     price: float | None = None
     volume_24h: float | None = None
-    base_token_address: ChecksumAddress | None = None
-    quote_token_address: ChecksumAddress | None = None
+
 
     def round_quote_to_ticks_int(self, price: float) -> int:
         """Convert price to integer based on tick size."""
@@ -129,18 +130,12 @@ class Market:
     def from_api(cls, data: dict[str, Any]) -> "Market":
         """Create a Market object from API response data."""
         contract_address = data["contractAddress"]
-        base_token_address = data["baseTokenAddress"]
-        quote_token_address = data["quoteTokenAddress"]
 
         return cls(
             address=contract_address,
             market_type=MarketType(data.get("marketType", "amm")),
-            base_asset=Asset.from_api(data.get("baseAsset", {})),
-            quote_asset=Asset.from_api(data.get("quoteAsset", {})),
-            base_token_address=base_token_address,
-            quote_token_address=quote_token_address,
-            base_decimals=data.get("baseDecimals", 18),
-            quote_decimals=data.get("quoteDecimals", 18),
+            base=Asset.from_api(data.get("baseAsset", {})),
+            quote=Asset.from_api(data.get("quoteAsset", {})),
             tick_size=data.get("tickSize", 0.01),
             lot_size=data.get("baseAtomsPerLot", 1),
             price=data.get("price"),
@@ -150,7 +145,7 @@ class Market:
     @property
     def pair(self) -> str:
         """Get the trading pair symbol."""
-        return f"{self.base_asset.symbol}/{self.quote_asset.symbol}"
+        return f"{self.base.symbol}/{self.quote.symbol}"
 
 
 @dataclass
@@ -349,8 +344,6 @@ class Order:
             price=data.get("price"),
             time_in_force=TimeInForce(tif_str),
             status=OrderStatus(status_str),
-            filled_amount=data.get("filledAmount", 0.0),
-            filled_price=data.get("filledPrice", 0.0),
             created_at=data.get("createdAt", int(datetime.now().timestamp() * 1000)),
         )
 

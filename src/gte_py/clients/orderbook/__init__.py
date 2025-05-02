@@ -4,13 +4,13 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Tuple
 
 from eth_typing import ChecksumAddress
 
 from gte_py.api.rest import RestApi
 from gte_py.api.ws import WebSocketApi
-from gte_py.clients import InfoClient
+from gte_py.clients import InfoClient, CLOBClient
 from gte_py.configs import NetworkConfig
 from gte_py.models import Candle, OrderbookUpdate, PriceLevel, OrderBookSnapshot, Market
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class OrderbookClient:
     """WebSocket-based client for real-time market data."""
 
-    def __init__(self, config: NetworkConfig, rest: RestApi, info: InfoClient):
+    def __init__(self, config: NetworkConfig, rest: RestApi, info: InfoClient, clob: CLOBClient):
         """Initialize the client.
 
         Args:
@@ -35,6 +35,7 @@ class OrderbookClient:
         self._last_trade = None
         self._last_candle = {}  # Keyed by interval
         self._orderbook_state: dict[ChecksumAddress, OrderbookUpdate] = {}
+        self._clob = clob
 
     async def connect(self):
         """Connect to the WebSocket."""
@@ -143,3 +144,17 @@ class OrderbookClient:
         """
         async with self._rest as client:
             return await client.get_order_book_snapshot(market.address, limit=depth)
+
+    async def get_tob(self, market: Market) -> Tuple[int, int]:
+        """
+        Get the best bid and offer (BBO) for a market.
+
+        Args:
+            market: Market object
+
+        Returns:
+            OrderBookSnapshot containing the best bid and offer
+        """
+        clob = self._clob.get_clob(market.address)
+        bbo = await clob.get_tob()
+        return bbo

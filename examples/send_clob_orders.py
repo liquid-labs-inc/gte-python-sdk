@@ -28,31 +28,25 @@ async def approve_and_deposit_example(client: Client, market: Market, amount: fl
     print_separator("Approve and Deposit Tokens Example")
 
     # Get the quote token address
-    quote = market.quote_token_address
-    print(f"Creating transaction to approve and deposit {amount} {market.quote_asset.symbol}...")
-
+    print(f"Creating transaction to approve and deposit {amount} {market.quote.symbol}...")
     # Get deposit transactions - this returns a list containing [approve_tx, deposit_tx]
-    await client.account.deposit_to_market(
-        token_address=quote,
-        amount=market.round_quote_to_ticks_int(amount * price),
+    await client.account.ensure_deposit(
+        token_address=market.quote.address,
+        amount=market.quote.convert_float_to_int(amount * price),
     )
 
     # Now deposit the base token
-    base = market.base_token_address
-    print(f"Creating transaction to approve and deposit {amount} {market.base_asset.symbol}...")
-    await client.account.deposit_to_market(
-        token_address=base,
+    print(f"Creating transaction to approve and deposit {amount} {market.base.symbol}...")
+    await client.account.ensure_deposit(
+        token_address=market.base.address,
         amount=market.round_base_to_lots_int(amount),
     )
 
 
-async def limit_order_example(client: Client, market: Market) -> list[int]:
+async def limit_order_example(client: Client, market: Market, amount: float, price: float) -> list[int]:
     """Example of creating a limit order."""
     print_separator("Limit Order Example")
 
-    # Current market price (or estimate)
-    price = market.round_quote_to_ticks_int(market.tick_size_float)
-    amount = market.round_base_to_lots_int(market.lot_size_float)
     results = []
     print(f"Creating BUY limit order at price: {price}")
     order = await client.execution.place_limit_order(
@@ -61,6 +55,7 @@ async def limit_order_example(client: Client, market: Market) -> list[int]:
         amount=amount,
         price=price,
         time_in_force=TimeInForce.GTC,
+        gas=50 * 10000000
     )
     results.append(order.order_id)
 
@@ -74,6 +69,7 @@ async def limit_order_example(client: Client, market: Market) -> list[int]:
         amount=amount,
         price=price,
         time_in_force=TimeInForce.GTC,
+        gas=50 * 10000000
     )
     results.append(order.order_id)
 
@@ -84,7 +80,6 @@ async def limit_order_example(client: Client, market: Market) -> list[int]:
 async def cancel_order_example(client: Client, market: Market, order_id: int = None) -> Optional[TxReceipt]:
     """Example of cancelling an order."""
     print_separator("Cancel Order Example")
-
 
     print(f"Creating cancel transaction for order ID {order_id}...")
     await client.execution.cancel_order(
@@ -187,14 +182,18 @@ async def main() -> None:
 
     print("\nNOTE: For WETH wrapping and unwrapping examples, see wrap_weth.py")
 
+    bid, ask = await client.orderbook.get_tob(market)
+    price = market.base.convert_float_to_int(bid)
+    amount = 0.1
+
     # Deposit tokens example
-    await approve_and_deposit_example(client, market, amount=1, price=1)
+    await approve_and_deposit_example(client, market, amount=amount, price=price)
 
     # Check balances after deposit
     await show_balances(client, market)
 
     # Order examples
-    order_ids = await limit_order_example(client, market)
+    order_ids = await limit_order_example(client, market, amount=amount, price=price)
     for order_id in order_ids:
         await cancel_order_example(client, market, order_id)
 

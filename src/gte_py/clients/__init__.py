@@ -48,11 +48,12 @@ class Client:
         self.info = InfoClient(
             web3=self._web3, rest=self.rest, clob_client=self.clob, token_client=self.token
         )
-        self.market: OrderbookClient = OrderbookClient(config, self.rest, self.info)
+        self.orderbook: OrderbookClient = OrderbookClient(config, self.rest, self.info, self.clob)
         if not account:
             self.account = None
         else:
             self.account = AccountClient(
+                config=config,
                 account=account, clob=self.clob, token=self.token, rest=self.rest
             )
         self.trades = TradesClient(config, self.rest)

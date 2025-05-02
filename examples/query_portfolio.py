@@ -5,7 +5,7 @@ from typing import Dict, Any, List
 
 from web3 import AsyncWeb3
 
-from examples.utils import MARKET_ADDRESS
+from examples.utils import MARKET_ADDRESS, display_token_balances
 from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
@@ -97,35 +97,6 @@ async def display_lp_positions(client: Client) -> None:
         print(f"Error retrieving LP positions: {e}")
 
 
-async def display_token_details(client: Client, token_address: str) -> None:
-    """
-    Display detailed balance information for a specific token.
-    
-    Args:
-        client: Initialized GTE client
-        token_address: Address of the token to check
-    """
-    print_separator(f"Token Balance Details: {token_address}")
-
-    try:
-        # Get wallet and exchange balances
-        exchange_balance = await client.account.get_token_balance(token_address)
-
-        token = client.token.get_erc20(token_address)
-
-        token_balance = await token.balance_of(WALLET_ADDRESS)
-        token_balance = await token.convert_amount_to_float(token_balance)
-        allowance = await token.allowance(WALLET_ADDRESS, client.config.router_address)
-        allowance = await token.convert_amount_to_float(allowance)
-        print(f"Token Name:    {await token.name()}")
-        print(f"Token Balance:    {token_balance:.6f}")
-        print(f"Exchange Balance: {exchange_balance:.6f}")
-        print(f"Allowance:       {allowance:.6f}")
-
-    except Exception as e:
-        print(f"Error retrieving token details: {e}")
-
-
 async def main() -> None:
     """Run the portfolio query examples."""
     network = TESTNET_CONFIG
@@ -148,10 +119,10 @@ async def main() -> None:
         # Display LP positions
         await display_lp_positions(client)
 
-        await display_token_details(client, network.weth_address)
+        await display_token_balances(client, network.weth_address)
         market = await client.info.get_market(MARKET_ADDRESS)
-        await display_token_details(client, market.base_token_address)
-        await display_token_details(client, market.quote_token_address)
+        await display_token_balances(client, market.base.address)
+        await display_token_balances(client, market.quote.address)
 
 
 if __name__ == "__main__":

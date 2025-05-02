@@ -28,22 +28,22 @@ async def query_specific_market(client: Client, market_address: ChecksumAddress)
 
     # Base asset details
     print("\nBase Asset:")
-    print(f"  Symbol: {market.base_asset.symbol}")
-    print(f"  Address: {market.base_asset.address}")
-    print(f"  Decimals: {market.base_asset.decimals}")
+    print(f"  Symbol: {market.base.symbol}")
+    print(f"  Address: {market.base.address}")
+    print(f"  Decimals: {market.base.decimals}")
 
     # Quote asset details
     print("\nQuote Asset:")
-    print(f"  Symbol: {market.quote_asset.symbol}")
-    print(f"  Address: {market.quote_asset.address}")
-    print(f"  Decimals: {market.quote_asset.decimals}")
+    print(f"  Symbol: {market.quote.symbol}")
+    print(f"  Address: {market.quote.address}")
+    print(f"  Decimals: {market.quote.decimals}")
 
     # On-chain details if available
     if market.address:
         print("\nOn-chain Details:")
         print(f"  Contract: {market.address}")
-        print(f"  Base Token: {market.base_token_address}")
-        print(f"  Quote Token: {market.quote_token_address}")
+        print(f"  Base Token: {market.base.address}")
+        print(f"  Quote Token: {market.quote.address}")
         print(f"  Tick Size: {market.tick_size}")
         print(f"  Lot Size: {market.lot_size}")
 

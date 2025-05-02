@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, List, Any, Tuple
 
 from eth_typing import ChecksumAddress
@@ -7,37 +8,44 @@ from web3.types import TxParams
 from gte_py.api.rest import RestApi
 from gte_py.clients.iclob import CLOBClient
 from gte_py.clients.token import TokenClient
+from gte_py.configs import NetworkConfig
+
+logger = logging.getLogger(__name__)
 
 
 class AccountClient:
     def __init__(
-            self, account: ChecksumAddress, clob: CLOBClient, token: TokenClient, rest: RestApi
+            self,
+            config: NetworkConfig,
+            account: ChecksumAddress, clob: CLOBClient, token: TokenClient, rest: RestApi
     ):
         """
         Initialize the account client.
 
         Args:
+            config: Network configuration
             account: EVM address of the account
             clob: CLOBClient instance
             token: TokenClient instance
             rest: RestApi instance for API interactions
         """
+        self._config = config
         self._account = account
-        self.clob = clob
-        self.token = token
+        self._clob = clob
+        self._token = token
         self._rest = rest
 
     async def wrap_eth(
             self, weth_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
     ):
-        return await self.token.get_weth(weth_address).deposit_eth(amount, **kwargs).send_wait()
+        return await self._token.get_weth(weth_address).deposit_eth(amount, **kwargs).send_wait()
 
     async def unwrap_eth(
             self, weth_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
     ):
-        return await self.token.get_weth(weth_address).withdraw_eth(amount, **kwargs).send_wait()
+        return await self._token.get_weth(weth_address).withdraw_eth(amount, **kwargs).send_wait()
 
-    async def deposit_to_market(
+    async def deposit(
             self, token_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
     ):
         """
@@ -51,15 +59,26 @@ class AccountClient:
         Returns:
             List of TypedContractFunction objects (approve and deposit)
         """
+        token = self._token.get_erc20(token_address)
+        if token_address == self._config.weth_address:
+            weth_token = await token.balance_of(self._account)
+            if weth_token < amount:
+                wrap_amount = amount - weth_token
+                logger.info("Not enough WETH in the account: asked for %d, got %d, lacking %d", amount, weth_token,
+                            wrap_amount)
+                await self.wrap_eth(
+                    weth_address=token_address,
+                    amount=wrap_amount,
 
-        token = self.token.get_erc20(token_address)
+                )
+
         # First approve the factory to spend tokens
         await token.approve(
-            spender=self.clob.get_factory_address(), amount=amount, **kwargs
+            spender=self._clob.get_factory_address(), amount=amount, **kwargs
         ).send_wait()
 
         # Then deposit the tokens
-        await self.clob.clob_factory.deposit(
+        await self._clob.clob_factory.deposit(
             account=self._account,
             token=token_address,
             amount=amount,
@@ -67,7 +86,35 @@ class AccountClient:
             **kwargs,
         ).send_wait()
 
-    async def withdraw_from_market(
+    async def ensure_deposit(
+            self,
+            token_address: ChecksumAddress,
+            amount: int,
+            **kwargs: Unpack[TxParams]
+    ) -> bool:
+        """
+        Ensure that the specified amount of tokens is deposited in the exchange.
+        Args:
+            token_address: Address of token to deposit
+            amount: Amount to deposit
+            **kwargs: Additional transaction parameters
+        Returns:
+            True if the deposit was executed
+            False if the deposit was not needed
+
+        """
+        # First approve the factory to spend tokens
+        exchange_balance = await self.get_token_balance(token_address)
+        if exchange_balance >= amount:
+            logger.info("Already enough tokens %s in the exchange: asked for %d, got %d", token_address, amount,
+                        exchange_balance)
+            return False
+        logger.info("Not enough tokens %s in the exchange: asked for %d, got %d", token_address, amount,
+                    exchange_balance)
+        await self.deposit(token_address, amount, **kwargs)
+        return True
+
+    async def withdraw(
             self, token_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
     ):
         """
@@ -83,7 +130,7 @@ class AccountClient:
         """
 
         # Withdraw the tokens
-        return await self.clob.clob_factory.withdraw(
+        return await self._clob.clob_factory.withdraw(
             account=self._account, token=token_address, amount=amount, to_operator=False, **kwargs
         ).send_wait()
 
@@ -125,7 +172,7 @@ class AccountClient:
         """
         return await self._rest.get_user_lp_positions(self._account)
 
-    async def get_token_balance(self, token_address: ChecksumAddress) -> float:
+    async def get_token_balance(self, token_address: ChecksumAddress) -> int:
         """
         Get the user's balance for a specific token both on-chain and in the exchange.
 
@@ -135,12 +182,9 @@ class AccountClient:
         Returns:
             Tuple of (wallet_balance, exchange_balance) in human-readable format
         """
-        token = self.token.get_erc20(token_address)
 
-        # Get exchange balance
-        exchange_balance_raw = await self.clob.clob_factory.get_account_balance(
+        exchange_balance_raw = await self._clob.clob_factory.get_account_balance(
             self._account, token_address
         )
-        exchange_balance = await token.convert_amount_to_float(exchange_balance_raw)
 
-        return exchange_balance
+        return exchange_balance_raw

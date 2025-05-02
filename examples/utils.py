@@ -79,8 +79,8 @@ async def display_market_info(client: Client, market_address: ChecksumAddress) -
     market = await client.info.get_market(market_address)
 
     print(f"Market: {market.pair}")
-    print(f"Base token: {market.base_asset.symbol} ({market.base_token_address})")
-    print(f"Quote token: {market.quote_asset.symbol} ({market.quote_token_address})")
+    print(f"Base token: {market.base.symbol} ({market.base.address})")
+    print(f"Quote token: {market.quote.symbol} ({market.quote.address})")
     print(f"Tick size: {market.tick_size}")
     print(f"Lot size: {market.lot_size}")
 
@@ -91,22 +91,49 @@ async def show_balances(client: Client, market: Market) -> None:
     """Display token balances for a market."""
     print_separator("Token Balances")
 
-    # Get balances for base and quote tokens
-    base_token = market.base_token_address
-    quote_token = market.quote_token_address
+    print(f"Getting balances for {market.base.symbol} and {market.quote.symbol}...")
 
-    print(f"Getting balances for {market.base_asset.symbol} and {market.quote_asset.symbol}...")
+    base_wallet, base_exchange = await client.execution.get_balance(market.base.address)
+    quote_wallet, quote_exchange = await client.execution.get_balance(market.quote.address)
 
-    base_wallet, base_exchange = await client.execution.get_balance(base_token)
-    quote_wallet, quote_exchange = await client.execution.get_balance(quote_token)
-
-    print(f"{market.base_asset.symbol} balances:")
+    print(f"{market.base.symbol} balances:")
     print(f"  Wallet: {base_wallet:.6f}")
     print(f"  Exchange: {base_exchange:.6f}")
+    await display_token_balances(client, market.base.address)
 
-    print(f"{market.quote_asset.symbol} balances:")
+    print(f"{market.quote.symbol} balances:")
     print(f"  Wallet: {quote_wallet:.6f}")
     print(f"  Exchange: {quote_exchange:.6f}")
+    await display_token_balances(client, market.quote.address)
+
+
+async def display_token_balances(client: Client, token_address: str) -> None:
+    """
+    Display detailed balance information for a specific token.
+
+    Args:
+        client: Initialized GTE client
+        token_address: Address of the token to check
+    """
+    print_separator(f"Token Balance Details: {token_address}")
+
+    try:
+        # Get wallet and exchange balances
+        token = client.token.get_erc20(token_address)
+        exchange_balance = await client.account.get_token_balance(token_address)
+        exchange_balance = await token.convert_amount_to_float(exchange_balance)
+
+        token_balance = await token.balance_of(WALLET_ADDRESS)
+        token_balance = await token.convert_amount_to_float(token_balance)
+        allowance = await token.allowance(WALLET_ADDRESS, client.config.router_address)
+        allowance = await token.convert_amount_to_float(allowance)
+        print(f"Token Name:    {await token.name()}")
+        print(f"Token Balance:    {token_balance:.6f}")
+        print(f"Exchange Balance: {exchange_balance:.6f}")
+        print(f"Allowance:       {allowance:.6f}")
+
+    except Exception as e:
+        print(f"Error retrieving token details: {e}")
 
 
 async def show_all_orders(client: Client, market: Market):
