@@ -50,7 +50,7 @@ class OrderStatus(Enum):
 
 
 @dataclass
-class Asset:
+class Token:
     """Asset model."""
 
     address: ChecksumAddress
@@ -73,7 +73,7 @@ class Asset:
         return int(quantity * (10 ** self.decimals))
 
     @classmethod
-    def from_api(cls, data: dict[str, Any], with_balance: bool = False) -> "Asset":
+    def from_api(cls, data: dict[str, Any], with_balance: bool = False) -> "Token":
         """Create an Asset object from API response data."""
         address = data.get("address", "")
         creator = data.get("creator")
@@ -102,8 +102,8 @@ class Market:
 
     address: ChecksumAddress
     market_type: MarketType
-    base: Asset
-    quote: Asset
+    base: Token
+    quote: Token
     tick_size: int
     tick_size_float: float
     lot_size: int
@@ -139,8 +139,8 @@ class Market:
         return cls(
             address=contract_address,
             market_type=MarketType(data.get("marketType", "amm")),
-            base=Asset.from_api(data.get("baseAsset", {})),
-            quote=Asset.from_api(data.get("quoteAsset", {})),
+            base=Token.from_api(data.get("baseAsset", {})),
+            quote=Token.from_api(data.get("quoteAsset", {})),
             tick_size=data.get("tickSize", 0.01),
             lot_size=data.get("baseAtomsPerLot", 1),
             price=data.get("price"),

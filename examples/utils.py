@@ -94,21 +94,13 @@ async def show_balances(client: Client, market: Market) -> None:
     print(f"Getting balances for {market.base.symbol} and {market.quote.symbol}...")
     wei = await client.account.get_eth_balance()
     print("ETH balance:", AsyncWeb3.from_wei(wei, "ether"))
-    base_wallet, base_exchange = await client.execution.get_balance(market.base.address)
-    quote_wallet, quote_exchange = await client.execution.get_balance(market.quote.address)
 
-    print(f"{market.base.symbol} balances:")
-    print(f"  Wallet: {base_wallet:.6f}")
-    print(f"  Exchange: {base_exchange:.6f}")
     await display_token_balances(client, market.base.address)
 
-    print(f"{market.quote.symbol} balances:")
-    print(f"  Wallet: {quote_wallet:.6f}")
-    print(f"  Exchange: {quote_exchange:.6f}")
     await display_token_balances(client, market.quote.address)
 
 
-async def display_token_balances(client: Client, token_address: str) -> None:
+async def display_token_balances(client: Client, token_address: ChecksumAddress, header: bool = True) -> None:
     """
     Display detailed balance information for a specific token.
 
@@ -116,7 +108,8 @@ async def display_token_balances(client: Client, token_address: str) -> None:
         client: Initialized GTE client
         token_address: Address of the token to check
     """
-    print_separator(f"Token Balance Details: {token_address}")
+    if header:
+        print_separator(f"Token Balance Details: {token_address}")
 
     try:
         # Get wallet and exchange balances

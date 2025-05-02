@@ -9,7 +9,7 @@ from gte_py.api.chain.iclob import ICLOB
 from gte_py.api.rest import RestApi
 from gte_py.clients.token import TokenClient
 from gte_py.clients.iclob import CLOBClient
-from gte_py.models import Asset, Market, MarketType
+from gte_py.models import Token, Market, MarketType
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class InfoClient:
         self._token_client = token_client
         self._clob_client = clob_client
         self._markets: dict[ChecksumAddress, Market] = {}
-        self._assets: dict[ChecksumAddress, Asset] = {}
+        self._assets: dict[ChecksumAddress, Token] = {}
 
     async def init(self):
         # Get and initialize CLOB factory
@@ -41,7 +41,7 @@ class InfoClient:
 
     async def get_tokens(
             self, creator: str | None = None, limit: int = 100, offset: int = 0
-    ) -> list[Asset]:
+    ) -> list[Token]:
         """
         Get list of assets.
 
@@ -54,7 +54,7 @@ class InfoClient:
             List of assets
         """
         response = await self._rest.get_tokens(creator=creator, limit=limit, offset=offset)
-        return [Asset.from_api(asset_data) for asset_data in response.get("assets", [])]
+        return [Token.from_api(asset_data) for asset_data in response.get("assets", [])]
 
     async def get_markets(
             self,
@@ -95,14 +95,14 @@ class InfoClient:
         base_contract = self._token_client.get_erc20(base)
         quote_contract = self._token_client.get_erc20(quote)
 
-        base_asset = Asset(
+        base_asset = Token(
             address=base,
             decimals=await base_contract.decimals(),
             name=await base_contract.name(),
             symbol=await base_contract.symbol(),
         )
 
-        quote_asset = Asset(
+        quote_asset = Token(
             address=quote,
             decimals=await quote_contract.decimals(),
             name=await quote_contract.name(),
