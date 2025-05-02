@@ -11,7 +11,7 @@ from gte_py.clients.token import TokenClient
 
 class AccountClient:
     def __init__(
-        self, account: ChecksumAddress, clob: CLOBClient, token: TokenClient, rest: RestApi
+            self, account: ChecksumAddress, clob: CLOBClient, token: TokenClient, rest: RestApi
     ):
         """
         Initialize the account client.
@@ -28,17 +28,17 @@ class AccountClient:
         self._rest = rest
 
     async def wrap_eth(
-        self, weth_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
+            self, weth_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
     ):
         return await self.token.get_weth(weth_address).deposit_eth(amount, **kwargs).send_wait()
 
     async def unwrap_eth(
-        self, weth_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
+            self, weth_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
     ):
         return await self.token.get_weth(weth_address).withdraw_eth(amount, **kwargs).send_wait()
 
     async def deposit_to_market(
-        self, token_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
+            self, token_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
     ):
         """
         Deposit tokens to the exchange for trading.
@@ -68,7 +68,7 @@ class AccountClient:
         ).send_wait()
 
     async def withdraw_from_market(
-        self, token_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
+            self, token_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
     ):
         """
         Withdraw tokens from the exchange.
@@ -125,7 +125,7 @@ class AccountClient:
         """
         return await self._rest.get_user_lp_positions(self._account)
 
-    async def get_token_balance(self, token_address: ChecksumAddress) -> Tuple[float, float]:
+    async def get_token_balance(self, token_address: ChecksumAddress) -> float:
         """
         Get the user's balance for a specific token both on-chain and in the exchange.
 
@@ -137,14 +137,10 @@ class AccountClient:
         """
         token = self.token.get_erc20(token_address)
 
-        # Get wallet balance
-        wallet_balance_raw = await token.balance_of(self._account)
-        wallet_balance = await token.convert_amount_to_float(wallet_balance_raw)
-
         # Get exchange balance
         exchange_balance_raw = await self.clob.clob_factory.get_account_balance(
             self._account, token_address
         )
         exchange_balance = await token.convert_amount_to_float(exchange_balance_raw)
 
-        return wallet_balance, exchange_balance
+        return exchange_balance

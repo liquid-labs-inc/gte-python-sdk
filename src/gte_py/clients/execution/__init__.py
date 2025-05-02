@@ -5,7 +5,9 @@ import logging
 from typing import Optional, List, Tuple, Dict, Any
 
 from eth_typing import ChecksumAddress
+from typing_extensions import Unpack
 from web3 import AsyncWeb3
+from web3.types import TxParams
 
 from gte_py.api.chain.events import OrderCanceledEvent
 from gte_py.api.chain.structs import Side, Settlement, LimitOrderType, FillOrderType, CLOBOrder
@@ -150,7 +152,7 @@ class ExecutionClient:
         price: int,
         time_in_force: TimeInForce = TimeInForce.GTC,
         client_order_id: int = 0,
-        **kwargs,
+        **kwargs: Unpack[TxParams],
     ) -> Order:
         tx = await self.place_limit_order_tx(
             market=market,

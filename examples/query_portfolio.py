@@ -5,6 +5,7 @@ from typing import Dict, Any, List
 
 from web3 import AsyncWeb3
 
+from examples.utils import MARKET_ADDRESS
 from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
@@ -108,11 +109,18 @@ async def display_token_details(client: Client, token_address: str) -> None:
 
     try:
         # Get wallet and exchange balances
-        wallet_balance, exchange_balance = await client.account.get_token_balance(token_address)
+        exchange_balance = await client.account.get_token_balance(token_address)
 
-        print(f"Wallet Balance:   {wallet_balance:.6f}")
+        token = client.token.get_erc20(token_address)
+
+        token_balance = await token.balance_of(WALLET_ADDRESS)
+        token_balance = await token.convert_amount_to_float(token_balance)
+        allowance = await token.allowance(WALLET_ADDRESS, client.config.router_address)
+        allowance = await token.convert_amount_to_float(allowance)
+        print(f"Token Name:    {await token.name()}")
+        print(f"Token Balance:    {token_balance:.6f}")
         print(f"Exchange Balance: {exchange_balance:.6f}")
-        print(f"Total Balance:    {wallet_balance + exchange_balance:.6f}")
+        print(f"Allowance:       {allowance:.6f}")
 
     except Exception as e:
         print(f"Error retrieving token details: {e}")
@@ -141,6 +149,9 @@ async def main() -> None:
         await display_lp_positions(client)
 
         await display_token_details(client, network.weth_address)
+        market = await client.info.get_market(MARKET_ADDRESS)
+        await display_token_details(client, market.base_token_address)
+        await display_token_details(client, market.quote_token_address)
 
 
 if __name__ == "__main__":

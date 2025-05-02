@@ -4,7 +4,6 @@ import asyncio
 
 from eth_utils import to_wei
 from web3 import AsyncWeb3
-from web3.types import TxReceipt
 
 from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client
@@ -24,11 +23,11 @@ async def get_weth_balance(client: Client, web3: AsyncWeb3, weth_address: str) -
     weth = client.token.get_weth(weth_address)
 
     # Get WETH balance using the async ERC20 balanceOf method
-    weth_balance_raw = await weth.balance_of_async(WALLET_ADDRESS)
-    weth_balance = weth.convert_amount_to_float(weth_balance_raw)
+    weth_balance_raw = await weth.balance_of(WALLET_ADDRESS)
+    weth_balance = await weth.convert_amount_to_float(weth_balance_raw)
 
     # Get exchange balance through the client
-    _, exchange_balance = await client.account.get_balance(weth_address)
+    exchange_balance = await client.account.get_token_balance(weth_address)
 
     # Get native ETH balance
     eth_balance = web3.from_wei(await web3.eth.get_balance(WALLET_ADDRESS, 'latest'), 'ether')
@@ -46,7 +45,7 @@ async def wrap_eth_example(client: Client, web3: AsyncWeb3, weth_address: str, a
 
     await client.account.wrap_eth(
         weth_address=weth_address,
-        amount_eth=to_wei(amount_eth, 'ether'),
+        amount=to_wei(amount_eth, 'ether'),
 
     )
 
@@ -59,7 +58,7 @@ async def unwrap_eth_example(client: Client, web3: AsyncWeb3, weth_address: str,
 
     await client.account.unwrap_eth(
         weth_address=weth_address,
-        amount_eth=to_wei(amount_eth, 'ether'),
+        amount=to_wei(amount_eth, 'ether'),
 
     )
 
@@ -82,6 +81,7 @@ async def main() -> None:
     # Initialize client with AsyncWeb3
     print("Initializing GTE client...")
     client = Client(web3=web3, config=network, account=web3.eth.default_account)
+    await client.init()
 
     # Show balances before operations
     await get_weth_balance(client, web3, TESTNET_CONFIG.weth_address)

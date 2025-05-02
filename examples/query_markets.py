@@ -17,7 +17,7 @@ async def query_specific_market(client: Client, market_address: ChecksumAddress)
 
     # Get a specific market by address
     print(f"Fetching market with address: {market_address}")
-    market = await client.info.get_market_by_address(market_address)
+    market = await client.info.get_market(market_address)
 
     # Display market information
     print(f"Market: {market.pair} ({market.address})")

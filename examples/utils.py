@@ -76,7 +76,7 @@ async def display_market_info(client: Client, market_address: ChecksumAddress) -
     """Get and display market information."""
 
     print(f"Using market: {market_address}")
-    market = await client.info.get_market_by_address(market_address)
+    market = await client.info.get_market(market_address)
 
     print(f"Market: {market.pair}")
     print(f"Base token: {market.base_asset.symbol} ({market.base_token_address})")
