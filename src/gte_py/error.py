@@ -84,3 +84,7 @@ class ZeroTrade(GTEError):
 class ZeroOrder(GTEError):
     """Order with zero quantity is not allowed."""
     error_code = "0xb82df155"
+
+class TransferFromFailed(GTEError):
+    """Transfer from operation failed."""
+    error_code = "0x7939f424"

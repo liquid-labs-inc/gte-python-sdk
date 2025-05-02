@@ -20,7 +20,7 @@ from gte_py.error import (
     InsufficientBalance, NotFactory, FOKNotFilled, UnauthorizedAmend,
     UnauthorizedCancel, InvalidAmend, OrderAlreadyExpired, InvalidAccountOrOperator,
     PostOnlyOrderWouldBeFilled, MaxOrdersInBookPostNotCompetitive, NonPostOnlyAmend,
-    ZeroCostTrade, ZeroTrade, ZeroOrder
+    ZeroCostTrade, ZeroTrade, ZeroOrder, TransferFromFailed
 )
 
 logger = logging.getLogger(__name__)
@@ -85,6 +85,7 @@ ERROR_EXCEPTIONS = {
     '0xd8a00083': ZeroCostTrade,
     '0x4ef36a18': ZeroTrade,
     '0xb82df155': ZeroOrder,
+    '0x7939f424': TransferFromFailed,
 }
 
 
