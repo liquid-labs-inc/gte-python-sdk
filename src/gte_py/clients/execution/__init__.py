@@ -6,7 +6,6 @@ from typing import Optional, List, Tuple, Dict, Any
 
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
-from web3.types import EventData
 
 from gte_py.api.chain.events import OrderCanceledEvent
 from gte_py.api.chain.structs import (
@@ -20,7 +19,7 @@ from gte_py.api.chain.utils import get_current_timestamp, TypedContractFunction
 from gte_py.api.rest import RestApi
 from gte_py.clients.iclob import CLOBClient
 from gte_py.clients.token import TokenClient
-from gte_py.models import Market, Order, OrderStatus, Side, OrderType, TimeInForce, Trade
+from gte_py.models import Market, Order, OrderStatus, Side, OrderType, TimeInForce
 
 logger = logging.getLogger(__name__)
 
@@ -262,8 +261,8 @@ class ExecutionClient:
             self,
             market: Market,
             order_id: int,
-            new_amount: Optional[float] = None,
-            new_price: Optional[float] = None,
+            new_amount: Optional[int] = None,
+            new_price: Optional[int] = None,
             **kwargs
     ) -> TypedContractFunction:
         """
@@ -292,8 +291,7 @@ class ExecutionClient:
 
         amount_in_base = new_amount or current_amount
 
-        tick_size = market.tick_size
-        price_in_ticks = int(new_price / tick_size) if new_price is not None else current_price
+        price_in_ticks = new_price if new_price is not None else current_price
 
         # Create amend args
         args = clob.create_amend_args(
@@ -317,8 +315,8 @@ class ExecutionClient:
             self,
             market: Market,
             order_id: int,
-            new_amount: Optional[float] = None,
-            new_price: Optional[float] = None,
+            new_amount: Optional[int] = None,
+            new_price: Optional[int] = None,
             **kwargs
     ):
         tx = await self.amend_order_tx(
@@ -641,13 +639,12 @@ class ExecutionClient:
             market_address=order_data.get('marketAddress'),
             side=Side.BUY if order_data.get('side') == 'bid' else Side.SELL,
             order_type=OrderType.LIMIT,
-            amount=float(order_data.get('originalSize', 0)),
-            price=float(order_data.get('limitPrice', 0)),
+            amount=order_data.get('originalSize', 0),
+            price=order_data.get('limitPrice', 0),
             time_in_force=TimeInForce.GTC,  # Default for open orders
             status=OrderStatus.OPEN,
             owner=order_data.get('owner', None),  # May be provided in some API responses
             created_at=order_data.get('placedAt', 0),
-            size_filled=float(order_data.get('sizeFilled', 0))
         )
 
     def _parse_filled_order(self, order_data: Dict[str, Any]) -> Order:
@@ -665,14 +662,12 @@ class ExecutionClient:
             market_address=order_data.get('marketAddress'),
             side=Side.BUY if order_data.get('side') == 'bid' else Side.SELL,
             order_type=OrderType.LIMIT,  # Assuming all filled orders were limit orders
-            amount=float(order_data.get('sizeFilled', 0)),
-            price=float(order_data.get('price', 0)),
+            amount=order_data.get('sizeFilled', 0),
+            price=order_data.get('price', 0),
             time_in_force=TimeInForce.GTC,  # Default
             status=OrderStatus.FILLED,
             owner=order_data.get('owner', None),
             created_at=0,  # Not provided
-            filled_at=order_data.get('filledAt', 0),
-            tx_hash=order_data.get('txnHash')
         )
 
     def _parse_order_history(self, order_data: Dict[str, Any]) -> Order:
@@ -701,8 +696,8 @@ class ExecutionClient:
             market_address=order_data.get('marketAddress'),
             side=Side.BUY if order_data.get('side') == 'bid' else Side.SELL,
             order_type=order_type,
-            amount=float(order_data.get('originalSize', 0)),
-            price=float(order_data.get('limitPrice', 0)),
+            amount=order_data.get('originalSize', 0),
+            price=order_data.get('limitPrice', 0),
             time_in_force=TimeInForce.GTC,  # Default
             status=status,
             owner=order_data.get('owner', None),
