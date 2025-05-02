@@ -226,7 +226,7 @@ class TypedContractFunction(Generic[T]):
         try:
             if isinstance(self.tx_hash, Awaitable):
                 self.tx_hash = await self.tx_hash
-                logger.info(f'tx_hash: {self.tx_hash.hex()}')
+                logger.info(f'tx_hash for tx#{self.tx_id}: {self.tx_hash.hex()}')
             if self.event is None:
                 return None
             # Wait for the transaction to be mined
