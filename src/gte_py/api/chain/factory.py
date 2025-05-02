@@ -4,7 +4,9 @@ import logging
 from typing import TypeVar, List
 
 from eth_typing import ChecksumAddress
+from typing_extensions import Unpack
 from web3 import AsyncWeb3
+from web3.types import TxParams
 
 from .utils import TypedContractFunction, load_abi
 
@@ -20,9 +22,9 @@ class CLOBFactory:
     """
 
     def __init__(
-            self,
-            web3: AsyncWeb3,
-            contract_address: ChecksumAddress,
+        self,
+        web3: AsyncWeb3,
+        contract_address: ChecksumAddress,
     ):
         """
         Initialize the CLOBFactory wrapper.
@@ -59,7 +61,9 @@ class CLOBFactory:
         """Get the maximum number of orders per market."""
         return await self.contract.functions.maxNumOrders().call()
 
-    async def get_market_address(self, quote_token: ChecksumAddress, base_token: ChecksumAddress) -> ChecksumAddress:
+    async def get_market_address(
+        self, quote_token: ChecksumAddress, base_token: ChecksumAddress
+    ) -> ChecksumAddress:
         """
         Get the address of a market given quote and base tokens.
 
@@ -133,7 +137,9 @@ class CLOBFactory:
         """
         return await self.contract.functions.getTakerFeeRate(fee_tier).call()
 
-    async def approved_operators(self, account: ChecksumAddress, operator: ChecksumAddress) -> bool:
+    async def approved_operators(
+        self, account: ChecksumAddress, operator: ChecksumAddress
+    ) -> bool:
         """
         Check if an operator is approved for an account.
 
@@ -149,11 +155,11 @@ class CLOBFactory:
     # ================= WRITE METHODS =================
 
     def create_market(
-            self,
-            base_token: ChecksumAddress,
-            quote_token: ChecksumAddress,
-            settings: dict,
-            **kwargs,
+        self,
+        base_token: ChecksumAddress,
+        quote_token: ChecksumAddress,
+        settings: dict,
+        **kwargs,
     ) -> TypedContractFunction[ChecksumAddress]:
         """
         Create a new market.
@@ -161,7 +167,7 @@ class CLOBFactory:
         Args:
             base_token: Address of the base token
             quote_token: Address of the quote token
-            settings: Market settings dictionary with owner, maxLimitsPerTx, 
+            settings: Market settings dictionary with owner, maxLimitsPerTx,
                       minLimitOrderAmountInBase, and tickSize
             sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
@@ -171,14 +177,11 @@ class CLOBFactory:
         """
         func = self.contract.functions.createMarket(base_token, quote_token, settings)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
-    def approve_operator(
-            self, operator: ChecksumAddress, **kwargs
-    ) -> TypedContractFunction[None]:
+    def approve_operator(self, operator: ChecksumAddress, **kwargs) -> TypedContractFunction[None]:
         """
         Approve an operator for the sender's account.
 
@@ -191,13 +194,12 @@ class CLOBFactory:
         """
         func = self.contract.functions.approveOperator(operator)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def disapprove_operator(
-            self, operator: ChecksumAddress, **kwargs
+        self, operator: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Disapprove an operator for the sender's account.
@@ -211,18 +213,17 @@ class CLOBFactory:
         """
         func = self.contract.functions.disapproveOperator(operator)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def deposit(
-            self,
-            account: ChecksumAddress,
-            token: ChecksumAddress,
-            amount: int,
-            from_operator: bool,
-            **kwargs,
+        self,
+        account: ChecksumAddress,
+        token: ChecksumAddress,
+        amount: int,
+        from_operator: bool,
+        **kwargs: Unpack[TxParams],
     ) -> TypedContractFunction[None]:
         """
         Deposit tokens for an account.
@@ -239,18 +240,17 @@ class CLOBFactory:
         """
         func = self.contract.functions.deposit(account, token, amount, from_operator)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def withdraw(
-            self,
-            account: ChecksumAddress,
-            token: ChecksumAddress,
-            amount: int,
-            to_operator: bool,
-            **kwargs,
+        self,
+        account: ChecksumAddress,
+        token: ChecksumAddress,
+        amount: int,
+        to_operator: bool,
+        **kwargs: Unpack[TxParams],
     ) -> TypedContractFunction[None]:
         """
         Withdraw tokens for an account.
@@ -267,13 +267,12 @@ class CLOBFactory:
         """
         func = self.contract.functions.withdraw(account, token, amount, to_operator)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def set_fee_recipient(
-            self, new_fee_recipient: ChecksumAddress, **kwargs
+        self, new_fee_recipient: ChecksumAddress, **kwargs: Unpack[TxParams]
     ) -> TypedContractFunction[None]:
         """
         Set a new fee recipient.
@@ -287,16 +286,15 @@ class CLOBFactory:
         """
         func = self.contract.functions.setFeeRecipient(new_fee_recipient)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def set_account_fee_tiers(
-            self,
-            accounts: List[ChecksumAddress],
-            fee_tiers: List[int],
-            **kwargs,
+        self,
+        accounts: List[ChecksumAddress],
+        fee_tiers: List[int],
+        **kwargs,
     ) -> TypedContractFunction[None]:
         """
         Set fee tiers for multiple accounts.
@@ -311,14 +309,11 @@ class CLOBFactory:
         """
         func = self.contract.functions.setAccountFeeTiers(accounts, fee_tiers)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
-    def collect_fees(
-            self, token: ChecksumAddress, **kwargs
-    ) -> TypedContractFunction[int]:
+    def collect_fees(self, token: ChecksumAddress, **kwargs) -> TypedContractFunction[int]:
         """
         Collect accumulated fees for a token.
 
@@ -331,13 +326,12 @@ class CLOBFactory:
         """
         func = self.contract.functions.collectFees(token)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def transfer_ownership(
-            self, new_owner: ChecksumAddress, **kwargs
+        self, new_owner: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Transfer ownership of the factory.
@@ -351,14 +345,11 @@ class CLOBFactory:
         """
         func = self.contract.functions.transferOwnership(new_owner)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
-    def renounce_ownership(
-            self, **kwargs
-    ) -> TypedContractFunction[None]:
+    def renounce_ownership(self, **kwargs) -> TypedContractFunction[None]:
         """
         Renounce ownership of the factory.
 
@@ -370,7 +361,6 @@ class CLOBFactory:
         """
         func = self.contract.functions.renounceOwnership()
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -378,7 +368,7 @@ class CLOBFactory:
     # ================= ADVANCED OPERATION METHODS =================
 
     def credit_account(
-            self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs
+        self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Credit an account with tokens (admin operation).
@@ -394,13 +384,12 @@ class CLOBFactory:
         """
         func = self.contract.functions.creditAccount(account, token, amount)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def debit_account(
-            self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs
+        self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Debit an account with tokens (admin operation).
@@ -416,13 +405,12 @@ class CLOBFactory:
         """
         func = self.contract.functions.debitAccount(account, token, amount)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def pull_from_account(
-            self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs
+        self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Pull tokens from an account (admin operation).
@@ -438,13 +426,12 @@ class CLOBFactory:
         """
         func = self.contract.functions.pullFromAccount(account, token, amount)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def push_to_account(
-            self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs
+        self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Push tokens to an account (admin operation).
@@ -460,14 +447,11 @@ class CLOBFactory:
         """
         func = self.contract.functions.pushToAccount(account, token, amount)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
-    def settle_incoming_order(
-            self, params: dict, **kwargs
-    ) -> TypedContractFunction[int]:
+    def settle_incoming_order(self, params: dict, **kwargs) -> TypedContractFunction[int]:
         """
         Settle an incoming order (admin operation).
 
@@ -489,11 +473,12 @@ class CLOBFactory:
         if "makerCredits" in params and params["makerCredits"]:
             for i, credit in enumerate(params["makerCredits"]):
                 if "maker" in credit and credit["maker"]:
-                    params["makerCredits"][i]["maker"] = self.web3.to_checksum_address(credit["maker"])
+                    params["makerCredits"][i]["maker"] = self.web3.to_checksum_address(
+                        credit["maker"]
+                    )
 
         func = self.contract.functions.settleIncomingOrder(params)
         tx_params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, tx_params)
@@ -501,21 +486,21 @@ class CLOBFactory:
     # ================= HELPER METHODS =================
 
     def create_market_settings(
-            self,
-            owner: ChecksumAddress,
-            max_limits_per_tx: int,
-            min_limit_order_amount_in_base: int,
-            tick_size: int
+        self,
+        owner: ChecksumAddress,
+        max_limits_per_tx: int,
+        min_limit_order_amount_in_base: int,
+        tick_size: int,
     ) -> dict:
         """
         Create a settings dictionary for use with create_market.
-        
+
         Args:
             owner: Address of the market owner
             max_limits_per_tx: Maximum number of limits per transaction
             min_limit_order_amount_in_base: Minimum limit order amount in base
             tick_size: Tick size for the market
-            
+
         Returns:
             Settings dictionary
         """
@@ -523,23 +508,23 @@ class CLOBFactory:
             "owner": owner,
             "maxLimitsPerTx": max_limits_per_tx,
             "minLimitOrderAmountInBase": min_limit_order_amount_in_base,
-            "tickSize": tick_size
+            "tickSize": tick_size,
         }
 
     def create_settle_params(
-            self,
-            taker: ChecksumAddress,
-            quote_token: ChecksumAddress,
-            base_token: ChecksumAddress,
-            side: int,
-            settlement: int,
-            taker_quote_amount: int,
-            taker_base_amount: int,
-            maker_credits: List[dict] = None
+        self,
+        taker: ChecksumAddress,
+        quote_token: ChecksumAddress,
+        base_token: ChecksumAddress,
+        side: int,
+        settlement: int,
+        taker_quote_amount: int,
+        taker_base_amount: int,
+        maker_credits: List[dict] = None,
     ) -> dict:
         """
         Create parameters for settle_incoming_order.
-        
+
         Args:
             taker: Address of the taker
             quote_token: Address of the quote token
@@ -549,19 +534,22 @@ class CLOBFactory:
             taker_quote_amount: Taker quote amount
             taker_base_amount: Taker base amount
             maker_credits: List of maker credit dictionaries each with maker, quoteAmount, and baseAmount
-            
+
         Returns:
             Settlement parameters dictionary
         """
         formatted_maker_credits = []
         if maker_credits:
             for credit in maker_credits:
-                formatted_maker_credits.append({
-                    "maker": self.web3.to_checksum_address(credit["maker"]) if isinstance(credit["maker"], str) else
-                    credit["maker"],
-                    "quoteAmount": credit["quoteAmount"],
-                    "baseAmount": credit["baseAmount"]
-                })
+                formatted_maker_credits.append(
+                    {
+                        "maker": self.web3.to_checksum_address(credit["maker"])
+                        if isinstance(credit["maker"], str)
+                        else credit["maker"],
+                        "quoteAmount": credit["quoteAmount"],
+                        "baseAmount": credit["baseAmount"],
+                    }
+                )
 
         return {
             "taker": taker,
@@ -571,7 +559,7 @@ class CLOBFactory:
             "settlement": settlement,
             "takerQuoteAmount": taker_quote_amount,
             "takerBaseAmount": taker_base_amount,
-            "makerCredits": formatted_maker_credits
+            "makerCredits": formatted_maker_credits,
         }
 
     async def owner_async(self) -> ChecksumAddress:
@@ -594,7 +582,9 @@ class CLOBFactory:
         """Get the maximum number of orders per market using async call."""
         return await self.contract.functions.maxNumOrders().call()
 
-    async def get_market_address_async(self, quote_token: ChecksumAddress, base_token: ChecksumAddress) -> ChecksumAddress:
+    async def get_market_address_async(
+        self, quote_token: ChecksumAddress, base_token: ChecksumAddress
+    ) -> ChecksumAddress:
         """
         Get the address of the market for a specific token pair using async call.
 
@@ -627,7 +617,9 @@ class CLOBFactory:
         """
         return await self.contract.functions.isMarket(market_address).call()
 
-    async def get_account_balance_async(self, account: ChecksumAddress, token: ChecksumAddress) -> int:
+    async def get_account_balance_async(
+        self, account: ChecksumAddress, token: ChecksumAddress
+    ) -> int:
         """
         Get the account balance for a specific token using async call.
 

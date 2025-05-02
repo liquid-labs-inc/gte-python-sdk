@@ -1,4 +1,5 @@
 """REST API client for GTE."""
+
 import json
 import logging
 
@@ -21,7 +22,7 @@ class RestApi:
         """
         self.base_url = base_url.rstrip("/")
         self.default_headers = {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
         }
         self.session: aiohttp.ClientSession | None = None
 
@@ -36,11 +37,11 @@ class RestApi:
             await self.session.close()
 
     async def _request(
-            self,
-            method: str,
-            endpoint: str,
-            params: dict | None = None,
-            data: dict | None = None,
+        self,
+        method: str,
+        endpoint: str,
+        params: dict | None = None,
+        data: dict | None = None,
     ) -> dict:
         """Make a request to the API.
 
@@ -59,8 +60,9 @@ class RestApi:
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
 
         try:
-            async with self.session.request(method, url, params=params, json=data,
-                                            headers=self.default_headers) as response:
+            async with self.session.request(
+                method, url, params=params, json=data, headers=self.default_headers
+            ) as response:
                 response_data = await response.text()
                 response.raise_for_status()
 
@@ -90,12 +92,12 @@ class RestApi:
 
     # Token endpoints
     async def get_tokens(
-            self,
-            metadata: bool = False,
-            creator: str | None = None,
-            market_type: str | None = None,
-            limit: int = 100,
-            offset: int = 0
+        self,
+        metadata: bool = False,
+        creator: str | None = None,
+        market_type: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
     ) -> dict:
         """Get list of tokens supported on GTE.
 
@@ -142,13 +144,13 @@ class RestApi:
 
     # Markets endpoints
     async def get_markets(
-            self,
-            limit: int = 100,
-            offset: int = 0,
-            market_type: str | None = None,
-            sort_by: str = "marketCap",
-            token_address: str | None = None,
-            newly_graduated: bool = False,
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        market_type: str | None = None,
+        sort_by: str = "marketCap",
+        token_address: str | None = None,
+        newly_graduated: bool = False,
     ) -> dict:
         """Get list of markets.
 
@@ -184,12 +186,12 @@ class RestApi:
         return await self._request("GET", f"/v1/markets/{market_address}")
 
     async def get_candles(
-            self,
-            market_address: str | ChecksumAddress,
-            interval: str,
-            start_time: int,
-            end_time: int | None = None,
-            limit: int = 500,
+        self,
+        market_address: str | ChecksumAddress,
+        interval: str,
+        start_time: int,
+        end_time: int | None = None,
+        limit: int = 500,
     ) -> dict:
         """Get candles for a market.
 
@@ -208,7 +210,9 @@ class RestApi:
             params["endTime"] = end_time
         return await self._request("GET", f"/v1/markets/{market_address}/candles", params=params)
 
-    async def get_trades(self, market_address: str | ChecksumAddress, limit: int = 100, offset: int = 0) -> dict:
+    async def get_trades(
+        self, market_address: str | ChecksumAddress, limit: int = 100, offset: int = 0
+    ) -> dict:
         """Get trades for a market.
 
         Args:
@@ -235,8 +239,9 @@ class RestApi:
         params = {"limit": limit}
         return await self._request("GET", f"/v1/markets/{market_address}/book", params=params)
 
-    async def get_order_book_snapshot(self, market_address: str | ChecksumAddress,
-                                      limit: int = 10) -> OrderBookSnapshot:
+    async def get_order_book_snapshot(
+        self, market_address: str | ChecksumAddress, limit: int = 10
+    ) -> OrderBookSnapshot:
         """Get typed order book snapshot for a market.
 
         Args:
@@ -263,7 +268,7 @@ class RestApi:
             bids=bids,
             asks=asks,
             timestamp=response.get("timestamp", 0),
-            market_address=market_address
+            market_address=market_address,
         )
 
     # Users endpoints
@@ -290,9 +295,9 @@ class RestApi:
         return await self._request("GET", f"/v1/users/{user_address}/portfolio")
 
     async def get_user_trades(
-            self,
-            user_address: str | ChecksumAddress,
-            market_address: str | ChecksumAddress | None = None
+        self,
+        user_address: str | ChecksumAddress,
+        market_address: str | ChecksumAddress | None = None,
     ) -> dict:
         """Get trades for a user.
 
@@ -309,9 +314,7 @@ class RestApi:
         return await self._request("GET", f"/v1/users/{user_address}/trades", params=params)
 
     async def get_user_open_orders(
-            self,
-            user_address: str | ChecksumAddress,
-            market_address: str | ChecksumAddress
+        self, user_address: str | ChecksumAddress, market_address: str | ChecksumAddress
     ) -> dict:
         """Get open orders for a user.
 
@@ -326,9 +329,7 @@ class RestApi:
         return await self._request("GET", f"/v1/users/{user_address}/open_orders", params=params)
 
     async def get_user_filled_orders(
-            self,
-            user_address: str | ChecksumAddress,
-            market_address: str | ChecksumAddress
+        self, user_address: str | ChecksumAddress, market_address: str | ChecksumAddress
     ) -> dict:
         """Get filled orders for a user.
 
@@ -343,9 +344,7 @@ class RestApi:
         return await self._request("GET", f"/v1/users/{user_address}/filled_orders", params=params)
 
     async def get_user_order_history(
-            self,
-            user_address: str | ChecksumAddress,
-            market_address: str | ChecksumAddress
+        self, user_address: str | ChecksumAddress, market_address: str | ChecksumAddress
     ) -> dict:
         """Get order history for a user.
 

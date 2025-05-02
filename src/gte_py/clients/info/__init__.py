@@ -17,12 +17,9 @@ logger = logging.getLogger(__name__)
 class InfoClient:
     """Service for retrieving market information from the blockchain."""
 
-    def __init__(self,
-                 rest: RestApi,
-                 web3: AsyncWeb3,
-                 clob_client: CLOBClient,
-                 token_client: TokenClient
-                 ):
+    def __init__(
+        self, rest: RestApi, web3: AsyncWeb3, clob_client: CLOBClient, token_client: TokenClient
+    ):
         """
         Initialize the market info service.
 
@@ -43,7 +40,7 @@ class InfoClient:
         await self._clob_client.init()
 
     async def get_tokens(
-            self, creator: str | None = None, limit: int = 100, offset: int = 0
+        self, creator: str | None = None, limit: int = 100, offset: int = 0
     ) -> list[Asset]:
         """
         Get list of assets.
@@ -60,11 +57,11 @@ class InfoClient:
         return [Asset.from_api(asset_data) for asset_data in response.get("assets", [])]
 
     async def get_markets(
-            self,
-            limit: int = 100,
-            offset: int = 0,
-            market_type: str | None = None,
-            token_address: str | None = None,
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        market_type: str | None = None,
+        token_address: str | None = None,
     ) -> list[Market]:
         """
         Get list of markets.

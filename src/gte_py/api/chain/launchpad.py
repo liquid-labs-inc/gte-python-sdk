@@ -1,6 +1,9 @@
-from eth_typing import Address, ChecksumAddress
+from typing import Unpack
+
+from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
+from web3.types import TxParams
 
 from gte_py.api.chain.utils import TypedContractFunction, load_abi
 
@@ -31,8 +34,6 @@ class Launchpad:
         Args:
             web3: AsyncWeb3 instance connected to a provider
             contract_address: Address of the Launchpad contract
-            abi_path: Path to the ABI JSON file (optional)
-            abi: The contract ABI as a Python dictionary (optional)
         """
         self.web3 = web3
         self.address = web3.to_checksum_address(contract_address)
@@ -141,7 +142,7 @@ class Launchpad:
 
     def quote_quote_for_base(self, token: str, base_amount: int, is_buy: bool) -> int:
         """
-        Quote quote amount for a given base amount.
+        Quote  amount for a given base amount.
 
         Args:
             token: Address of the token
@@ -162,8 +163,7 @@ class Launchpad:
         recipient: str,
         amount_out_base: int,
         max_amount_in_quote: int,
-        sender_address: Address,
-        **kwargs,
+        **kwargs: Unpack[TxParams],
     ) -> TypedContractFunction[HexBytes]:
         """
         Buy base tokens with quote tokens.
@@ -173,7 +173,6 @@ class Launchpad:
             recipient: Address to receive the tokens
             amount_out_base: Amount of base tokens to buy
             max_amount_in_quote: Maximum amount of quote tokens to spend
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -185,20 +184,16 @@ class Launchpad:
         func = self.contract.functions.buy(token, recipient, amount_out_base, max_amount_in_quote)
 
         params = {
-            
             **kwargs,
         }
 
         return TypedContractFunction(func, params)
 
-    def cancel_ownership_handover(
-        self, sender_address: Address, **kwargs
-    ) -> TypedContractFunction[HexBytes]:
+    def cancel_ownership_handover(self, **kwargs) -> TypedContractFunction[HexBytes]:
         """
         Cancel an ownership handover request.
 
         Args:
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters
 
         Returns:
@@ -207,21 +202,19 @@ class Launchpad:
         func = self.contract.functions.cancelOwnershipHandover()
 
         params = {
-            
             **kwargs,
         }
 
         return TypedContractFunction(func, params)
 
     def complete_ownership_handover(
-        self, pending_owner: str, sender_address: Address, **kwargs
+        self, pending_owner: str, **kwargs
     ) -> TypedContractFunction[HexBytes]:
         """
         Complete an ownership handover.
 
         Args:
             pending_owner: Address of the pending owner
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters
 
         Returns:
@@ -231,21 +224,17 @@ class Launchpad:
         func = self.contract.functions.completeOwnershipHandover(pending_owner)
 
         params = {
-            
             **kwargs,
         }
 
         return TypedContractFunction(func, params)
 
-    def initialize(
-        self, owner: str, sender_address: Address, **kwargs
-    ) -> TypedContractFunction[HexBytes]:
+    def initialize(self, owner: str, **kwargs) -> TypedContractFunction[HexBytes]:
         """
         Initialize the contract with an owner.
 
         Args:
             owner: Address of the owner
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters
 
         Returns:
@@ -255,20 +244,13 @@ class Launchpad:
         func = self.contract.functions.initialize(owner)
 
         params = {
-            
             **kwargs,
         }
 
         return TypedContractFunction(func, params)
 
     def launch(
-        self,
-        name: str,
-        symbol: str,
-        media_uri: str,
-        sender_address: Address,
-        value: int = 0,
-        **kwargs,
+        self, name: str, symbol: str, media_uri: str, value: int = 0, **kwargs: Unpack[TxParams]
     ) -> TypedContractFunction[HexBytes]:
         """
         Launch a new token.
@@ -277,7 +259,6 @@ class Launchpad:
             name: Name of the token
             symbol: Symbol of the token
             media_uri: Media URI for the token
-            sender_address: Address of the transaction sender
             value: ETH value to send with the transaction (for launch fee)
             **kwargs: Additional transaction parameters
 
@@ -287,20 +268,17 @@ class Launchpad:
         func = self.contract.functions.launch(name, symbol, media_uri)
 
         params = {
-            "from": sender_address,
             "value": value,
-            "nonce": self.web3.eth.get_transaction_count(sender_address),
             **kwargs,
         }
 
         return TypedContractFunction(func, params)
 
-    def pull_fees(self, sender_address: Address, **kwargs) -> TypedContractFunction[HexBytes]:
+    def pull_fees(self, **kwargs) -> TypedContractFunction[HexBytes]:
         """
         Pull accumulated fees.
 
         Args:
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters
 
         Returns:
@@ -309,20 +287,16 @@ class Launchpad:
         func = self.contract.functions.pullFees()
 
         params = {
-            
             **kwargs,
         }
 
         return TypedContractFunction(func, params)
 
-    def renounce_ownership(
-        self, sender_address: Address, **kwargs
-    ) -> TypedContractFunction[HexBytes]:
+    def renounce_ownership(self, **kwargs) -> TypedContractFunction[HexBytes]:
         """
         Renounce ownership of the contract.
 
         Args:
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters
 
         Returns:
@@ -331,20 +305,16 @@ class Launchpad:
         func = self.contract.functions.renounceOwnership()
 
         params = {
-            
             **kwargs,
         }
 
         return TypedContractFunction(func, params)
 
-    def request_ownership_handover(
-        self, sender_address: Address, **kwargs
-    ) -> TypedContractFunction[HexBytes]:
+    def request_ownership_handover(self, **kwargs) -> TypedContractFunction[HexBytes]:
         """
         Request an ownership handover.
 
         Args:
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters
 
         Returns:
@@ -353,7 +323,6 @@ class Launchpad:
         func = self.contract.functions.requestOwnershipHandover()
 
         params = {
-            
             **kwargs,
         }
 
@@ -365,8 +334,7 @@ class Launchpad:
         recipient: str,
         amount_in_base: int,
         min_amount_out_quote: int,
-        sender_address: Address,
-        **kwargs,
+        **kwargs: Unpack[TxParams],
     ) -> TypedContractFunction[HexBytes]:
         """
         Sell base tokens for quote tokens.
@@ -376,7 +344,6 @@ class Launchpad:
             recipient: Address to receive the quote tokens
             amount_in_base: Amount of base tokens to sell
             min_amount_out_quote: Minimum amount of quote tokens to receive
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters
 
         Returns:
@@ -388,14 +355,13 @@ class Launchpad:
         func = self.contract.functions.sell(token, recipient, amount_in_base, min_amount_out_quote)
 
         params = {
-            
             **kwargs,
         }
 
         return TypedContractFunction(func, params)
 
     def set_virtual_reserves(
-        self, virtual_base: int, virtual_quote: int, sender_address: Address, **kwargs
+        self, virtual_base: int, virtual_quote: int, **kwargs
     ) -> TypedContractFunction[HexBytes]:
         """
         Set virtual reserves for the bonding curve.
@@ -403,7 +369,6 @@ class Launchpad:
         Args:
             virtual_base: Virtual base reserves
             virtual_quote: Virtual quote reserves
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters
 
         Returns:
@@ -412,21 +377,17 @@ class Launchpad:
         func = self.contract.functions.setVirtualReserves(virtual_base, virtual_quote)
 
         params = {
-            
             **kwargs,
         }
 
         return TypedContractFunction(func, params)
 
-    def transfer_ownership(
-        self, new_owner: str, sender_address: Address, **kwargs
-    ) -> TypedContractFunction[HexBytes]:
+    def transfer_ownership(self, new_owner: str, **kwargs) -> TypedContractFunction[HexBytes]:
         """
         Transfer ownership of the contract.
 
         Args:
             new_owner: Address of the new owner
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters
 
         Returns:
@@ -436,21 +397,19 @@ class Launchpad:
         func = self.contract.functions.transferOwnership(new_owner)
 
         params = {
-            
             **kwargs,
         }
 
         return TypedContractFunction(func, params)
 
     def update_bonding_curve(
-        self, new_bonding_curve: str, sender_address: Address, **kwargs
+        self, new_bonding_curve: str, **kwargs
     ) -> TypedContractFunction[HexBytes]:
         """
         Update the bonding curve address.
 
         Args:
             new_bonding_curve: Address of the new bonding curve
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters
 
         Returns:
@@ -460,21 +419,17 @@ class Launchpad:
         func = self.contract.functions.updateBondingCurve(new_bonding_curve)
 
         params = {
-            
             **kwargs,
         }
 
         return TypedContractFunction(func, params)
 
-    def update_init_code_hash(
-        self, new_hash: bytes, sender_address: Address, **kwargs
-    ) -> TypedContractFunction[HexBytes]:
+    def update_init_code_hash(self, new_hash: bytes, **kwargs) -> TypedContractFunction[HexBytes]:
         """
         Update the init code hash.
 
         Args:
             new_hash: New init code hash
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters
 
         Returns:
@@ -483,21 +438,19 @@ class Launchpad:
         func = self.contract.functions.updateInitCodeHash(new_hash)
 
         params = {
-            
             **kwargs,
         }
 
         return TypedContractFunction(func, params)
 
     def update_quote_asset(
-        self, new_quote_asset: str, sender_address: Address, **kwargs
+        self, new_quote_asset: str, **kwargs
     ) -> TypedContractFunction[HexBytes]:
         """
         Update the quote asset address.
 
         Args:
             new_quote_asset: Address of the new quote asset
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters
 
         Returns:
@@ -507,7 +460,6 @@ class Launchpad:
         func = self.contract.functions.updateQuoteAsset(new_quote_asset)
 
         params = {
-            
             **kwargs,
         }
 

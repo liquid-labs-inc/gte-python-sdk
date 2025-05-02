@@ -4,6 +4,7 @@ Historical event querying module for CLOB contract events.
 This module provides functionality to query past events
 from the CLOB (Central Limit Order Book) contract.
 """
+
 from typing import List, Optional
 
 from eth_typing import ChecksumAddress
@@ -37,11 +38,11 @@ class CLOBHistoricalQuerier:
         self._order_matched_event: ContractEvent = self.contract.events.OrderMatched
 
     async def query_order_matched(
-            self,
-            from_block: int,
-            to_block: int | str = "latest",
-            maker: Optional[ChecksumAddress] = None,
-            taker: Optional[ChecksumAddress] = None,
+        self,
+        from_block: int,
+        to_block: int | str = "latest",
+        maker: Optional[ChecksumAddress] = None,
+        taker: Optional[ChecksumAddress] = None,
     ) -> List[OrderMatchedEvent]:
         """
         Query historical OrderMatched events within a block range.

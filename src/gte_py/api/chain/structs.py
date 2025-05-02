@@ -1,4 +1,5 @@
 """Structure definitions for GTE contracts."""
+
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import TypedDict
@@ -181,6 +182,7 @@ class ICLOBCancelArgs(TypedDict):
 @dataclass
 class CLOBOrder:
     """Order structure from contract."""
+
     side: Side
     cancelTimestamp: int
     id: int
@@ -191,7 +193,19 @@ class CLOBOrder:
     amount: int
 
     @classmethod
-    def from_tuple(cls, order_tuple: tuple[int, int, int, int, int, ChecksumAddress, int, int,]) -> "CLOBOrder":
+    def from_tuple(
+        cls,
+        order_tuple: tuple[
+            int,
+            int,
+            int,
+            int,
+            int,
+            ChecksumAddress,
+            int,
+            int,
+        ],
+    ) -> "CLOBOrder":
         """Convert from tuple to Order."""
         return cls(
             side=Side(order_tuple[0]),

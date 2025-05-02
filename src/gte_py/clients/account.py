@@ -1,6 +1,8 @@
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Tuple
 
 from eth_typing import ChecksumAddress
+from typing_extensions import Unpack
+from web3.types import TxParams
 
 from gte_py.api.rest import RestApi
 from gte_py.clients.iclob import CLOBClient
@@ -8,11 +10,9 @@ from gte_py.clients.token import TokenClient
 
 
 class AccountClient:
-    def __init__(self,
-                 account: ChecksumAddress,
-                 clob: CLOBClient, 
-                 token: TokenClient,
-                 rest: RestApi):
+    def __init__(
+        self, account: ChecksumAddress, clob: CLOBClient, token: TokenClient, rest: RestApi
+    ):
         """
         Initialize the account client.
 
@@ -28,26 +28,17 @@ class AccountClient:
         self._rest = rest
 
     async def wrap_eth(
-            self,
-            weth_address: ChecksumAddress,
-            amount: int,
-            **kwargs
+        self, weth_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
     ):
         return await self.token.get_weth(weth_address).deposit_eth(amount, **kwargs).send_wait()
 
     async def unwrap_eth(
-            self,
-            weth_address: ChecksumAddress,
-            amount: int,
-            **kwargs
+        self, weth_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
     ):
         return await self.token.get_weth(weth_address).withdraw_eth(amount, **kwargs).send_wait()
 
     async def deposit_to_market(
-            self,
-            token_address: ChecksumAddress,
-            amount: int,
-            **kwargs
+        self, token_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
     ):
         """
         Deposit tokens to the exchange for trading.
@@ -64,9 +55,7 @@ class AccountClient:
         token = self.token.get_erc20(token_address)
         # First approve the factory to spend tokens
         await token.approve(
-            spender=self.clob.get_factory_address(),
-            amount=amount,
-            **kwargs
+            spender=self.clob.get_factory_address(), amount=amount, **kwargs
         ).send_wait()
 
         # Then deposit the tokens
@@ -75,14 +64,11 @@ class AccountClient:
             token=token_address,
             amount=amount,
             from_operator=False,
-            **kwargs
+            **kwargs,
         ).send_wait()
 
     async def withdraw_from_market(
-            self,
-            token_address: ChecksumAddress,
-            amount: int,
-            **kwargs
+        self, token_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
     ):
         """
         Withdraw tokens from the exchange.
@@ -93,16 +79,12 @@ class AccountClient:
             **kwargs: Additional transaction parameters
 
         Returns:
-            TypedContractFunction for the withdraw transaction
+            TypedContractFunction for the withdrawal transaction
         """
 
         # Withdraw the tokens
         return await self.clob.clob_factory.withdraw(
-            account=self._account,
-            token=token_address,
-            amount=amount,
-            to_operator=False,
-            **kwargs
+            account=self._account, token=token_address, amount=amount, to_operator=False, **kwargs
         ).send_wait()
 
     async def get_portfolio(self) -> Dict[str, Any]:
@@ -122,7 +104,7 @@ class AccountClient:
             List of token balances with associated information
         """
         portfolio = await self.get_portfolio()
-        return portfolio.get('tokens', [])
+        return portfolio.get("tokens", [])
 
     async def get_total_usd_balance(self) -> float:
         """
@@ -132,9 +114,9 @@ class AccountClient:
             Total portfolio value in USD
         """
         portfolio = await self.get_portfolio()
-        return float(portfolio.get('totalUsdBalance', 0))
+        return float(portfolio.get("totalUsdBalance", 0))
 
-    async def get_lp_positions(self) -> List[Dict[str, Any]]:
+    async def get_lp_positions(self) -> dict:
         """
         Get the user's liquidity provider positions.
 
@@ -160,9 +142,9 @@ class AccountClient:
         wallet_balance = await token.convert_amount_to_float(wallet_balance_raw)
 
         # Get exchange balance
-        exchange_balance_raw = await self.clob.clob_factory.get_account_balance(self._account, token_address)
+        exchange_balance_raw = await self.clob.clob_factory.get_account_balance(
+            self._account, token_address
+        )
         exchange_balance = await token.convert_amount_to_float(exchange_balance_raw)
 
         return wallet_balance, exchange_balance
-
-

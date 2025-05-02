@@ -20,9 +20,7 @@ logger = logging.getLogger(__name__)
 class OrderbookClient:
     """WebSocket-based client for real-time market data."""
 
-    def __init__(self, config: NetworkConfig,
-                 rest: RestApi,
-                 info: InfoClient):
+    def __init__(self, config: NetworkConfig, rest: RestApi, info: InfoClient):
         """Initialize the client.
 
         Args:
@@ -47,16 +45,16 @@ class OrderbookClient:
         """Close the WebSocket connection."""
         await self._ws_client.close()
 
-
     def get_last_candle(self, interval: str = "1m") -> Candle | None:
         """Get the most recent candle for the specified interval."""
         return self._last_candle.get(interval)
 
     # Orderbook methods
     async def subscribe_orderbook(
-            self,
-            market: Market,
-            callback: Callable[[OrderbookUpdate], Any] | None = None, limit: int = 10
+        self,
+        market: Market,
+        callback: Callable[[OrderbookUpdate], Any] | None = None,
+        limit: int = 10,
     ):
         """Subscribe to real-time orderbook updates.
 
@@ -119,9 +117,7 @@ class OrderbookClient:
             market=market.address, limit=limit, callback=handle_orderbook_message
         )
 
-    async def unsubscribe_orderbook(self,
-                                    market: Market,
-                                    limit: int = 10):
+    async def unsubscribe_orderbook(self, market: Market, limit: int = 10):
         """Unsubscribe from real-time orderbook updates.
 
         Args:
@@ -135,9 +131,7 @@ class OrderbookClient:
         """Get the current orderbook state."""
         return self._orderbook_state[market.address]
 
-    async def get_order_book_snapshot(self,
-                                      market: Market,
-                                      depth: int = 5) -> OrderBookSnapshot:
+    async def get_order_book_snapshot(self, market: Market, depth: int = 5) -> OrderBookSnapshot:
         """
         Get a snapshot of the current order book from the API.
 

@@ -36,7 +36,9 @@ class TokenClient:
             ERC20 instance
         """
         if token_address not in self._contracts_erc20:
-            self._contracts_erc20[token_address] = ERC20(web3=self._web3, contract_address=token_address)
+            self._contracts_erc20[token_address] = ERC20(
+                web3=self._web3, contract_address=token_address
+            )
         return self._contracts_erc20[token_address]
 
     def get_weth(self, token_address: ChecksumAddress) -> WETH:
@@ -46,5 +48,7 @@ class TokenClient:
         :return:
         """
         if token_address not in self._contracts_weth:
-            self._contracts_weth[token_address] = WETH(web3=self._web3, contract_address=token_address)
+            self._contracts_weth[token_address] = WETH(
+                web3=self._web3, contract_address=token_address
+            )
         return self._contracts_weth[token_address]

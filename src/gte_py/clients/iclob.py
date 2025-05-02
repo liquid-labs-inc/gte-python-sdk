@@ -29,7 +29,10 @@ class CLOBClient:
     async def init(self):
         # Get and initialize CLOB factory
         self._clob_factory_address = await self._router.get_clob_factory()
-        self.clob_factory = CLOBFactory(web3=self._web3, contract_address=self._clob_factory_address)
+        self.clob_factory = CLOBFactory(
+            web3=self._web3, contract_address=self._clob_factory_address
+        )
+
     def get_factory_address(self) -> ChecksumAddress:
         """
         Get the address of the CLOB factory.

@@ -20,9 +20,9 @@ class WETH(ERC20):
     """
 
     def __init__(
-            self,
-            web3: AsyncWeb3,
-            contract_address: ChecksumAddress,
+        self,
+        web3: AsyncWeb3,
+        contract_address: ChecksumAddress,
     ):
         """
         Initialize the WETH wrapper.
@@ -37,18 +37,14 @@ class WETH(ERC20):
         loaded_abi = load_abi("weth")
         self.contract = self.web3.eth.contract(address=self.address, abi=loaded_abi)
 
-    def deposit(
-            self,
-            amount: int,
-            **kwargs
-    ) -> TypedContractFunction[None]:
+    def deposit(self, amount: int, **kwargs) -> TypedContractFunction[None]:
         """
         Deposit ETH to get WETH.
-        
+
         Args:
             amount: Amount of ETH to wrap (in wei)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-            
+
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
@@ -59,18 +55,14 @@ class WETH(ERC20):
         }
         return TypedContractFunction(func, params)
 
-    def withdraw(
-            self,
-            amount: int,
-            **kwargs
-    ) -> TypedContractFunction[None]:
+    def withdraw(self, amount: int, **kwargs) -> TypedContractFunction[None]:
         """
         Withdraw ETH by unwrapping WETH.
-        
+
         Args:
             amount: Amount of WETH to unwrap (in wei)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-            
+
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
@@ -81,35 +73,27 @@ class WETH(ERC20):
         }
         return TypedContractFunction(func, params)
 
-    def deposit_eth(
-            self,
-            amount: int,
-            **kwargs
-    ) -> TypedContractFunction[None]:
+    def deposit_eth(self, amount: int, **kwargs) -> TypedContractFunction[None]:
         """
         Deposit ETH to get WETH, using wei amount as int.
-        
+
         Args:
             amount: Amount of ETH to wrap (in wei)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-            
+
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
         return self.deposit(amount, **kwargs)
 
-    def withdraw_eth(
-            self,
-            amount: int,
-            **kwargs
-    ) -> TypedContractFunction[None]:
+    def withdraw_eth(self, amount: int, **kwargs) -> TypedContractFunction[None]:
         """
         Withdraw ETH by unwrapping WETH, using ETH amount as float.
-        
+
         Args:
             amount: Amount of ETH to unwrap (in wei)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-            
+
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """

@@ -17,10 +17,21 @@ from web3.types import TxParams, EventData, Nonce
 
 from gte_py.configs import NetworkConfig
 from gte_py.error import (
-    InsufficientBalance, NotFactory, FOKNotFilled, UnauthorizedAmend,
-    UnauthorizedCancel, InvalidAmend, OrderAlreadyExpired, InvalidAccountOrOperator,
-    PostOnlyOrderWouldBeFilled, MaxOrdersInBookPostNotCompetitive, NonPostOnlyAmend,
-    ZeroCostTrade, ZeroTrade, ZeroOrder, TransferFromFailed
+    InsufficientBalance,
+    NotFactory,
+    FOKNotFilled,
+    UnauthorizedAmend,
+    UnauthorizedCancel,
+    InvalidAmend,
+    OrderAlreadyExpired,
+    InvalidAccountOrOperator,
+    PostOnlyOrderWouldBeFilled,
+    MaxOrdersInBookPostNotCompetitive,
+    NonPostOnlyAmend,
+    ZeroCostTrade,
+    ZeroTrade,
+    ZeroOrder,
+    TransferFromFailed,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,28 +82,28 @@ def load_abi(abi_name: str) -> list[dict[str, Any]]:
 
 
 ERROR_EXCEPTIONS = {
-    '0xf4d678b8': InsufficientBalance,
-    '0x32cc7236': NotFactory,
-    '0x87e393a7': FOKNotFilled,
-    '0x60ab4840': UnauthorizedAmend,
-    '0x45bb6073': UnauthorizedCancel,
-    '0x4b22649a': InvalidAmend,
-    '0x3154078e': OrderAlreadyExpired,
-    '0x3d104567': InvalidAccountOrOperator,
-    '0x52409ba3': PostOnlyOrderWouldBeFilled,
-    '0x315ff5e5': MaxOrdersInBookPostNotCompetitive,
-    '0xc1008f10': NonPostOnlyAmend,  # Fixed: changed from string to exception class
-    '0xd8a00083': ZeroCostTrade,
-    '0x4ef36a18': ZeroTrade,
-    '0xb82df155': ZeroOrder,
-    '0x7939f424': TransferFromFailed,
+    "0xf4d678b8": InsufficientBalance,
+    "0x32cc7236": NotFactory,
+    "0x87e393a7": FOKNotFilled,
+    "0x60ab4840": UnauthorizedAmend,
+    "0x45bb6073": UnauthorizedCancel,
+    "0x4b22649a": InvalidAmend,
+    "0x3154078e": OrderAlreadyExpired,
+    "0x3d104567": InvalidAccountOrOperator,
+    "0x52409ba3": PostOnlyOrderWouldBeFilled,
+    "0x315ff5e5": MaxOrdersInBookPostNotCompetitive,
+    "0xc1008f10": NonPostOnlyAmend,  # Fixed: changed from string to exception class
+    "0xd8a00083": ZeroCostTrade,
+    "0x4ef36a18": ZeroTrade,
+    "0xb82df155": ZeroOrder,
+    "0x7939f424": TransferFromFailed,
 }
 
 
 def convert_web3_error(error: ContractCustomError, cause: str) -> Exception:
     """
     Convert a web3.exceptions.ContractCustomError into our custom exception.
-    
+
     Args:
         error: AsyncWeb3 contract custom error
         cause: The cause of the error, usually the function name or context
@@ -119,7 +130,17 @@ tx_id = 0
 
 class TypedContractFunction(Generic[T]):
     """Generic transaction wrapper with typed results and async support"""
-    __slots__ = ["web3", "func_call", "params", "event", "event_parser", "result", "receipt", "tx_hash"]
+
+    __slots__ = [
+        "web3",
+        "func_call",
+        "params",
+        "event",
+        "event_parser",
+        "result",
+        "receipt",
+        "tx_hash",
+    ]
 
     def __init__(self, func_call: AsyncContractFunction, params: TxParams | Any = None):
         self.web3: AsyncWeb3 = func_call.w3
@@ -131,7 +152,9 @@ class TypedContractFunction(Generic[T]):
         self.receipt: dict[str, Any] | None = None
         self.tx_hash: HexBytes | None = None
 
-    def with_event(self, event, parser: Callable[[EventData], T] | None = None) -> "TypedContractFunction[T]":
+    def with_event(
+        self, event, parser: Callable[[EventData], T] | None = None
+    ) -> "TypedContractFunction[T]":
         """Set the event to listen for"""
         self.event = event
         self.event_parser = parser
@@ -149,12 +172,16 @@ class TypedContractFunction(Generic[T]):
             tx = self.params
             tx_id += 1
             tx_id1 = tx_id
-            logger.info('Sending tx#%d %s with %s', tx_id1, format_contract_function(self.func_call), tx)
+            logger.info(
+                "Sending tx#%d %s with %s", tx_id1, format_contract_function(self.func_call), tx
+            )
             tx = await self.func_call.build_transaction(tx)
             # tx is auto signed
-            instance = await Web3RequestManager.ensure_instance(self.web3, self.web3.eth.default_account)
+            instance = await Web3RequestManager.ensure_instance(
+                self.web3, self.web3.eth.default_account
+            )
             self.tx_hash = await instance.send_request(tx)
-            logger.info('tx#%d sent: %s', tx_id1, self.tx_hash.hex())
+            logger.info("tx#%d sent: %s", tx_id1, self.tx_hash.hex())
             return self.tx_hash
         except ContractCustomError as e:
             raise convert_web3_error(e, format_contract_function(self.func_call)) from e
@@ -196,7 +223,7 @@ class TypedContractFunction(Generic[T]):
 
             if self.event_parser:
                 return self.event_parser(logs[0])
-            return logs[0]['args']
+            return logs[0]["args"]
         except ContractCustomError as e:
             raise convert_web3_error(e, format_contract_function(self.func_call)) from e
 
@@ -208,16 +235,16 @@ class TypedContractFunction(Generic[T]):
 def format_contract_function(func: AsyncContractFunction) -> str:
     """
     Format a ContractFunction into a more readable string with parameter names and values.
-    
+
     Example output:
-    postLimitOrder(address: '0x1234...', order: {'amountInBase': 1.0, 'price': 1.0, 'cancelTimestamp': 0, 
-                                                'side': <Side.SELL: 1>, 'clientOrderId': 0, 
-                                                'limitOrderType': <LimitOrderType.GOOD_TILL_CANCELLED: 0>, 
+    postLimitOrder(address: '0x1234...', order: {'amountInBase': 1.0, 'price': 1.0, 'cancelTimestamp': 0,
+                                                'side': <Side.SELL: 1>, 'clientOrderId': 0,
+                                                'limitOrderType': <LimitOrderType.GOOD_TILL_CANCELLED: 0>,
                                                 'settlement': <Settlement.INSTANT: 1>})
-    
+
     Args:
         func: The ContractFunction to format
-        
+
     Returns:
         A formatted string representation of the function
     """
@@ -229,13 +256,15 @@ def format_contract_function(func: AsyncContractFunction) -> str:
     try:
         contract = func.contract_abi
         for item in contract:
-            if item.get('name') == function_name and item.get('type') == 'function':
-                param_names = [input_param.get('name', f'param{i}') for i, input_param in
-                               enumerate(item.get('inputs', []))]
+            if item.get("name") == function_name and item.get("type") == "function":
+                param_names = [
+                    input_param.get("name", f"param{i}")
+                    for i, input_param in enumerate(item.get("inputs", []))
+                ]
                 break
     except (AttributeError, KeyError):
         # If we can't get parameter names from ABI, use generic param names
-        param_names = [f'param{i}' for i in range(len(args_values))]
+        param_names = [f"param{i}" for i in range(len(args_values))]
 
     # Format each argument with its name
     formatted_args = []
@@ -249,9 +278,9 @@ def format_contract_function(func: AsyncContractFunction) -> str:
 
 
 def make_web3(
-        network: NetworkConfig,
-        wallet_address: ChecksumAddress | None = None,
-        wallet_private_key: PrivateKeyType | None = None,
+    network: NetworkConfig,
+    wallet_address: ChecksumAddress | None = None,
+    wallet_private_key: PrivateKeyType | None = None,
 ) -> AsyncWeb3:
     """
     Create an AsyncWeb3 instance with the specified network configuration.
@@ -275,10 +304,12 @@ def make_web3(
 
 
 class Web3RequestManager:
-    instances: Dict[ChecksumAddress, 'Web3RequestManager'] = {}
+    instances: Dict[ChecksumAddress, "Web3RequestManager"] = {}
 
     @classmethod
-    async def ensure_instance(cls, web3: AsyncWeb3, account_address: ChecksumAddress) -> "Web3RequestManager":
+    async def ensure_instance(
+        cls, web3: AsyncWeb3, account_address: ChecksumAddress
+    ) -> "Web3RequestManager":
         """Ensure a singleton instance of Web3RequestManager for the given account address"""
         if account_address not in cls.instances:
             cls.instances[account_address] = Web3RequestManager(web3, account_address)
@@ -288,7 +319,9 @@ class Web3RequestManager:
     def __init__(self, web3: AsyncWeb3, account_address: ChecksumAddress):
         self.web3 = web3
         self.account_address = account_address
-        self.request_queue: asyncio.Queue[Tuple[TxParams, asyncio.Future[HexBytes]]] = asyncio.Queue()
+        self.request_queue: asyncio.Queue[Tuple[TxParams, asyncio.Future[HexBytes]]] = (
+            asyncio.Queue()
+        )
         self.pending_transactions: Dict[int, HexBytes] = {}  # {nonce: tx_hash}
         self.current_nonce: int = 0
         self.lock = asyncio.Lock()
@@ -311,8 +344,12 @@ class Web3RequestManager:
     async def sync_nonce(self):
         """Update nonce from blockchain state"""
         async with self.lock:
-            latest = await self.web3.eth.get_transaction_count(self.account_address, block_identifier='latest')
-            pending = await self.web3.eth.get_transaction_count(self.account_address, block_identifier='pending')
+            latest = await self.web3.eth.get_transaction_count(
+                self.account_address, block_identifier="latest"
+            )
+            pending = await self.web3.eth.get_transaction_count(
+                self.account_address, block_identifier="pending"
+            )
             self.current_nonce = max(latest, pending)
             self._cleanup_confirmed_nonces(latest)
 
@@ -360,7 +397,7 @@ class Web3RequestManager:
 
                 try:
                     receipt = await self.web3.eth.get_transaction_receipt(tx_hash)
-                    if receipt and receipt['blockNumber']:
+                    if receipt and receipt["blockNumber"]:
                         # finished
                         async with self.lock:
                             del self.pending_transactions[nonce]
@@ -380,10 +417,10 @@ class Web3RequestManager:
 
     async def _send_transaction(self, tx: TxParams, nonce: Nonce):
         """Transaction sending implementation"""
-        if 'from' not in tx:
-            tx['from'] = self.account_address
-        if 'nonce' not in tx:
-            tx['nonce'] = nonce
+        if "from" not in tx:
+            tx["from"] = self.account_address
+        if "nonce" not in tx:
+            tx["nonce"] = nonce
         return await self.web3.eth.send_transaction(tx)
 
     async def send_request(self, data: TxParams) -> HexBytes:

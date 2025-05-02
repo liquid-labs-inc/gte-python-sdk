@@ -358,6 +358,7 @@ class Order:
 @dataclass
 class OrderBookSnapshot:
     """Snapshot of the orderbook at a point in time."""
+
     bids: List[Tuple[float, float, int]]  # (price, size, count)
     asks: List[Tuple[float, float, int]]  # (price, size, count)
     timestamp: int

@@ -8,13 +8,7 @@ from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 
 from gte_py.api.chain.events import OrderCanceledEvent
-from gte_py.api.chain.structs import (
-    Side,
-    Settlement,
-    LimitOrderType,
-    FillOrderType,
-    CLOBOrder
-)
+from gte_py.api.chain.structs import Side, Settlement, LimitOrderType, FillOrderType, CLOBOrder
 from gte_py.api.chain.utils import get_current_timestamp, TypedContractFunction
 from gte_py.api.rest import RestApi
 from gte_py.clients.iclob import CLOBClient
@@ -36,12 +30,14 @@ class ExecutionClient:
     EVENT_ORDER_CANCELED = "OrderCanceled"
     EVENT_ORDER_MATCHED = "OrderMatched"
 
-    def __init__(self, web3: AsyncWeb3,
-                 main_account: ChecksumAddress,
-                 clob: CLOBClient,
-                 token: TokenClient,
-                 rest: RestApi
-                 ):
+    def __init__(
+        self,
+        web3: AsyncWeb3,
+        main_account: ChecksumAddress,
+        clob: CLOBClient,
+        token: TokenClient,
+        rest: RestApi,
+    ):
         """
         Initialize the execution client.
 
@@ -59,18 +55,18 @@ class ExecutionClient:
         self.main_account = main_account
 
     async def place_limit_order_tx(
-            self,
-            market: Market,
-            side: Side,
-            amount: int,
-            price: int,
-            time_in_force: TimeInForce = TimeInForce.GTC,
-            client_order_id: int = 0,
-            **kwargs
+        self,
+        market: Market,
+        side: Side,
+        amount: int,
+        price: int,
+        time_in_force: TimeInForce = TimeInForce.GTC,
+        client_order_id: int = 0,
+        **kwargs,
     ) -> TypedContractFunction:
         """
         Place a limit order on the CLOB.
-        
+
         Args:
             market: Market to place the order on
             side: Order side (BUY or SELL)
@@ -79,7 +75,7 @@ class ExecutionClient:
             time_in_force: Time in force (GTC, IOC, FOK)
             client_order_id: Optional client order ID for tracking
             **kwargs: Additional transaction parameters
-            
+
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
@@ -90,9 +86,13 @@ class ExecutionClient:
         contract_side = Side.BUY if side == Side.BUY else Side.SELL
 
         if not market.check_lot_size(amount):
-            raise ValueError(f"Amount is not multiples of lot size: {amount} (lot size: {market.lot_size})")
+            raise ValueError(
+                f"Amount is not multiples of lot size: {amount} (lot size: {market.lot_size})"
+            )
         if not market.check_tick_size(price):
-            raise ValueError(f"Price is not multiples of tick size: {price} (tick size: {market.tick_size})")
+            raise ValueError(
+                f"Price is not multiples of tick size: {price} (tick size: {market.tick_size})"
+            )
 
         # For IOC and FOK orders, we use the fill order API which has different behavior
         if time_in_force in [TimeInForce.IOC, TimeInForce.FOK]:
@@ -112,15 +112,11 @@ class ExecutionClient:
                 side=contract_side,
                 amount_is_base=True,  # Since amount is in base tokens
                 fill_order_type=fill_order_type,
-                settlement=Settlement.INSTANT
+                settlement=Settlement.INSTANT,
             )
 
             # Return the transaction
-            return clob.post_fill_order(
-                account=self.main_account,
-                args=args,
-                **kwargs
-            )
+            return clob.post_fill_order(account=self.main_account, args=args, **kwargs)
         else:
             if time_in_force == TimeInForce.GTC:
                 tif = LimitOrderType.GOOD_TILL_CANCELLED
@@ -140,25 +136,21 @@ class ExecutionClient:
                 cancel_timestamp=0,  # No expiration
                 client_order_id=client_order_id,
                 limit_order_type=tif,
-                settlement=Settlement.INSTANT
+                settlement=Settlement.INSTANT,
             )
 
             # Return the transaction
-            return clob.post_limit_order(
-                account=self.main_account,
-                args=args,
-                **kwargs
-            )
+            return clob.post_limit_order(account=self.main_account, args=args, **kwargs)
 
     async def place_limit_order(
-            self,
-            market: Market,
-            side: Side,
-            amount: int,
-            price: int,
-            time_in_force: TimeInForce = TimeInForce.GTC,
-            client_order_id: int = 0,
-            **kwargs
+        self,
+        market: Market,
+        side: Side,
+        amount: int,
+        price: int,
+        time_in_force: TimeInForce = TimeInForce.GTC,
+        client_order_id: int = 0,
+        **kwargs,
     ) -> Order:
         tx = await self.place_limit_order_tx(
             market=market,
@@ -167,29 +159,29 @@ class ExecutionClient:
             price=price,
             time_in_force=time_in_force,
             client_order_id=client_order_id,
-            **kwargs
+            **kwargs,
         )
         return await tx.send_wait()
 
     async def place_market_order_tx(
-            self,
-            market: Market,
-            side: Side,
-            amount: int,
-            amount_is_base: bool = True,
-            slippage: float = 0.01,
-            **kwargs
+        self,
+        market: Market,
+        side: Side,
+        amount: int,
+        amount_is_base: bool = True,
+        slippage: float = 0.01,
+        **kwargs,
     ) -> TypedContractFunction:
         """
         Place a market order on the CLOB.
-        
+
         Args:
             market: Market to place the order on
             side: Order side (BUY or SELL)
             amount: Order amount in base tokens if amount_is_base is True, otherwise in quote tokens
             amount_is_base: Whether the amount is in base tokens
             **kwargs: Additional transaction parameters
-            
+
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
@@ -214,24 +206,20 @@ class ExecutionClient:
             side=contract_side,
             amount_is_base=amount_is_base,
             fill_order_type=FillOrderType.IMMEDIATE_OR_CANCEL,
-            settlement=Settlement.INSTANT
+            settlement=Settlement.INSTANT,
         )
 
         # Return the transaction
-        return clob.post_fill_order(
-            account=self.main_account,
-            args=args,
-            **kwargs
-        )
+        return clob.post_fill_order(account=self.main_account, args=args, **kwargs)
 
     async def place_market_order(
-            self,
-            market: Market,
-            side: Side,
-            amount: int,
-            amount_is_base: bool = True,
-            slippage: float = 0.01,
-            **kwargs
+        self,
+        market: Market,
+        side: Side,
+        amount: int,
+        amount_is_base: bool = True,
+        slippage: float = 0.01,
+        **kwargs,
     ):
         """
         Place a market order on the CLOB.
@@ -253,28 +241,28 @@ class ExecutionClient:
             amount=amount,
             amount_is_base=amount_is_base,
             slippage=slippage,
-            **kwargs
+            **kwargs,
         )
         return await tx.send_wait()
 
     async def amend_order_tx(
-            self,
-            market: Market,
-            order_id: int,
-            new_amount: Optional[int] = None,
-            new_price: Optional[int] = None,
-            **kwargs
+        self,
+        market: Market,
+        order_id: int,
+        new_amount: Optional[int] = None,
+        new_price: Optional[int] = None,
+        **kwargs,
     ) -> TypedContractFunction:
         """
         Amend an existing order.
-        
+
         Args:
             market: Market the order is on
             order_id: ID of the order to amend
             new_amount: New amount for the order (None to keep current)
             new_price: New price for the order (None to keep current)
             **kwargs: Additional transaction parameters
-            
+
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
@@ -301,46 +289,36 @@ class ExecutionClient:
             side=side,
             cancel_timestamp=0,  # No expiration
             limit_order_type=LimitOrderType.GOOD_TILL_CANCELLED,
-            settlement=Settlement.INSTANT
+            settlement=Settlement.INSTANT,
         )
 
         # Return the transaction
-        return clob.amend(
-            account=self.main_account,
-            args=args,
-            **kwargs
-        )
+        return clob.amend(account=self.main_account, args=args, **kwargs)
 
     async def amend_order(
-            self,
-            market: Market,
-            order_id: int,
-            new_amount: Optional[int] = None,
-            new_price: Optional[int] = None,
-            **kwargs
+        self,
+        market: Market,
+        order_id: int,
+        new_amount: Optional[int] = None,
+        new_price: Optional[int] = None,
+        **kwargs,
     ):
         tx = await self.amend_order_tx(
-            market=market,
-            order_id=order_id,
-            new_amount=new_amount,
-            new_price=new_price,
-            **kwargs)
+            market=market, order_id=order_id, new_amount=new_amount, new_price=new_price, **kwargs
+        )
         return await tx.send_wait()
 
     async def cancel_order_tx(
-            self,
-            market: Market,
-            order_id: int,
-            **kwargs
+        self, market: Market, order_id: int, **kwargs
     ) -> TypedContractFunction[OrderCanceledEvent | None]:
         """
         Cancel an existing order.
-        
+
         Args:
             market: Market the order is on
             order_id: ID of the order to cancel
             **kwargs: Additional transaction parameters
-            
+
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
@@ -348,36 +326,16 @@ class ExecutionClient:
         clob = self.clob.get_clob(market.address)
 
         # Create cancel args
-        args = clob.create_cancel_args(
-            order_ids=[order_id],
-            settlement=Settlement.INSTANT
-        )
+        args = clob.create_cancel_args(order_ids=[order_id], settlement=Settlement.INSTANT)
 
         # Return the transaction
-        return clob.cancel(
-            account=self.main_account,
-            args=args,
-            **kwargs
-        )
+        return clob.cancel(account=self.main_account, args=args, **kwargs)
 
-    async def cancel_order(
-            self,
-            market: Market,
-            order_id: int,
-            **kwargs
-    ):
-        tx = await self.cancel_order_tx(
-            market=market,
-            order_id=order_id,
-            **kwargs
-        )
+    async def cancel_order(self, market: Market, order_id: int, **kwargs):
+        tx = await self.cancel_order_tx(market=market, order_id=order_id, **kwargs)
         return await tx.send_wait()
 
-    async def cancel_all_orders(
-            self,
-            market: Market,
-            **kwargs
-    ):
+    async def cancel_all_orders(self, market: Market, **kwargs):
         """
         Cancel all orders for the current user on a specific market.
 
@@ -392,9 +350,7 @@ class ExecutionClient:
             await self.cancel_order(market, order.order_id, **kwargs)
 
     async def get_balance(
-            self,
-            token_address: ChecksumAddress,
-            account: Optional[ChecksumAddress] = None
+        self, token_address: ChecksumAddress, account: Optional[ChecksumAddress] = None
     ) -> Tuple[float, float]:
         """
         Get token balance for an account both on-chain and in the exchange.
@@ -415,7 +371,9 @@ class ExecutionClient:
         wallet_balance = await token.convert_amount_to_float(wallet_balance_raw)
 
         # Get exchange balance
-        exchange_balance_raw = await self.clob.clob_factory.get_account_balance(account, token_address)
+        exchange_balance_raw = await self.clob.clob_factory.get_account_balance(
+            account, token_address
+        )
         exchange_balance = await token.convert_amount_to_float(exchange_balance_raw)
 
         return wallet_balance, exchange_balance
@@ -425,7 +383,9 @@ class ExecutionClient:
         order = await clob.get_order(order_id)
         return self._convert_contract_order_to_model(market, order)
 
-    async def get_open_orders(self, market: Market, address: ChecksumAddress | None = None) -> List[Order]:
+    async def get_open_orders(
+        self, market: Market, address: ChecksumAddress | None = None
+    ) -> List[Order]:
         """
         Get all orders for a specific market and address from the chain directly.
         This is a fallback method when the REST API is not available.
@@ -445,21 +405,23 @@ class ExecutionClient:
         tasks = []
 
         while price_level > 0:
-            tasks.append(asyncio.create_task(self.get_orders_for_price_level(
-                market=market,
-                price=price_level,
-                side=Side.BUY,
-                address=address
-            )))
+            tasks.append(
+                asyncio.create_task(
+                    self.get_orders_for_price_level(
+                        market=market, price=price_level, side=Side.BUY, address=address
+                    )
+                )
+            )
             price_level = await clob.get_next_smallest_price(price_level, Side.BUY)
         price_level = best_ask
         while price_level > 0:
-            tasks.append(asyncio.create_task(self.get_orders_for_price_level(
-                market=market,
-                price=price_level,
-                side=Side.SELL,
-                address=address
-            )))
+            tasks.append(
+                asyncio.create_task(
+                    self.get_orders_for_price_level(
+                        market=market, price=price_level, side=Side.SELL, address=address
+                    )
+                )
+            )
             price_level = await clob.get_next_biggest_price(price_level, Side.SELL)
 
         address = address or self.main_account
@@ -474,12 +436,9 @@ class ExecutionClient:
                 logger.error(f"Error getting orders: {e}")
         return orders
 
-    async def get_orders_for_price_level(self,
-                                         market: Market,
-                                         price: int,
-                                         side: Side,
-                                         address: ChecksumAddress | None = None
-                                         ) -> List[Order]:
+    async def get_orders_for_price_level(
+        self, market: Market, price: int, side: Side, address: ChecksumAddress | None = None
+    ) -> List[Order]:
         """
         Get all orders for a specific price level.
 
@@ -504,9 +463,7 @@ class ExecutionClient:
         return orders
 
     async def get_open_orders_rest(
-            self,
-            address: Optional[ChecksumAddress] = None,
-            market_address: ChecksumAddress = None
+        self, address: Optional[ChecksumAddress] = None, market_address: ChecksumAddress = None
     ) -> List[Order]:
         """
         Get open orders for an address on a specific market using the REST API.
@@ -532,9 +489,7 @@ class ExecutionClient:
             return []
 
     async def get_filled_orders(
-            self,
-            address: Optional[ChecksumAddress] = None,
-            market_address: ChecksumAddress = None
+        self, address: Optional[ChecksumAddress] = None, market_address: ChecksumAddress = None
     ) -> List[Order]:
         """
         Get filled orders for an address on a specific market using the REST API.
@@ -560,9 +515,7 @@ class ExecutionClient:
             return []
 
     async def get_order_history(
-            self,
-            address: Optional[ChecksumAddress] = None,
-            market_address: ChecksumAddress = None
+        self, address: Optional[ChecksumAddress] = None, market_address: ChecksumAddress = None
     ) -> List[Order]:
         """
         Get order history for an address on a specific market using the REST API.
@@ -588,9 +541,9 @@ class ExecutionClient:
             return []
 
     def _convert_contract_order_to_model(
-            self,
-            market: Market,
-            order_data: CLOBOrder,
+        self,
+        market: Market,
+        order_data: CLOBOrder,
     ) -> Order:
         """
         Convert contract order data to Order model.
@@ -607,7 +560,9 @@ class ExecutionClient:
         status = OrderStatus.OPEN
         if order_data.amount == 0:
             status = OrderStatus.FILLED
-        elif order_data.cancelTimestamp > 0 and order_data.cancelTimestamp < get_current_timestamp():
+        elif (
+            order_data.cancelTimestamp > 0 and order_data.cancelTimestamp < get_current_timestamp()
+        ):
             status = OrderStatus.EXPIRED
 
         # Create Order model
@@ -621,7 +576,7 @@ class ExecutionClient:
             time_in_force=TimeInForce.GTC,  # Default
             status=status,
             owner=order_data.owner,
-            created_at=0  # Need to be retrieved from event timestamp
+            created_at=0,  # Need to be retrieved from event timestamp
         )
 
     def _parse_open_order(self, order_data: Dict[str, Any]) -> Order:
@@ -635,16 +590,16 @@ class ExecutionClient:
             Order object
         """
         return Order(
-            order_id=int(order_data.get('orderId', 0)),
-            market_address=order_data.get('marketAddress'),
-            side=Side.BUY if order_data.get('side') == 'bid' else Side.SELL,
+            order_id=int(order_data.get("orderId", 0)),
+            market_address=order_data.get("marketAddress"),
+            side=Side.BUY if order_data.get("side") == "bid" else Side.SELL,
             order_type=OrderType.LIMIT,
-            amount=order_data.get('originalSize', 0),
-            price=order_data.get('limitPrice', 0),
+            amount=order_data.get("originalSize", 0),
+            price=order_data.get("limitPrice", 0),
             time_in_force=TimeInForce.GTC,  # Default for open orders
             status=OrderStatus.OPEN,
-            owner=order_data.get('owner', None),  # May be provided in some API responses
-            created_at=order_data.get('placedAt', 0),
+            owner=order_data.get("owner", None),  # May be provided in some API responses
+            created_at=order_data.get("placedAt", 0),
         )
 
     def _parse_filled_order(self, order_data: Dict[str, Any]) -> Order:
@@ -658,15 +613,15 @@ class ExecutionClient:
             Order object
         """
         return Order(
-            order_id=int(order_data.get('orderId', 0)),
-            market_address=order_data.get('marketAddress'),
-            side=Side.BUY if order_data.get('side') == 'bid' else Side.SELL,
+            order_id=int(order_data.get("orderId", 0)),
+            market_address=order_data.get("marketAddress"),
+            side=Side.BUY if order_data.get("side") == "bid" else Side.SELL,
             order_type=OrderType.LIMIT,  # Assuming all filled orders were limit orders
-            amount=order_data.get('sizeFilled', 0),
-            price=order_data.get('price', 0),
+            amount=order_data.get("sizeFilled", 0),
+            price=order_data.get("price", 0),
             time_in_force=TimeInForce.GTC,  # Default
             status=OrderStatus.FILLED,
-            owner=order_data.get('owner', None),
+            owner=order_data.get("owner", None),
             created_at=0,  # Not provided
         )
 
@@ -682,24 +637,24 @@ class ExecutionClient:
         """
         # Determine order status based on available data
         status = OrderStatus.OPEN
-        if order_data.get('status') == 'filled':
+        if order_data.get("status") == "filled":
             status = OrderStatus.FILLED
-        elif order_data.get('status') == 'canceled':
+        elif order_data.get("status") == "canceled":
             status = OrderStatus.CANCELLED
 
         order_type = OrderType.LIMIT
-        if order_data.get('orderType') == 'fill':
+        if order_data.get("orderType") == "fill":
             order_type = OrderType.MARKET
 
         return Order(
-            order_id=int(order_data.get('orderId', 0)),
-            market_address=order_data.get('marketAddress'),
-            side=Side.BUY if order_data.get('side') == 'bid' else Side.SELL,
+            order_id=int(order_data.get("orderId", 0)),
+            market_address=order_data.get("marketAddress"),
+            side=Side.BUY if order_data.get("side") == "bid" else Side.SELL,
             order_type=order_type,
-            amount=order_data.get('originalSize', 0),
-            price=order_data.get('limitPrice', 0),
+            amount=order_data.get("originalSize", 0),
+            price=order_data.get("limitPrice", 0),
             time_in_force=TimeInForce.GTC,  # Default
             status=status,
-            owner=order_data.get('owner', None),
-            created_at=order_data.get('placedAt', 0)
+            owner=order_data.get("owner", None),
+            created_at=order_data.get("placedAt", 0),
         )

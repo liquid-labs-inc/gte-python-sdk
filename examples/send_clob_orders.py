@@ -35,7 +35,6 @@ async def approve_and_deposit_example(client: Client, market: Market, amount: fl
     await client.account.deposit_to_market(
         token_address=quote,
         amount=market.round_quote_to_ticks_int(amount * price),
-        gas=100000,
     )
 
     # Now deposit the base token
@@ -44,7 +43,6 @@ async def approve_and_deposit_example(client: Client, market: Market, amount: fl
     await client.account.deposit_to_market(
         token_address=base,
         amount=market.round_base_to_lots_int(amount),
-        gas=100000,
     )
 
 

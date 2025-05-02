@@ -1,8 +1,11 @@
 """Python wrapper for ERC20 token contracts."""
+
 from typing import TypeVar, Dict, Any
 
 from eth_typing import ChecksumAddress
+from typing_extensions import Unpack
 from web3 import AsyncWeb3
+from web3.types import TxParams
 
 from .utils import TypedContractFunction, load_abi
 
@@ -16,9 +19,9 @@ class ERC20:
     """
 
     def __init__(
-            self,
-            web3: AsyncWeb3,
-            contract_address: ChecksumAddress,
+        self,
+        web3: AsyncWeb3,
+        contract_address: ChecksumAddress,
     ):
         """
         Initialize the ERC20 wrapper.
@@ -87,10 +90,7 @@ class ERC20:
     # ================= WRITE METHODS =================
 
     def transfer(
-            self,
-            recipient: ChecksumAddress,
-            amount: int,
-            **kwargs
+        self, recipient: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
     ) -> TypedContractFunction[bool]:
         """
         Transfer tokens to a specified address.
@@ -105,16 +105,12 @@ class ERC20:
         """
         func = self.contract.functions.transfer(recipient, amount)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def approve(
-            self,
-            spender: ChecksumAddress,
-            amount: int,
-            **kwargs
+        self, spender: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
     ) -> TypedContractFunction[bool]:
         """
         Approve the passed address to spend the specified amount of tokens on behalf of the sender.
@@ -129,17 +125,16 @@ class ERC20:
         """
         func = self.contract.functions.approve(spender, amount)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def transfer_from(
-            self,
-            sender: ChecksumAddress,
-            recipient: ChecksumAddress,
-            amount: int,
-            **kwargs
+        self,
+        sender: ChecksumAddress,
+        recipient: ChecksumAddress,
+        amount: int,
+        **kwargs: Unpack[TxParams],
     ) -> TypedContractFunction[bool]:
         """
         Transfer tokens from one address to another.
@@ -155,16 +150,12 @@ class ERC20:
         """
         func = self.contract.functions.transferFrom(sender, recipient, amount)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
 
     def increase_allowance(
-            self,
-            spender: ChecksumAddress,
-            added_value: int,
-            **kwargs
+        self, spender: ChecksumAddress, added_value: int, **kwargs: Unpack[TxParams]
     ) -> TypedContractFunction[bool]:
         """
         Increase the allowance granted to `spender` by the caller.
@@ -184,10 +175,7 @@ class ERC20:
         return TypedContractFunction(func, params)
 
     def decrease_allowance(
-            self,
-            spender: ChecksumAddress,
-            subtracted_value: int,
-            **kwargs
+        self, spender: ChecksumAddress, subtracted_value: int, **kwargs: Unpack[TxParams]
     ) -> TypedContractFunction[bool]:
         """
         Decrease the allowance granted to `spender` by the caller.
@@ -202,7 +190,6 @@ class ERC20:
         """
         func = self.contract.functions.decreaseAllowance(spender, subtracted_value)
         params = {
-
             **kwargs,
         }
         return TypedContractFunction(func, params)
@@ -220,12 +207,10 @@ class ERC20:
             Human-readable amount as a float
         """
         decimals = await self.decimals()
-        return amount / (10 ** decimals)
+        return amount / (10**decimals)
 
     def approve_max(
-            self,
-            spender: ChecksumAddress,
-            **kwargs
+        self, spender: ChecksumAddress, **kwargs: Unpack[TxParams]
     ) -> TypedContractFunction[bool]:
         """
         Approve the maximum possible amount for a spender.
@@ -238,29 +223,29 @@ class ERC20:
             TypedContractFunction that returns a boolean success value
         """
         # 2^256 - 1, the maximum uint256 value
-        max_uint256 = 2 ** 256 - 1
+        max_uint256 = 2**256 - 1
         return self.approve(spender, max_uint256, **kwargs)
 
     async def balance_of_async(self, account: ChecksumAddress) -> int:
         """Get token balance for an account using async call."""
         return await self.contract.functions.balanceOf(account).call()
 
-    async def allowance_async(self, owner: ChecksumAddress, spender: ChecksumAddress) -> int:
-        """Get token allowance for a spender using async call."""
-        return await self.contract.functions.allowance(owner, spender).call()
+        async def allowance_async(self, owner: ChecksumAddress, spender: ChecksumAddress) -> int:
+            """Get token allowance for a spender using async call."""
+            return await self.contract.functions.allowance(owner, spender).call()
 
-    async def total_supply_async(self) -> int:
-        """Get total token supply using async call."""
-        return await self.contract.functions.totalSupply().call()
+        async def total_supply_async(self) -> int:
+            """Get total token supply using async call."""
+            return await self.contract.functions.totalSupply().call()
 
-    async def name_async(self) -> str:
-        """Get token name using async call."""
-        return await self.contract.functions.name().call()
+        async def name_async(self) -> str:
+            """Get token name using async call."""
+            return await self.contract.functions.name().call()
 
-    async def symbol_async(self) -> str:
-        """Get token symbol using async call."""
-        return await self.contract.functions.symbol().call()
+        async def symbol_async(self) -> str:
+            """Get token symbol using async call."""
+            return await self.contract.functions.symbol().call()
 
-    async def decimals_async(self) -> int:
-        """Get token decimals using async call."""
-        return await self.contract.functions.decimals().call()
+        async def decimals_async(self) -> int:
+            """Get token decimals using async call."""
+            return await self.contract.functions.decimals().call()

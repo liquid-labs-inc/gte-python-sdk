@@ -16,6 +16,7 @@ Block Time	10ms for mini blocks
 1s for EVM blocks
 
 """
+
 import os
 from dataclasses import dataclass
 
@@ -51,7 +52,7 @@ class NetworkConfig:
 
 TESTNET_CONFIG = NetworkConfig(
     name="MegaETH Testnet",
-    api_url='https://api-testnet.gte.xyz',
+    api_url="https://api-testnet.gte.xyz",
     ws_url="wss://api-testnet.gte.xyz/ws",
     chain_id=6342,
     native_token="MegaETH Testnet Ether (ETH)",
@@ -64,8 +65,8 @@ TESTNET_CONFIG = NetworkConfig(
     eip_1559_max_block_size=2_000_000_000,
     eip_1559_target_block_size=1_000_000_000,
     block_time="10ms for mini blocks, 1s for EVM blocks",
-    router_address=to_checksum_address('0x86470efcEa37e50F94E74649463b737C87ada367'),
-    launchpad_address=to_checksum_address('0x0B6cD1DefCe3189Df60A210326E315383fbC14Ed'),
-    clob_manager_address=to_checksum_address('0xD7310f8A0D569Dd0803D28BB29f4E0A471fA84F6'),
-    weth_address=to_checksum_address('0x776401b9BC8aAe31A685731B7147D4445fD9FB19')
+    router_address=to_checksum_address("0x86470efcEa37e50F94E74649463b737C87ada367"),
+    launchpad_address=to_checksum_address("0x0B6cD1DefCe3189Df60A210326E315383fbC14Ed"),
+    clob_manager_address=to_checksum_address("0xD7310f8A0D569Dd0803D28BB29f4E0A471fA84F6"),
+    weth_address=to_checksum_address("0x776401b9BC8aAe31A685731B7147D4445fD9FB19"),
 )

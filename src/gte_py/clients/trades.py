@@ -14,9 +14,7 @@ class TradesClient:
     This class is used to interact with the trades endpoint of the GTE API.
     """
 
-    def __init__(self,
-                 config: NetworkConfig,
-                 rest: RestApi):
+    def __init__(self, config: NetworkConfig, rest: RestApi):
         self._ws = WebSocketApi(config.ws_url)
         self._trade_callbacks = []
         self._rest = rest
@@ -36,7 +34,9 @@ class TradesClient:
         return await self._rest.get_trades(market, limit, offset)
 
     # Trade methods
-    async def subscribe_trades(self, market: Market, callback: Callable[[Trade], Any] | None = None):
+    async def subscribe_trades(
+        self, market: Market, callback: Callable[[Trade], Any] | None = None
+    ):
         """Subscribe to real-time trades.
 
         Args:

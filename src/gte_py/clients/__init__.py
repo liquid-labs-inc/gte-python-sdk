@@ -22,10 +22,10 @@ class Client:
     """User-friendly client for interacting with GTE."""
 
     def __init__(
-            self,
-            web3: AsyncWeb3,
-            config: NetworkConfig,
-            account: ChecksumAddress | None = None,
+        self,
+        web3: AsyncWeb3,
+        config: NetworkConfig,
+        account: ChecksumAddress | None = None,
     ):
         """
         Initialize the client.
@@ -45,16 +45,15 @@ class Client:
         self.clob = CLOBClient(self._web3, config.router_address)
         # Initialize market service for fetching market information
         self.token = TokenClient(self._web3)
-        self.info = InfoClient(web3=self._web3, rest=self.rest, clob_client=self.clob, token_client=self.token)
+        self.info = InfoClient(
+            web3=self._web3, rest=self.rest, clob_client=self.clob, token_client=self.token
+        )
         self.market: OrderbookClient = OrderbookClient(config, self.rest, self.info)
         if not account:
             self.account = None
         else:
             self.account = AccountClient(
-                account=account,
-                clob=self.clob,
-                token=self.token,
-                rest=self.rest
+                account=account, clob=self.clob, token=self.token, rest=self.rest
             )
         self.trades = TradesClient(config, self.rest)
 
@@ -67,7 +66,7 @@ class Client:
                 main_account=account,
                 clob=self.clob,
                 token=self.token,
-                rest=self.rest
+                rest=self.rest,
             )
 
         self._sender_address = account
