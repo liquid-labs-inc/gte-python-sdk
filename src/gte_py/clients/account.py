@@ -62,12 +62,10 @@ class AccountClient:
         """
 
         token = self.token.get_erc20(token_address)
-        amount_in_atoms = amount
-
         # First approve the factory to spend tokens
         await token.approve(
             spender=self.clob.get_factory_address(),
-            amount=amount_in_atoms,
+            amount=amount,
             **kwargs
         ).send_wait()
 
@@ -75,7 +73,7 @@ class AccountClient:
         await self.clob.clob_factory.deposit(
             account=self._account,
             token=token_address,
-            amount=amount_in_atoms,
+            amount=amount,
             from_operator=False,
             **kwargs
         ).send_wait()

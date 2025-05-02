@@ -42,7 +42,7 @@ class InfoClient:
         # Get and initialize CLOB factory
         await self._clob_client.init()
 
-    async def get_assets(
+    async def get_tokens(
             self, creator: str | None = None, limit: int = 100, offset: int = 0
     ) -> list[Asset]:
         """
@@ -56,7 +56,7 @@ class InfoClient:
         Returns:
             List of assets
         """
-        response = await self._rest.get_assets(creator=creator, limit=limit, offset=offset)
+        response = await self._rest.get_tokens(creator=creator, limit=limit, offset=offset)
         return [Asset.from_api(asset_data) for asset_data in response.get("assets", [])]
 
     async def get_markets(
@@ -64,8 +64,7 @@ class InfoClient:
             limit: int = 100,
             offset: int = 0,
             market_type: str | None = None,
-            asset_address: str | None = None,
-            max_price: float | None = None,
+            token_address: str | None = None,
     ) -> list[Market]:
         """
         Get list of markets.
@@ -74,8 +73,7 @@ class InfoClient:
             limit: Maximum number of markets to return
             offset: Offset for pagination
             market_type: Filter by market type (amm, launchpad, clob)
-            asset_address: Filter by base asset address
-            max_price: Maximum price filter
+            token_address: Filter by base asset address
 
         Returns:
             List of markets
@@ -84,8 +82,7 @@ class InfoClient:
             limit=limit,
             offset=offset,
             market_type=market_type,
-            asset=asset_address,
-            price=max_price,
+            token_address=token_address,
         )
 
         markets = [Market.from_api(market_data) for market_data in response.get("markets", [])]
@@ -123,10 +120,10 @@ class InfoClient:
             quote_token_address=quote,
             base_decimals=base_asset.decimals,
             quote_decimals=quote_asset.decimals,
-            tick_size_in_quote=tick_size,
-            tick_size=await quote_contract.convert_amount_to_float(tick_size),
-            lot_size_in_base=lot_size,
-            lot_size=await base_contract.convert_amount_to_float(lot_size),
+            tick_size=tick_size,
+            tick_size_float=await quote_contract.convert_amount_to_float(tick_size),
+            lot_size=lot_size,
+            lot_size_float=await base_contract.convert_amount_to_float(lot_size),
         )
 
         return market_info

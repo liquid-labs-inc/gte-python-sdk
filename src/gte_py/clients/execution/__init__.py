@@ -91,9 +91,9 @@ class ExecutionClient:
         contract_side = Side.BUY if side == Side.BUY else Side.SELL
 
         if not market.check_lot_size(amount):
-            raise ValueError(f"Amount is not multiples of lot size: {amount} (lot size: {market.lot_size_in_base})")
+            raise ValueError(f"Amount is not multiples of lot size: {amount} (lot size: {market.lot_size})")
         if not market.check_tick_size(price):
-            raise ValueError(f"Price is not multiples of tick size: {price} (tick size: {market.tick_size_in_quote})")
+            raise ValueError(f"Price is not multiples of tick size: {price} (tick size: {market.tick_size})")
 
         # For IOC and FOK orders, we use the fill order API which has different behavior
         if time_in_force in [TimeInForce.IOC, TimeInForce.FOK]:
@@ -292,7 +292,7 @@ class ExecutionClient:
 
         amount_in_base = new_amount or current_amount
 
-        tick_size = market.tick_size_in_quote
+        tick_size = market.tick_size
         price_in_ticks = int(new_price / tick_size) if new_price is not None else current_price
 
         # Create amend args

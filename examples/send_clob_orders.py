@@ -53,8 +53,8 @@ async def limit_order_example(client: Client, market: Market) -> list[int]:
     print_separator("Limit Order Example")
 
     # Current market price (or estimate)
-    price = market.round_quote_to_ticks_int(market.tick_size)
-    amount = market.round_base_to_lots_int(market.lot_size)
+    price = market.round_quote_to_ticks_int(market.tick_size_float)
+    amount = market.round_base_to_lots_int(market.lot_size_float)
     results = []
     print(f"Creating BUY limit order at price: {price}")
     order = await client.execution.place_limit_order(
