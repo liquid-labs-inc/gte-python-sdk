@@ -11,7 +11,7 @@ from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
 from web3.contract.async_contract import AsyncContractFunction
-from web3.exceptions import ContractCustomError, TransactionNotFound
+from web3.exceptions import ContractCustomError, TransactionNotFound, Web3Exception
 from web3.middleware import SignAndSendRawMiddlewareBuilder
 from web3.types import TxParams, EventData, Nonce
 
@@ -231,6 +231,11 @@ class TypedContractFunction(Generic[T]):
                 return None
             # Wait for the transaction to be mined
             self.receipt = await self.web3.eth.wait_for_transaction_receipt(self.tx_hash)
+            if self.receipt['status'] != 1:
+                raise Web3Exception("transaction failed: " +
+                                    format_contract_function(self.func_call, self.tx_hash) +
+                                    " : " + str(self.receipt)
+                                    )
             logs = self.event.process_receipt(self.receipt)
 
             if len(logs) == 0:
@@ -242,14 +247,14 @@ class TypedContractFunction(Generic[T]):
                 return self.event_parser(logs[0])
             return logs[0]["args"]
         except ContractCustomError as e:
-            raise convert_web3_error(e, format_contract_function(self.func_call)) from e
+            raise convert_web3_error(e, format_contract_function(self.func_call, self.tx_hash)) from e
 
     async def send_wait(self) -> T:
         await self.send()
         return await self.retrieve()
 
 
-def format_contract_function(func: AsyncContractFunction) -> str:
+def format_contract_function(func: AsyncContractFunction, tx_hash: HexBytes | None = None) -> str:
     """
     Format a ContractFunction into a more readable string with parameter names and values.
 
@@ -291,7 +296,10 @@ def format_contract_function(func: AsyncContractFunction) -> str:
         else:
             formatted_args.append(repr(value))
 
-    return f"{func.address} {function_name}({', '.join(formatted_args)})"
+    result = f"{func.address} {function_name}({', '.join(formatted_args)})"
+    if tx_hash:
+        result += f" tx_hash: {tx_hash.hex()}"
+    return result
 
 
 async def make_web3(
