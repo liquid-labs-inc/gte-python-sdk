@@ -260,7 +260,7 @@ def format_contract_function(func: AsyncContractFunction, tx_hash: HexBytes | No
 
     Example output:
     0x1234 postLimitOrder(address: '0x1234...', order: {'amountInBase': 1.0, 'price': 1.0, 'cancelTimestamp': 0,
-                                                'side': <Side.SELL: 1>, 'clientOrderId': 0,
+                                                'side': <Side.SELL: 1>,
                                                 'limitOrderType': <LimitOrderType.GOOD_TILL_CANCELLED: 0>,
                                                 'settlement': <Settlement.INSTANT: 1>})
 
