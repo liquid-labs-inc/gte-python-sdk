@@ -81,8 +81,6 @@ async def display_market_info(client: Client, market_address: ChecksumAddress) -
     print(f"Market: {market.pair}")
     print(f"Base token: {market.base.symbol} ({market.base.address})")
     print(f"Quote token: {market.quote.symbol} ({market.quote.address})")
-    print(f"Tick size: {market.tick_size}")
-    print(f"Lot size: {market.lot_size}")
 
     return market
 

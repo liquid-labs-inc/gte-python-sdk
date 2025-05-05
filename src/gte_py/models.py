@@ -104,32 +104,8 @@ class Market:
     market_type: MarketType
     base: Token
     quote: Token
-    tick_size: int
-    tick_size_float: float
-    lot_size: int
-    lot_size_float: float
     price: float | None = None
     volume_24h: float | None = None
-
-    def round_quote_to_ticks_int(self, price: float) -> int:
-        """Convert price to integer based on tick size."""
-        ticks_in_float = price / self.tick_size_float
-        ticks_in_int = round(ticks_in_float)
-        price_in_quote = ticks_in_int * self.tick_size
-        return price_in_quote
-
-    def round_base_to_lots_int(self, amount: float) -> int:
-        """Convert amount to integer based on lot size."""
-        amount_in_float = amount / self.lot_size_float
-        amount_in_int = round(amount_in_float)
-        amount_in_base = amount_in_int * self.lot_size
-        return amount_in_base
-
-    def check_tick_size(self, price: int) -> bool:
-        return price % self.tick_size == 0
-
-    def check_lot_size(self, amount: int) -> bool:
-        return amount % self.lot_size == 0
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Market":
@@ -141,8 +117,6 @@ class Market:
             market_type=MarketType(data.get("marketType", "amm")),
             base=Token.from_api(data.get("baseAsset", {})),
             quote=Token.from_api(data.get("quoteAsset", {})),
-            tick_size=data.get("tickSize", 0.01),
-            lot_size=data.get("baseAtomsPerLot", 1),
             price=data.get("price"),
             volume_24h=data.get("volume24hr"),
         )

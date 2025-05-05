@@ -75,7 +75,7 @@ class ICLOB:
         """Get the base token used in the CLOB."""
         return await self.contract.functions.getBaseToken().call()
 
-    # factory, mask?, quote, base, tick_size?, lot_size?
+    # factory, mask?, quote, base, quote size, base size
     async def get_market_config(
         self,
     ) -> tuple[ChecksumAddress, int, ChecksumAddress, ChecksumAddress, int, int]:

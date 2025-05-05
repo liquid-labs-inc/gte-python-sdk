@@ -87,15 +87,6 @@ class ExecutionClient:
         # Convert model types to contract types
         contract_side = Side.BUY if side == Side.BUY else Side.SELL
 
-        # if not market.check_lot_size(amount):
-        #     raise ValueError(
-        #         f"Amount is not multiples of lot size: {amount} (lot size: {market.lot_size})"
-        #     )
-        # if not market.check_tick_size(price):
-        #     raise ValueError(
-        #         f"Price is not multiples of tick size: {price} (tick size: {market.tick_size})"
-        #     )
-
         # For IOC and FOK orders, we use the fill order API which has different behavior
         if time_in_force in [TimeInForce.IOC, TimeInForce.FOK]:
             # Convert amount to base token atoms

@@ -44,8 +44,6 @@ async def query_specific_market(client: Client, market_address: ChecksumAddress)
         print(f"  Contract: {market.address}")
         print(f"  Base Token: {market.base.address}")
         print(f"  Quote Token: {market.quote.address}")
-        print(f"  Tick Size: {market.tick_size}")
-        print(f"  Lot Size: {market.lot_size}")
 
     return market
 

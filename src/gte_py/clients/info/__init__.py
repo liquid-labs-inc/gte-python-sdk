@@ -90,7 +90,7 @@ class InfoClient:
         # Get market config for additional details
         if not isinstance(address, ICLOB):
             address = self._clob_client.get_clob(address)
-        factory, mask, quote, base, tick_size, lot_size = await address.get_market_config()
+        factory, mask, quote, base, quote_size, base_size= await address.get_market_config()
 
         base_contract = self._token_client.get_erc20(base)
         quote_contract = self._token_client.get_erc20(quote)
@@ -115,10 +115,6 @@ class InfoClient:
             market_type=MarketType.CLOB,
             base=base_asset,
             quote=quote_asset,
-            tick_size=tick_size,
-            tick_size_float=await quote_contract.convert_amount_to_quantity(tick_size),
-            lot_size=lot_size,
-            lot_size_float=await base_contract.convert_amount_to_quantity(lot_size),
         )
 
         return market_info
