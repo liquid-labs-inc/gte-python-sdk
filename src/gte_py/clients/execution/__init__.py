@@ -66,7 +66,8 @@ class ExecutionClient:
             amount: int,
             price: int,
             time_in_force: TimeInForce = TimeInForce.GTC,
-            **kwargs,
+            client_order_id: int = 0,
+        **kwargs,
     ) -> TypedContractFunction:
         """
         Place a limit order on the CLOB.
@@ -77,6 +78,7 @@ class ExecutionClient:
             amount: Order amount in base tokens
             price: Order price
             time_in_force: Time in force (GTC, IOC, FOK)
+            client_order_id: Optional client order ID for tracking
             **kwargs: Additional transaction parameters
 
         Returns:
@@ -128,6 +130,7 @@ class ExecutionClient:
                 price=price,
                 side=contract_side,
                 cancel_timestamp=0,  # No expiration
+                client_order_id=client_order_id,
                 limit_order_type=tif,
                 settlement=Settlement.INSTANT,
             )
@@ -142,7 +145,8 @@ class ExecutionClient:
             amount: int,
             price: int,
             time_in_force: TimeInForce = TimeInForce.GTC,
-            **kwargs: Unpack[TxParams],
+            client_order_id: int = 0,
+        **kwargs: Unpack[TxParams],
     ) -> Awaitable[Order]:
         tx = self.place_limit_order_tx(
             market=market,
@@ -150,6 +154,7 @@ class ExecutionClient:
             amount=amount,
             price=price,
             time_in_force=time_in_force,
+            client_order_id=client_order_id,
             **kwargs,
         )
         tx.send_nowait()

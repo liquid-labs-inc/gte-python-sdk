@@ -497,6 +497,7 @@ class ICLOB:
         price: int,
         side: Side,
         cancel_timestamp: int = 0,
+        client_order_id: int = 0,
         limit_order_type: int = LimitOrderType.GOOD_TILL_CANCELLED,
         settlement: int = Settlement.INSTANT,
     ) -> ICLOBPostLimitOrderArgs:
@@ -508,6 +509,7 @@ class ICLOB:
             price: The price of the order
             side: BUY(0) or SELL(1)
             cancel_timestamp: Timestamp after which the order is automatically canceled (0 = never)
+            client_order_id: Optional client-side order ID for tracking
             limit_order_type: Type of limit order (default: GOOD_TILL_CANCELLED)
             settlement: Settlement type (default: INSTANT)
 
@@ -519,9 +521,9 @@ class ICLOB:
             "price": price,
             "cancelTimestamp": cancel_timestamp,
             "side": side,
+            "clientOrderId": client_order_id,
             "limitOrderType": limit_order_type,
             "settlement": settlement,
-            "clientOrderId": 0
         }
 
     def create_post_fill_order_args(

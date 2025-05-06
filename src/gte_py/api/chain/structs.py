@@ -97,6 +97,7 @@ class ICLOBPostLimitOrderArgs(TypedDict):
     price: int
     cancelTimestamp: int
     side: int
+    clientOrderId: int
     limitOrderType: int
     settlement: int
 
@@ -193,17 +194,17 @@ class CLOBOrder:
 
     @classmethod
     def from_tuple(
-            cls,
-            order_tuple: tuple[
-                int,
-                int,
-                int,
-                int,
-                int,
-                ChecksumAddress,
-                int,
-                int,
-            ],
+        cls,
+        order_tuple: tuple[
+            int,
+            int,
+            int,
+            int,
+            int,
+            ChecksumAddress,
+            int,
+            int,
+        ],
     ) -> "CLOBOrder":
         """Convert from tuple to Order."""
         return cls(
