@@ -198,7 +198,7 @@ class TypedContractFunction(Generic[T]):
     async def send(self) -> HexBytes:
         """Synchronous write operation"""
         self.tx_hash = await self.send_nowait(_show_pending=False)
-        logger.info("tx#%d sent: %s", self.tx_id, self.tx_hash.hex())
+        logger.info("tx#%d sent: %s", self.tx_id, self.tx_hash.to_0x_hex())
         return self.tx_hash
 
     async def build_transaction(self) -> TxParams:
@@ -227,7 +227,7 @@ class TypedContractFunction(Generic[T]):
         try:
             if isinstance(self.tx_hash, Awaitable):
                 self.tx_hash = await self.tx_hash
-                logger.info(f'tx_hash for tx#{self.tx_id}: {self.tx_hash.hex()}')
+                logger.info(f'tx_hash for tx#{self.tx_id}: {self.tx_hash.to_0x_hex()}')
             if self.event is None:
                 return None
             # Wait for the transaction to be mined
@@ -299,7 +299,7 @@ def format_contract_function(func: AsyncContractFunction, tx_hash: HexBytes | No
 
     result = f"{func.address} {function_name}({', '.join(formatted_args)})"
     if tx_hash:
-        result += f" tx_hash: {tx_hash.hex()}"
+        result += f" tx_hash: {tx_hash.to_0x_hex()}"
     return result
 
 
@@ -438,7 +438,7 @@ class Web3RequestManager:
                     # Transaction not found, it might be pending
                     continue
                 except Exception as e:
-                    logger.error("Error while checking transaction %s: %s", tx_hash.hex(), e)
+                    logger.error("Error while checking transaction %s: %s", tx_hash.to_0x_hex(), e)
                     async with self.lock:
                         del self.pending_transactions[nonce]
 
