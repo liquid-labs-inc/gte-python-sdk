@@ -521,6 +521,7 @@ class ICLOB:
             "side": side,
             "limitOrderType": limit_order_type,
             "settlement": settlement,
+            "clientOrderId": 0
         }
 
     def create_post_fill_order_args(
