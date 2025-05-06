@@ -3,7 +3,8 @@ import importlib.resources as pkg_resources
 import json
 import logging
 import time
-from typing import Any, Generic, TypeVar, Callable, Tuple, Dict, Awaitable
+import warnings
+from typing import Any, Generic, TypeVar, Callable, Tuple, Dict, Awaitable, cast, Set
 
 from eth_account import Account
 from eth_account.types import PrivateKeyType
@@ -12,8 +13,8 @@ from hexbytes import HexBytes
 from web3 import AsyncWeb3
 from web3.contract.async_contract import AsyncContractFunction
 from web3.exceptions import ContractCustomError, TransactionNotFound, Web3Exception
-from web3.middleware import SignAndSendRawMiddlewareBuilder
-from web3.types import TxParams, EventData, Nonce
+from web3.middleware import SignAndSendRawMiddlewareBuilder, validation
+from web3.types import TxParams, EventData, Nonce, RPCEndpoint
 
 from gte_py.configs import NetworkConfig
 from gte_py.error import (
@@ -319,6 +320,10 @@ async def make_web3(
         An instance of AsyncWeb3 configured for the specified network
     """
     w3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(network.rpc_http))
+
+    warnings.warn("web3.middleware.validation.METHODS_TO_VALIDATE is set to [] to avoid repetitive get_chainId. This will affect all web3 instances.")
+    validation.METHODS_TO_VALIDATE = []
+
     if wallet_address:
         w3.eth.default_account = wallet_address
     if wallet_private_key:
