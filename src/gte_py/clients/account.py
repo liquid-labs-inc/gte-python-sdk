@@ -6,7 +6,7 @@ from typing_extensions import Unpack
 from web3.types import TxParams
 
 from gte_py.api.rest import RestApi
-from gte_py.clients.iclob import CLOBClient
+from gte_py.clients.clob import CLOBClient
 from gte_py.clients.token import TokenClient
 from gte_py.configs import NetworkConfig
 

@@ -19,7 +19,7 @@ from utils import (
     show_balances,
     WALLET_ADDRESS,
     WALLET_PRIVATE_KEY,
-    MARKET_ADDRESS
+    MARKET_ADDRESS, show_all_orders
 )
 
 
@@ -180,8 +180,8 @@ async def main() -> None:
     # Show balances
     await show_balances(client, market)
     # Display all orders
-    # await show_all_orders(client, market)
-
+    await show_all_orders(client, market)
+    return
     # Display recent order matches
     await display_recent_matches(client, market)
 
@@ -207,5 +207,5 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     asyncio.run(main())

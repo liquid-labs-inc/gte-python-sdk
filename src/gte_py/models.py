@@ -8,7 +8,8 @@ from typing import Any, List, Optional, Tuple
 from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
-from gte_py.api.chain.structs import Side as ContractSide
+from gte_py.api.chain.structs import Side as ContractSide, CLOBOrder
+from gte_py.api.chain.utils import get_current_timestamp
 
 
 class MarketType(Enum):
@@ -324,6 +325,30 @@ class Order:
             time_in_force=TimeInForce(tif_str),
             status=OrderStatus(status_str),
             created_at=data.get("createdAt", int(datetime.now().timestamp() * 1000)),
+        )
+
+    @classmethod
+    def from_clob_order(cls, clob: CLOBOrder, market: Market) -> "Order":
+        status = OrderStatus.OPEN
+        if clob.amount == 0:
+            status = OrderStatus.FILLED
+        elif (
+                clob.cancelTimestamp > 0 and clob.cancelTimestamp < get_current_timestamp()
+        ):
+            status = OrderStatus.EXPIRED
+
+        # Create Order model
+        return Order(
+            order_id=clob.id,
+            market_address=market.address,
+            side=clob.side,
+            order_type=OrderType.LIMIT,
+            amount=clob.amount,
+            price=clob.price,
+            time_in_force=TimeInForce.GTC,  # Default
+            status=status,
+            owner=clob.owner,
+            created_at=0,  # Need to be retrieved from event timestamp
         )
 
 

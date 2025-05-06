@@ -7,7 +7,7 @@ from web3 import AsyncWeb3
 
 from .account import AccountClient
 from .execution import ExecutionClient
-from .iclob import CLOBClient
+from .clob import CLOBClient
 from .info import InfoClient
 from .orderbook import OrderbookClient
 from .token import TokenClient
@@ -68,6 +68,7 @@ class Client:
                 clob=self.clob,
                 token=self.token,
                 rest=self.rest,
+                orderbook=self.orderbook,
             )
 
         self._sender_address = account

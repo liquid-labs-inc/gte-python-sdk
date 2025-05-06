@@ -1,6 +1,5 @@
 """Order execution functionality for the GTE client."""
 
-import asyncio
 import logging
 from typing import Optional, List, Tuple, Dict, Any, Awaitable
 
@@ -13,7 +12,8 @@ from gte_py.api.chain.events import OrderCanceledEvent
 from gte_py.api.chain.structs import Side, Settlement, LimitOrderType, FillOrderType, CLOBOrder
 from gte_py.api.chain.utils import get_current_timestamp, TypedContractFunction
 from gte_py.api.rest import RestApi
-from gte_py.clients.iclob import CLOBClient
+from gte_py.clients.clob import CLOBClient
+from gte_py.clients.orderbook import OrderbookClient
 from gte_py.clients.token import TokenClient
 from gte_py.models import Market, Order, OrderStatus, Side, OrderType, TimeInForce
 
@@ -33,12 +33,13 @@ class ExecutionClient:
     EVENT_ORDER_MATCHED = "OrderMatched"
 
     def __init__(
-        self,
-        web3: AsyncWeb3,
-        main_account: ChecksumAddress,
-        clob: CLOBClient,
-        token: TokenClient,
-        rest: RestApi,
+            self,
+            web3: AsyncWeb3,
+            main_account: ChecksumAddress,
+            clob: CLOBClient,
+            token: TokenClient,
+            rest: RestApi,
+            orderbook: OrderbookClient
     ):
         """
         Initialize the execution client.
@@ -49,21 +50,23 @@ class ExecutionClient:
             clob: CLOBClient instance
             token: TokenClient instance
             rest: Optional RestApi instance for API interactions
+            orderbook: OrderbookClient instance for order book interactions
         """
         self._web3 = web3
         self._rest = rest
         self.clob = clob
         self.token = token
         self.main_account = main_account
+        self._orderbook = orderbook
 
     def place_limit_order_tx(
-        self,
-        market: Market,
-        side: Side,
-        amount: int,
-        price: int,
-        time_in_force: TimeInForce = TimeInForce.GTC,
-        **kwargs,
+            self,
+            market: Market,
+            side: Side,
+            amount: int,
+            price: int,
+            time_in_force: TimeInForce = TimeInForce.GTC,
+            **kwargs,
     ) -> TypedContractFunction:
         """
         Place a limit order on the CLOB.
@@ -133,13 +136,13 @@ class ExecutionClient:
             return clob.post_limit_order(account=self.main_account, args=args, **kwargs)
 
     def place_limit_order(
-        self,
-        market: Market,
-        side: Side,
-        amount: int,
-        price: int,
-        time_in_force: TimeInForce = TimeInForce.GTC,
-        **kwargs: Unpack[TxParams],
+            self,
+            market: Market,
+            side: Side,
+            amount: int,
+            price: int,
+            time_in_force: TimeInForce = TimeInForce.GTC,
+            **kwargs: Unpack[TxParams],
     ) -> Awaitable[Order]:
         tx = self.place_limit_order_tx(
             market=market,
@@ -153,13 +156,13 @@ class ExecutionClient:
         return tx.retrieve()
 
     async def place_market_order_tx(
-        self,
-        market: Market,
-        side: Side,
-        amount: int,
-        amount_is_base: bool = True,
-        slippage: float = 0.01,
-        **kwargs,
+            self,
+            market: Market,
+            side: Side,
+            amount: int,
+            amount_is_base: bool = True,
+            slippage: float = 0.01,
+            **kwargs,
     ) -> TypedContractFunction:
         """
         Place a market order on the CLOB.
@@ -202,13 +205,13 @@ class ExecutionClient:
         return clob.post_fill_order(account=self.main_account, args=args, **kwargs)
 
     async def place_market_order(
-        self,
-        market: Market,
-        side: Side,
-        amount: int,
-        amount_is_base: bool = True,
-        slippage: float = 0.01,
-        **kwargs,
+            self,
+            market: Market,
+            side: Side,
+            amount: int,
+            amount_is_base: bool = True,
+            slippage: float = 0.01,
+            **kwargs,
     ):
         """
         Place a market order on the CLOB.
@@ -235,12 +238,12 @@ class ExecutionClient:
         return await tx.send_wait()
 
     async def amend_order_tx(
-        self,
-        market: Market,
-        order_id: int,
-        new_amount: Optional[int] = None,
-        new_price: Optional[int] = None,
-        **kwargs,
+            self,
+            market: Market,
+            order_id: int,
+            new_amount: Optional[int] = None,
+            new_price: Optional[int] = None,
+            **kwargs,
     ) -> TypedContractFunction:
         """
         Amend an existing order.
@@ -285,12 +288,12 @@ class ExecutionClient:
         return clob.amend(account=self.main_account, args=args, **kwargs)
 
     async def amend_order(
-        self,
-        market: Market,
-        order_id: int,
-        new_amount: Optional[int] = None,
-        new_price: Optional[int] = None,
-        **kwargs,
+            self,
+            market: Market,
+            order_id: int,
+            new_amount: Optional[int] = None,
+            new_price: Optional[int] = None,
+            **kwargs,
     ):
         tx = await self.amend_order_tx(
             market=market, order_id=order_id, new_amount=new_amount, new_price=new_price, **kwargs
@@ -298,7 +301,7 @@ class ExecutionClient:
         return await tx.send_wait()
 
     async def cancel_order_tx(
-        self, market: Market, order_id: int, **kwargs
+            self, market: Market, order_id: int, **kwargs
     ) -> TypedContractFunction[OrderCanceledEvent | None]:
         """
         Cancel an existing order.
@@ -339,7 +342,7 @@ class ExecutionClient:
             await self.cancel_order(market, order.order_id, **kwargs)
 
     async def get_balance(
-        self, token_address: ChecksumAddress, account: Optional[ChecksumAddress] = None
+            self, token_address: ChecksumAddress, account: Optional[ChecksumAddress] = None
     ) -> Tuple[float, float]:
         """
         Get token balance for an account both on-chain and in the exchange.
@@ -368,12 +371,10 @@ class ExecutionClient:
         return wallet_balance, exchange_balance
 
     async def get_order(self, market: Market, order_id: int) -> Order:
-        clob = self.clob.get_clob(market.address)
-        order = await clob.get_order(order_id)
-        return self._convert_contract_order_to_model(market, order)
+        return await self._orderbook.get_order(market, order_id)
 
     async def get_open_orders(
-        self, market: Market, address: ChecksumAddress | None = None
+            self, market: Market, level: int | None = None
     ) -> List[Order]:
         """
         Get all orders for a specific market and address from the chain directly.
@@ -381,78 +382,17 @@ class ExecutionClient:
 
         Args:
             market: Market to get orders from
-            address: Address to filter orders by (None for all)
+            level: Number of price levels to retrieve (None for all)
+
 
         Returns:
             List of Order objects
         """
-        clob = self.clob.get_clob(market.address)
-        best_bid, best_ask = await clob.get_tob()
-        orders = []
-        # Get all orders for the bid and ask price levels
-        price_level = best_bid
-        tasks = []
-
-        while price_level > 0:
-            tasks.append(
-                asyncio.create_task(
-                    self.get_orders_for_price_level(
-                        market=market, price=price_level, side=Side.BUY, address=address
-                    )
-                )
-            )
-            price_level = await clob.get_next_smallest_price(price_level, Side.BUY)
-        price_level = best_ask
-        while price_level > 0:
-            tasks.append(
-                asyncio.create_task(
-                    self.get_orders_for_price_level(
-                        market=market, price=price_level, side=Side.SELL, address=address
-                    )
-                )
-            )
-            price_level = await clob.get_next_biggest_price(price_level, Side.SELL)
-
-        address = address or self.main_account
-        for task in tasks:
-            try:
-                pl_orders = await task
-                for order in pl_orders:
-                    if order.owner != address:
-                        continue
-                    orders.append(order)
-            except Exception as e:
-                logger.error(f"Error getting orders: {e}")
-        return orders
-
-    async def get_orders_for_price_level(
-        self, market: Market, price: int, side: Side, address: ChecksumAddress | None = None
-    ) -> List[Order]:
-        """
-        Get all orders for a specific price level.
-
-        Args:
-            market: Market to get orders from
-            price: Price level to filter orders by
-            side: Side of the order (BUY or SELL)
-            address: Address to filter orders by (None for all)
-
-        Returns:
-            List of Order objects
-        """
-        clob = self.clob.get_clob(market.address)
-        orders = []
-        (num, head, tail) = await clob.get_limit(price, side)
-        order_id = head
-        for i in range(num):
-            order = await clob.get_order(order_id)
-            if address is None or order.owner == address:
-                orders.append(self._convert_contract_order_to_model(market, order))
-            order_id = order.nextOrderId
-        return orders
+        orders = await self._orderbook.get_open_orders(market, level=level)
+        return [o for o in orders if o.owner == self.main_account]
 
     async def get_open_orders_rest(
-        self, address: Optional[ChecksumAddress] = None, market_address: ChecksumAddress = None
+            self, address: Optional[ChecksumAddress] = None, market_address: ChecksumAddress = None
     ) -> List[Order]:
         """
         Get open orders for an address on a specific market using the REST API.
@@ -478,7 +418,7 @@ class ExecutionClient:
             return []
 
     async def get_filled_orders(
-        self, address: Optional[ChecksumAddress] = None, market_address: ChecksumAddress = None
+            self, address: Optional[ChecksumAddress] = None, market_address: ChecksumAddress = None
     ) -> List[Order]:
         """
         Get filled orders for an address on a specific market using the REST API.
@@ -504,7 +444,7 @@ class ExecutionClient:
             return []
 
     async def get_order_history(
-        self, address: Optional[ChecksumAddress] = None, market_address: ChecksumAddress = None
+            self, address: Optional[ChecksumAddress] = None, market_address: ChecksumAddress = None
     ) -> List[Order]:
         """
         Get order history for an address on a specific market using the REST API.
@@ -530,9 +470,9 @@ class ExecutionClient:
             return []
 
     def _convert_contract_order_to_model(
-        self,
-        market: Market,
-        order_data: CLOBOrder,
+            self,
+            market: Market,
+            order_data: CLOBOrder,
     ) -> Order:
         """
         Convert contract order data to Order model.
@@ -550,7 +490,7 @@ class ExecutionClient:
         if order_data.amount == 0:
             status = OrderStatus.FILLED
         elif (
-            order_data.cancelTimestamp > 0 and order_data.cancelTimestamp < get_current_timestamp()
+                order_data.cancelTimestamp > 0 and order_data.cancelTimestamp < get_current_timestamp()
         ):
             status = OrderStatus.EXPIRED
 

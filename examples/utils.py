@@ -134,7 +134,7 @@ async def show_all_orders(client: Client, market: Market):
 
     try:
         # Get all orders for the market
-        orders: List[Order] = await client.execution.get_open_orders(market)
+        orders: List[Order] = await client.orderbook.get_open_orders(market, level=5)
 
         # Display order details
         for order in orders:

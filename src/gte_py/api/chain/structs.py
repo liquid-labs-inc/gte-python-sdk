@@ -217,7 +217,6 @@ class CLOBOrder:
             amount=order_tuple[7],
         )
 
-
 class OrderStruct(TypedDict):
     """Order structure from contract."""
 
