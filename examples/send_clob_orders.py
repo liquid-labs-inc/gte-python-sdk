@@ -7,7 +7,6 @@ from typing import Optional
 from web3.types import TxReceipt
 
 # from examples.utils import show_all_orders
-from gte_py.api.chain.iclob_historical import CLOBHistoricalQuerier
 from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
@@ -140,10 +139,10 @@ async def display_recent_matches(client: Client, market: Market, block_range: in
         from_block = max(1, current_block - block_range)
 
         # Initialize the historical querier
-        historical_querier = CLOBHistoricalQuerier(client._web3, market.address)
+        clob = client.clob.get_clob(market.address)
 
         # Fetch recent order matches
-        matches = await historical_querier.query_order_matched(from_block=from_block)
+        matches = await clob.get_order_matched_events(from_block)
 
         if not matches:
             print(f"No order matches found in the last {block_range} blocks")
@@ -196,7 +195,6 @@ async def main() -> None:
 
     bid, ask = await client.orderbook.get_tob(market)
     price = market.base.convert_amount_to_quantity(bid)
-    # price = 1.0
     amount = 1.0
 
     # Deposit tokens example

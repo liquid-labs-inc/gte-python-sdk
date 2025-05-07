@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from math import floor, log10
 from typing import Any, List, Optional, Tuple
 
 from eth_typing import ChecksumAddress
@@ -50,6 +51,14 @@ class OrderStatus(Enum):
     REJECTED = "rejected"
 
 
+def round_decimals(n: float, sig: int) -> float:
+    """Round a number to a specified number of significant digits."""
+    if n == 0:
+        return 0.0
+    else:
+        return round(n, sig - int(floor(log10(abs(n)))) - 1)
+
+
 @dataclass
 class Token:
     """Asset model."""
@@ -66,7 +75,7 @@ class Token:
     def convert_amount_to_quantity(self, amount: int) -> float:
         """Convert amount in base units to float."""
         assert isinstance(amount, int), f"amount {amount} is not an integer"
-        return amount / (10 ** self.decimals)
+        return round_decimals(amount / (10 ** self.decimals), sig=8)
 
     def convert_quantity_to_amount(self, quantity: float) -> int:
         """Convert amount in float to base units."""
@@ -316,11 +325,11 @@ class Order:
         status_str = data.get("status", "open")
 
         return cls(
-            order_id=data.get("id", ""),
+            order_id=data.get("id", 0),
             market_address=data.get("marketAddress", ""),
             side=Side(side_str),
             order_type=OrderType(type_str),
-            amount=data.get("amount", 0.0),
+            amount=data.get("amount", 0),
             price=data.get("price"),
             time_in_force=TimeInForce(tif_str),
             status=OrderStatus(status_str),

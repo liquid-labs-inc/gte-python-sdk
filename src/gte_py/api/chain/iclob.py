@@ -1,19 +1,22 @@
-from typing import TypeVar
+from typing import TypeVar, Union, List, Dict, Optional, AsyncIterator, Any, Tuple, Callable
 
 from eth_typing import ChecksumAddress
 from typing_extensions import Unpack
 from web3 import AsyncWeb3
 from web3.types import TxParams
 
+from .event_source import EventSource, EventStream
 from .events import (
     LimitOrderProcessedEvent,
     FillOrderProcessedEvent,
     OrderAmendedEvent,
     OrderCanceledEvent,
+    OrderMatchedEvent,
     parse_limit_order_processed,
     parse_fill_order_processed,
     parse_order_amended,
     parse_order_canceled,
+    parse_order_matched,
 )
 from .structs import (
     FillOrderType,
@@ -27,6 +30,7 @@ from .structs import (
     Side,
 )
 from .utils import TypedContractFunction, load_abi
+from gte_py.models import OrderBookSnapshot
 
 # Type variable for contract function return types
 T = TypeVar("T")
@@ -46,12 +50,14 @@ class ICLOB:
     - Posting fill orders
     - Order management (amend, cancel)
     - Order book information retrieval
+    - Historical event queries
+    - Real-time event streaming
     """
 
     def __init__(
-        self,
-        web3: AsyncWeb3,
-        contract_address: ChecksumAddress,
+            self,
+            web3: AsyncWeb3,
+            contract_address: ChecksumAddress,
     ):
         """
         Initialize the ICLOB wrapper.
@@ -65,6 +71,37 @@ class ICLOB:
         loaded_abi = load_abi("iclob")
         self.contract = self.web3.eth.contract(address=self.address, abi=loaded_abi)
 
+        # Initialize event sources
+        self._limit_order_processed_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.LimitOrderProcessed,
+            parser=parse_limit_order_processed
+        )
+
+        self._fill_order_processed_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.FillOrderProcessed,
+            parser=parse_fill_order_processed
+        )
+
+        self._order_amended_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.OrderAmended,
+            parser=parse_order_amended
+        )
+
+        self._order_canceled_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.OrderCanceled,
+            parser=parse_order_canceled
+        )
+
+        self._order_matched_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.OrderMatched,
+            parser=parse_order_matched
+        )
+
     # ================= READ METHODS =================
 
     async def get_quote_token(self) -> ChecksumAddress:
@@ -77,7 +114,7 @@ class ICLOB:
 
     # factory, mask?, quote, base, quote size, base size
     async def get_market_config(
-        self,
+            self,
     ) -> tuple[ChecksumAddress, int, ChecksumAddress, ChecksumAddress, int, int]:
         """Get the market configuration settings for the CLOB."""
         return await self.contract.functions.getMarketConfig().call()
@@ -282,7 +319,7 @@ class ICLOB:
     # ================= WRITE METHODS =================
 
     def post_limit_order(
-        self, account: ChecksumAddress, args: ICLOBPostLimitOrderArgs, **kwargs: Unpack[TxParams]
+            self, account: ChecksumAddress, args: ICLOBPostLimitOrderArgs, **kwargs: Unpack[TxParams]
     ) -> TypedContractFunction[LimitOrderProcessedEvent]:
         """
         Post a limit order to the CLOB.
@@ -302,7 +339,7 @@ class ICLOB:
         )
 
     def post_fill_order(
-        self, account: ChecksumAddress, args: ICLOBPostFillOrderArgs, **kwargs: Unpack[TxParams]
+            self, account: ChecksumAddress, args: ICLOBPostFillOrderArgs, **kwargs: Unpack[TxParams]
     ) -> TypedContractFunction[FillOrderProcessedEvent]:
         """
         Post a fill order to the CLOB.
@@ -322,7 +359,7 @@ class ICLOB:
         )
 
     def amend(
-        self, account: ChecksumAddress, args: ICLOBAmendArgs, **kwargs
+            self, account: ChecksumAddress, args: ICLOBAmendArgs, **kwargs
     ) -> TypedContractFunction[OrderAmendedEvent]:
         """
         Amend an existing order.
@@ -344,7 +381,7 @@ class ICLOB:
         )
 
     def cancel(
-        self, account: ChecksumAddress, args: ICLOBCancelArgs, **kwargs
+            self, account: ChecksumAddress, args: ICLOBCancelArgs, **kwargs
     ) -> TypedContractFunction[OrderCanceledEvent]:
         """
         Cancel one or more orders.
@@ -398,7 +435,7 @@ class ICLOB:
         return TypedContractFunction(func, params)
 
     def transfer_ownership(
-        self, new_owner: ChecksumAddress, **kwargs: Unpack[TxParams]
+            self, new_owner: ChecksumAddress, **kwargs: Unpack[TxParams]
     ) -> TypedContractFunction[None]:
         """
         Transfer ownership of the contract.
@@ -417,7 +454,7 @@ class ICLOB:
         return TypedContractFunction(func, params)
 
     def set_max_limits_exempt(
-        self, account: ChecksumAddress, toggle: bool, **kwargs
+            self, account: ChecksumAddress, toggle: bool, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Set whether an account is exempt from the max limits restriction.
@@ -454,7 +491,7 @@ class ICLOB:
         return TypedContractFunction(func, params)
 
     def set_min_limit_order_amount_in_base(
-        self, new_min_amount: int, **kwargs
+            self, new_min_amount: int, **kwargs
     ) -> TypedContractFunction[None]:
         """
         Set the minimum amount in base for limit orders.
@@ -489,17 +526,199 @@ class ICLOB:
         }
         return TypedContractFunction(func, params)
 
+    # ================= EVENT METHODS =================
+
+    async def get_limit_order_processed_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[LimitOrderProcessedEvent]:
+        """
+        Get historical LimitOrderProcessed events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of LimitOrderProcessed events
+        """
+        return await self._limit_order_processed_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_limit_order_processed_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[LimitOrderProcessedEvent]:
+        """
+        Stream LimitOrderProcessed events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of LimitOrderProcessed events
+        """
+        return self._limit_order_processed_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+
+    async def get_fill_order_processed_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[FillOrderProcessedEvent]:
+        """
+        Get historical FillOrderProcessed events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of FillOrderProcessed events
+        """
+        return await self._fill_order_processed_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_fill_order_processed_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[FillOrderProcessedEvent]:
+        """
+        Stream FillOrderProcessed events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of FillOrderProcessed events
+        """
+        return self._fill_order_processed_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+
+    async def get_order_amended_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[OrderAmendedEvent]:
+        """
+        Get historical OrderAmended events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of OrderAmended events
+        """
+        return await self._order_amended_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_order_amended_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[OrderAmendedEvent]:
+        """
+        Stream OrderAmended events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of OrderAmended events
+        """
+        return self._order_amended_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+
+    async def get_order_canceled_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[OrderCanceledEvent]:
+        """
+        Get historical OrderCanceled events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of OrderCanceled events
+        """
+        return await self._order_canceled_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_order_canceled_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[OrderCanceledEvent]:
+        """
+        Stream OrderCanceled events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of OrderCanceled events
+        """
+        return self._order_canceled_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+
+    async def get_order_matched_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[OrderMatchedEvent]:
+        """
+        Get historical OrderMatched events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of OrderMatched events
+        """
+        return await self._order_matched_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_order_matched_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[OrderMatchedEvent]:
+        """
+        Stream OrderMatched events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of OrderMatched events
+        """
+        return self._order_matched_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+
     # ================= HELPER METHODS =================
 
     def create_post_limit_order_args(
-        self,
-        amount_in_base: int,
-        price: int,
-        side: Side,
-        cancel_timestamp: int = 0,
-        client_order_id: int = 0,
-        limit_order_type: int = LimitOrderType.GOOD_TILL_CANCELLED,
-        settlement: int = Settlement.INSTANT,
+            self,
+            amount_in_base: int,
+            price: int,
+            side: Side,
+            cancel_timestamp: int = 0,
+            client_order_id: int = 0,
+            limit_order_type: int = LimitOrderType.GOOD_TILL_CANCELLED,
+            settlement: int = Settlement.INSTANT,
     ) -> ICLOBPostLimitOrderArgs:
         """
         Create a PostLimitOrderArgs struct for use with post_limit_order.
@@ -527,13 +746,13 @@ class ICLOB:
         }
 
     def create_post_fill_order_args(
-        self,
-        amount: int,
-        price_limit: int,
-        side: Side,
-        amount_is_base: bool = True,
-        fill_order_type: int = FillOrderType.IMMEDIATE_OR_CANCEL,
-        settlement: int = Settlement.INSTANT,
+            self,
+            amount: int,
+            price_limit: int,
+            side: Side,
+            amount_is_base: bool = True,
+            fill_order_type: int = FillOrderType.IMMEDIATE_OR_CANCEL,
+            settlement: int = Settlement.INSTANT,
     ) -> ICLOBPostFillOrderArgs:
         """
         Create a PostFillOrderArgs struct for use with post_fill_order.
@@ -559,14 +778,14 @@ class ICLOB:
         }
 
     def create_amend_args(
-        self,
-        order_id: int,
-        amount_in_base: int,
-        price: int,
-        side: Side,
-        cancel_timestamp: int = 0,
-        limit_order_type: int = LimitOrderType.GOOD_TILL_CANCELLED,
-        settlement: int = Settlement.INSTANT,
+            self,
+            order_id: int,
+            amount_in_base: int,
+            price: int,
+            side: Side,
+            cancel_timestamp: int = 0,
+            limit_order_type: int = LimitOrderType.GOOD_TILL_CANCELLED,
+            settlement: int = Settlement.INSTANT,
     ) -> ICLOBAmendArgs:
         """
         Create an AmendArgs struct for use with amend.
@@ -594,7 +813,7 @@ class ICLOB:
         }
 
     def create_cancel_args(
-        self, order_ids: list[int], settlement: int = Settlement.INSTANT
+            self, order_ids: list[int], settlement: int = Settlement.INSTANT
     ) -> ICLOBCancelArgs:
         """
         Create a CancelArgs struct for use with cancel.
