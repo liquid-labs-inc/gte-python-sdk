@@ -9,6 +9,8 @@ from typing import Any, List, Optional, Tuple
 from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
+
+from gte_py.api.chain.events import LimitOrderProcessedEvent, FillOrderProcessedEvent
 from gte_py.api.chain.structs import Side as ContractSide, CLOBOrder
 from gte_py.api.chain.utils import get_current_timestamp
 
@@ -361,6 +363,52 @@ class Order:
             time_in_force=TimeInForce.GTC,  # Default
             status=status,
             owner=clob.owner,
+            created_at=0,  # Need to be retrieved from event timestamp
+        )
+
+    @classmethod
+    def from_clob_limit_order_processed(
+            cls, event: LimitOrderProcessedEvent, amount: int, side: Side, price: int
+    ) -> "Order":
+        """Create an Order object from a CLOB limit order."""
+        status = OrderStatus.OPEN
+        if event.base_token_amount_traded == amount:
+            status = OrderStatus.FILLED
+
+        # Create Order model
+        return cls(
+            order_id=event.order_id,
+            market_address=event.address,
+            side=side,
+            order_type=OrderType.LIMIT,
+            amount=amount,
+            price=price,
+            time_in_force=TimeInForce.GTC,  # Default
+            status=status,
+            owner=event.account,
+            created_at=0,  # Need to be retrieved from event timestamp
+        )
+
+    @classmethod
+    def from_clob_fill_order_processed(
+            cls, event: FillOrderProcessedEvent, amount: int, side: Side, price: int
+    ) -> "Order":
+        """Create an Order object from a CLOB limit order."""
+        status = OrderStatus.OPEN
+        if event.base_token_amount_traded == amount:
+            status = OrderStatus.FILLED
+
+        # Create Order model
+        return cls(
+            order_id=event.order_id,
+            market_address=event.address,
+            side=side,
+            order_type=OrderType.LIMIT,
+            amount=amount,
+            price=price,
+            time_in_force=TimeInForce.GTC,  # Default
+            status=status,
+            owner=event.account,
             created_at=0,  # Need to be retrieved from event timestamp
         )
 

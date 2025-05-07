@@ -8,7 +8,7 @@ from typing_extensions import Unpack
 from web3 import AsyncWeb3
 from web3.types import TxParams
 
-from gte_py.api.chain.events import OrderCanceledEvent
+from gte_py.api.chain.events import OrderCanceledEvent, FillOrderProcessedEvent, LimitOrderProcessedEvent
 from gte_py.api.chain.structs import Side, Settlement, LimitOrderType, FillOrderType, CLOBOrder
 from gte_py.api.chain.utils import get_current_timestamp, TypedContractFunction
 from gte_py.api.rest import RestApi
@@ -67,8 +67,8 @@ class ExecutionClient:
             price: int,
             time_in_force: TimeInForce = TimeInForce.GTC,
             client_order_id: int = 0,
-        **kwargs,
-    ) -> TypedContractFunction:
+            **kwargs,
+    ) -> TypedContractFunction[FillOrderProcessedEvent | LimitOrderProcessedEvent]:
         """
         Place a limit order on the CLOB.
 
@@ -146,7 +146,7 @@ class ExecutionClient:
             price: int,
             time_in_force: TimeInForce = TimeInForce.GTC,
             client_order_id: int = 0,
-        **kwargs: Unpack[TxParams],
+            **kwargs: Unpack[TxParams],
     ) -> Awaitable[Order]:
         tx = self.place_limit_order_tx(
             market=market,
@@ -158,7 +158,22 @@ class ExecutionClient:
             **kwargs,
         )
         tx.send_nowait()
-        return tx.retrieve()
+
+        async def task():
+            log = await tx.retrieve()
+            if isinstance(log, FillOrderProcessedEvent):
+                order = Order.from_clob_fill_order_processed(
+                    log, amount, side, price
+                )
+            elif isinstance(log, LimitOrderProcessedEvent):
+                order = Order.from_clob_limit_order_processed(
+                    log, amount, side, price
+                )
+            else:
+                raise ValueError(f"Unknown event type: {log.event_name}")
+            return order
+
+        return task()
 
     async def place_market_order_tx(
             self,

@@ -43,7 +43,6 @@ class LimitOrderProcessedEvent(CLOBEvent):
     base_token_amount_traded: int
     taker_fee: int
 
-
 @dataclass
 class FillOrderSubmittedEvent(CLOBEvent):
     """Event emitted when a fill order is submitted."""
