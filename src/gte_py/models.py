@@ -51,12 +51,14 @@ class OrderStatus(Enum):
     REJECTED = "rejected"
 
 
-def round_decimals(n: float, sig: int) -> float:
+def round_decimals_int(n: float, sig: int) -> int:
     """Round a number to a specified number of significant digits."""
-    if n == 0:
-        return 0.0
+    n_int = round(n)
+    if n_int == 0:
+        return 0
     else:
-        return round(n, sig - int(floor(log10(abs(n)))) - 1)
+        d = sig - int(floor(log10(abs(n_int)))) - 1
+        return round(n_int, d)
 
 
 @dataclass
@@ -80,7 +82,9 @@ class Token:
     def convert_quantity_to_amount(self, quantity: float) -> int:
         """Convert amount in float to base units."""
         assert isinstance(quantity, float), f"quantity {quantity} is not a float"
-        return int(round_decimals(quantity * (10 ** self.decimals), sig=8))
+        scaled = quantity * (10 ** self.decimals)
+        rounded = round_decimals_int(scaled, sig=8)
+        return rounded
 
     @classmethod
     def from_api(cls, data: dict[str, Any], with_balance: bool = False) -> "Token":
