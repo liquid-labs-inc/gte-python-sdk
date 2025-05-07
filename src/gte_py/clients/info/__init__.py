@@ -5,7 +5,7 @@ import logging
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 
-from gte_py.api.chain.iclob import ICLOB
+from gte_py.api.chain.clob import ICLOB
 from gte_py.api.rest import RestApi
 from gte_py.clients.token import TokenClient
 from gte_py.clients.clob import CLOBClient
