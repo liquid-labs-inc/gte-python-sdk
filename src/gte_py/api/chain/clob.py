@@ -68,7 +68,7 @@ class ICLOB:
         """
         self.web3 = web3
         self.address = contract_address
-        loaded_abi = load_abi("iclob")
+        loaded_abi = load_abi("clob")
         self.contract = self.web3.eth.contract(address=self.address, abi=loaded_abi)
 
         # Initialize event sources
