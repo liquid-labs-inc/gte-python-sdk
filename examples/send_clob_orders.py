@@ -64,7 +64,6 @@ async def limit_order_example(client: Client, market: Market, quantity: float, p
         results.append(order.order_id)
         await get_order_status(client, market, order.order_id)
 
-
     print(f"Creating SELL limit order at price: {price}")
     order = await client.execution.place_limit_order(
         market=market,
@@ -151,9 +150,17 @@ async def display_recent_matches(client: Client, market: Market, block_range: in
             return
 
         print(f"Found {len(matches)} recent order matches:")
+
         for i, match in enumerate(matches, 1):
             print(f"\nMatch #{i}:")
             print(f"  Block: {match.block_number}")
+            print(f"  Transaction Hash: {match.tx_hash}")
+            print(f"  Maker Order ID: {match.maker_order_id}")
+            print(f"  Taker Order ID: {match.taker_order_id}")
+            print(f"  Maker Order: {match.maker_order}")
+            print(f"  Taker Order: {match.taker_order}")
+            print(f"  Traded Base: {match.traded_base}")
+
 
     except Exception as e:
         print(f"Error fetching recent order matches: {str(e)}")
@@ -189,7 +196,8 @@ async def main() -> None:
 
     bid, ask = await client.orderbook.get_tob(market)
     price = market.base.convert_amount_to_quantity(bid)
-    amount = 0.1
+    # price = 1.0
+    amount = 1.0
 
     # Deposit tokens example
     await approve_and_deposit_example(client, market, quantity=amount, price=price)

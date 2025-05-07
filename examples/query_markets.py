@@ -5,47 +5,9 @@ import asyncio
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 
-import gte_py.models
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
-from utils import print_separator, format_price, MARKET_ADDRESS
-
-
-async def query_specific_market(client: Client, market_address: ChecksumAddress) -> gte_py.models.Market:
-    """Query a specific market by address."""
-    print_separator("Specific Market Query")
-
-    # Get a specific market by address
-    print(f"Fetching market with address: {market_address}")
-    market = await client.info.get_market(market_address)
-
-    # Display market information
-    print(f"Market: {market.pair} ({market.address})")
-    if hasattr(market, 'market_type'):
-        print(f"Type: {market.market_type.value}")
-    print(f"Price: {format_price(market.price)}")
-    print(f"24h Volume: {market.volume_24h if market.volume_24h else 'N/A'}")
-
-    # Base asset details
-    print("\nBase Asset:")
-    print(f"  Symbol: {market.base.symbol}")
-    print(f"  Address: {market.base.address}")
-    print(f"  Decimals: {market.base.decimals}")
-
-    # Quote asset details
-    print("\nQuote Asset:")
-    print(f"  Symbol: {market.quote.symbol}")
-    print(f"  Address: {market.quote.address}")
-    print(f"  Decimals: {market.quote.decimals}")
-
-    # On-chain details if available
-    if market.address:
-        print("\nOn-chain Details:")
-        print(f"  Contract: {market.address}")
-        print(f"  Base Token: {market.base.address}")
-        print(f"  Quote Token: {market.quote.address}")
-
-    return market
+from utils import print_separator, MARKET_ADDRESS, display_market_info
 
 
 async def query_market_trades(client: Client, market_address: ChecksumAddress) -> None:
@@ -79,8 +41,8 @@ async def main() -> None:
     )
 
     market_address = MARKET_ADDRESS
-    market = await query_specific_market(client, market_address)
-    # await query_market_trades(client, market_address)
+    market = await display_market_info(client, market_address)
+    await query_market_trades(client, market_address)
 
 
 if __name__ == "__main__":
