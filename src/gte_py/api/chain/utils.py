@@ -4,17 +4,19 @@ import json
 import logging
 import time
 import warnings
-from typing import Any, Generic, TypeVar, Callable, Tuple, Dict, Awaitable, cast, Set
+from typing import Any, Generic, TypeVar, Callable, Tuple, Dict, Awaitable, Optional, List
 
 from eth_account import Account
+from eth_account.datastructures import SignedTransaction
+from eth_account.signers.local import LocalAccount
 from eth_account.types import PrivateKeyType
 from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
 from web3.contract.async_contract import AsyncContractFunction
-from web3.exceptions import ContractCustomError, TransactionNotFound, Web3Exception
+from web3.exceptions import ContractCustomError, Web3Exception
 from web3.middleware import SignAndSendRawMiddlewareBuilder, validation
-from web3.types import TxParams, EventData, Nonce, RPCEndpoint
+from web3.types import TxParams, EventData, Nonce, Wei
 
 from gte_py.configs import NetworkConfig
 from gte_py.error import (
@@ -188,8 +190,6 @@ class TypedContractFunction(Generic[T]):
                 self.web3.eth.default_account
             ]
             self.tx_hash = instance.send_request(tx)
-            if _show_pending:
-                logger.info("tx#%d sent: %s", self.tx_id, 'pending')
 
             return self.tx_hash
         except ContractCustomError as e:
@@ -321,16 +321,17 @@ async def make_web3(
     """
     w3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(network.rpc_http))
 
-    warnings.warn("web3.middleware.validation.METHODS_TO_VALIDATE is set to [] to avoid repetitive get_chainId. This will affect all web3 instances.")
+    warnings.warn(
+        "web3.middleware.validation.METHODS_TO_VALIDATE is set to [] to avoid repetitive get_chainId. This will affect all web3 instances.")
     validation.METHODS_TO_VALIDATE = []
 
     if wallet_address:
         w3.eth.default_account = wallet_address
     if wallet_private_key:
-        account = Account.from_key(wallet_private_key)
+        account: LocalAccount = Account.from_key(wallet_private_key)
         w3.eth.default_account = account.address
         w3.middleware_onion.inject(SignAndSendRawMiddlewareBuilder.build(account), layer=0)
-        await Web3RequestManager.ensure_instance(w3, account.address)
+        await Web3RequestManager.ensure_instance(w3, account)
     return w3
 
 
@@ -339,122 +340,173 @@ class Web3RequestManager:
 
     @classmethod
     async def ensure_instance(
-            cls, web3: AsyncWeb3, account_address: ChecksumAddress
+            cls, web3: AsyncWeb3,
+            account: LocalAccount
     ) -> "Web3RequestManager":
         """Ensure a singleton instance of Web3RequestManager for the given account address"""
-        if account_address not in cls.instances:
-            cls.instances[account_address] = Web3RequestManager(web3, account_address)
-            await cls.instances[account_address].start()
-        return cls.instances[account_address]
+        if account.address not in cls.instances:
+            cls.instances[account.address] = Web3RequestManager(web3, account)
+            await cls.instances[account.address].start()
+        return cls.instances[account.address]
 
-    def __init__(self, web3: AsyncWeb3, account_address: ChecksumAddress):
+    def __init__(self, web3: AsyncWeb3, account: LocalAccount):
         self.web3 = web3
-        self.account_address = account_address
+        self.account = account
         self.request_queue: asyncio.Queue[Tuple[TxParams | Awaitable[TxParams], asyncio.Future[HexBytes]]] = (
             asyncio.Queue()
         )
-        self.pending_transactions: Dict[int, HexBytes] = {}  # {nonce: tx_hash}
-        self.current_nonce: int = 0
+        self.nonces: List[Nonce] = []
+        self.next_nonce: Nonce = Nonce(0)
         self.lock = asyncio.Lock()
         self.is_running = False
         self.confirmation_task = None
+        self.process_transactions_task = None
+        self.logger = logging.getLogger(__name__)
 
     async def start(self):
         """Initialize and start processing"""
         await self.sync_nonce()
         self.is_running = True
         self.confirmation_task = asyncio.create_task(self._monitor_confirmations())
-        asyncio.create_task(self._process_transactions())
+        self.process_transactions_task = asyncio.create_task(self._process_transactions())
 
     async def stop(self):
         """Graceful shutdown"""
         self.is_running = False
         if self.confirmation_task:
             await self.confirmation_task
+        if self.process_transactions_task:
+            await self.process_transactions_task
 
     async def sync_nonce(self):
         """Update nonce from blockchain state"""
         async with self.lock:
-            latest = await self.web3.eth.get_transaction_count(
-                self.account_address, block_identifier="latest"
+            latest: Nonce = await self.web3.eth.get_transaction_count(
+                self.account.address, block_identifier="latest"
             )
-            pending = await self.web3.eth.get_transaction_count(
-                self.account_address, block_identifier="pending"
+            pending: Nonce = await self.web3.eth.get_transaction_count(
+                self.account.address, block_identifier="pending"
             )
-            self.current_nonce = max(latest, pending)
-            self._cleanup_confirmed_nonces(latest)
+            self.next_nonce = max(latest, pending, self.next_nonce)
 
-    async def bump_nonce(self):
-        """Increment nonce for the next transaction"""
+            # Filling up nonce gaps but one at a time
+            if len(self.nonces) > 0:
+                nonce = self.nonces[0]
+                if nonce + 1 < self.next_nonce:
+                    self.logger.info(
+                        f"Nonce gap exists from {nonce} up to {self.next_nonce}"
+                    )
+                    self.nonces.pop(0)
+                    await self.fill_up_nonce_gap(nonce)
+
+    async def get_nonce(self):
         async with self.lock:
-            self.current_nonce += 1
-            return self.current_nonce
+            if len(self.nonces) == 0:
+                nonce = self.next_nonce
+                self.logger.debug(f"Get nonce {nonce}")
+                self.next_nonce += 1
+            else:
+                nonce = self.nonces.pop(0)
+                self.logger.debug(f"Get nonce {nonce}")
+            return nonce
 
-    def _cleanup_confirmed_nonces(self, latest_nonce):
-        """Remove confirmed transactions from pending set"""
-        for nonce in list(self.pending_transactions.keys()):
-            if nonce < latest_nonce:
-                del self.pending_transactions[nonce]
+    async def put_nonce(self, nonce):
+        self.logger.debug(f"Put nonce {nonce}")
+        self.nonces.append(nonce)
+        self.nonces.sort()
+
+        while len(self.nonces) > 0:
+            nonce = self.nonces[-1]
+            if nonce + 1 == self.next_nonce:
+                self.logger.info(f"Recycling nonce {nonce}")
+                self.nonces.pop()
+                self.next_nonce = nonce
+            else:
+                break
+
+    async def fill_up_nonce_gap(self, nonce):
+        assert nonce >= 0, "nonce should be non-negative"
+        self.logger.info(f"Filling up nonce {nonce}")
+        await self.cancel_transaction(nonce)
+
+    async def cancel_transaction(self, nonce: Nonce) -> Optional[HexBytes]:
+        """
+        Cancel a pending transaction by submitting a replacement with higher gas price.
+
+        Args:
+            nonce: The nonce of the transaction to cancel
+
+        Returns:
+            Transaction hash of the cancellation transaction if successful, None otherwise
+        """
+        async with self.lock:
+            # Get current gas price and increase it
+            gas_price = await self.web3.eth.gas_price
+            gas_price_multiplier = 1.5
+            new_gas_price = Wei(int(gas_price * gas_price_multiplier))
+
+            # Create a transaction sending 0 ETH to ourselves (cancellation)
+            cancel_tx: TxParams = {
+                "from": self.account.address,
+                "to": self.account.address,
+                "value": Wei(0),
+                "nonce": Nonce(nonce),
+                "gasPrice": new_gas_price,
+                "gas": 21000  # Minimum gas limit
+            }
+            await self._send_transaction(cancel_tx, nonce)
 
     async def _process_transactions(self):
-        """Main transaction processing loop"""
         while self.is_running:
             tx, future = await self.request_queue.get()
 
-            async with self.lock:
-                nonce = self.current_nonce
-                self.current_nonce += 1
             try:
+                nonce = await self.get_nonce()
+                # Process the transaction
                 if isinstance(tx, Awaitable):
                     tx = await tx
-                tx_hash = await self._send_transaction(tx, Nonce(nonce))
-                future.set_result(tx_hash)
-                self.pending_transactions[nonce] = tx_hash
+
+                tx_hash = await self._send_transaction(tx, nonce, future)
+                logger.info(f"Transaction with nonce {nonce} sent: {tx_hash.to_0x_hex()}")
 
             except Exception as e:
+                logger.error(f"Failed to send transaction: {e}")
                 future.set_exception(e)
-                await self._handle_processing_error(e)
 
     async def _monitor_confirmations(self):
         """Dedicated confirmation monitoring task"""
         while self.is_running:
             await asyncio.sleep(5)  # Check every 5 seconds
+            await self.sync_nonce()
 
-            async with self.lock:
-                pending_nonces = list(self.pending_transactions.keys())
-
-            for nonce in pending_nonces:
-                tx_hash = self.pending_transactions.get(nonce, None)
-                if not tx_hash:
-                    continue
-
-                try:
-                    receipt = await self.web3.eth.get_transaction_receipt(tx_hash)
-                    if receipt and receipt["blockNumber"]:
-                        # finished
-                        async with self.lock:
-                            del self.pending_transactions[nonce]
-                except TransactionNotFound:
-                    # Transaction not found, it might be pending
-                    continue
-                except Exception as e:
-                    logger.error("Error while checking transaction %s: %s", tx_hash.to_0x_hex(), e)
-                    async with self.lock:
-                        del self.pending_transactions[nonce]
-
-    async def _handle_processing_error(self, error):
-        """Handle transaction sending errors"""
-        if isinstance(error, (ValueError, TransactionNotFound)):
-            async with self.lock:
-                await self.sync_nonce()
-
-    async def _send_transaction(self, tx: TxParams, nonce: Nonce):
+    async def _send_transaction(self, tx: TxParams, nonce: Nonce, future: asyncio.Future[HexBytes] | None = None):
         """Transaction sending implementation"""
-        if "from" not in tx:
-            tx["from"] = self.account_address
-        if "nonce" not in tx:
+        try:
             tx["nonce"] = nonce
-        return await self.web3.eth.send_transaction(tx)
+            if "from" not in tx:
+                tx["from"] = self.account.address
+            if "maxFeePerGas" not in tx:
+                gas_price = await self.web3.eth.gas_price
+                tx["maxFeePerGas"] = gas_price
+            if "gas" not in tx:
+                gas = await self.web3.eth.estimate_gas(tx)
+                effective_gas = int(gas * 1.5)
+                tx["gas"] = effective_gas
+            signed_tx: SignedTransaction = self.web3.eth.account.sign_transaction(tx, self.account.key)
+            if future:
+                future.set_result(signed_tx.hash)
+            await self.web3.eth.send_raw_transaction(signed_tx.raw_transaction)
+            return signed_tx.hash
+        except Exception as e:
+            self.logger.error(f"Error sending transaction: {e}")
+            error = str(e)
+            nonce_already_known = (
+                    "replacement transaction underpriced" in error
+                    or "nonce too low" in error
+            )
+            if not nonce_already_known:
+                await self.put_nonce(nonce)
+            raise e
 
     def send_request(self, data: TxParams | Awaitable[TxParams]) -> Awaitable[HexBytes]:
         """Public API to submit transactions"""

@@ -186,10 +186,10 @@ async def main() -> None:
     # Show balances
     await show_balances(client, market)
     # Display all orders
-    await show_all_orders(client, market)
+    # await show_all_orders(client, market)
 
     # Display recent order matches
-    await display_recent_matches(client, market)
+    # await display_recent_matches(client, market)
 
     print("\nNOTE: For WETH wrapping and unwrapping examples, see wrap_weth.py")
 
@@ -209,7 +209,7 @@ async def main() -> None:
         await cancel_order_example(client, market, order_id)
 
     # Show all orders
-    await show_orders(client, market)
+    # await show_orders(client, market)
 
 
 if __name__ == "__main__":
