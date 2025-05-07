@@ -75,12 +75,12 @@ class Token:
     def convert_amount_to_quantity(self, amount: int) -> float:
         """Convert amount in base units to float."""
         assert isinstance(amount, int), f"amount {amount} is not an integer"
-        return round_decimals(amount / (10 ** self.decimals), sig=8)
+        return amount / (10 ** self.decimals)
 
     def convert_quantity_to_amount(self, quantity: float) -> int:
         """Convert amount in float to base units."""
         assert isinstance(quantity, float), f"quantity {quantity} is not a float"
-        return int(quantity * (10 ** self.decimals))
+        return int(round_decimals(quantity * (10 ** self.decimals), sig=8))
 
     @classmethod
     def from_api(cls, data: dict[str, Any], with_balance: bool = False) -> "Token":

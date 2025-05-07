@@ -195,16 +195,16 @@ async def main() -> None:
 
     bid, ask = await client.orderbook.get_tob(market)
     price = market.base.convert_amount_to_quantity(bid)
-    amount = 1.0
+    quantity = 1.0
 
     # Deposit tokens example
-    await approve_and_deposit_example(client, market, quantity=amount, price=price)
+    await approve_and_deposit_example(client, market, quantity=quantity, price=price)
 
     # Check balances after deposit
     await show_balances(client, market)
 
     # Order examples
-    order_ids = await limit_order_example(client, market, quantity=amount, price=price)
+    order_ids = await limit_order_example(client, market, quantity=quantity, price=price)
     for order_id in order_ids:
         await cancel_order_example(client, market, order_id)
 
