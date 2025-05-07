@@ -154,7 +154,7 @@ async def display_recent_matches(client: Client, market: Market, block_range: in
         for i, match in enumerate(matches, 1):
             print(f"\nMatch #{i}:")
             print(f"  Block: {match.block_number}")
-            print(f"  Transaction Hash: {match.tx_hash}")
+            print(f"  Transaction Hash: {match.tx_hash.to_0x_hex()}")
             print(f"  Maker Order ID: {match.maker_order_id}")
             print(f"  Taker Order ID: {match.taker_order_id}")
             print(f"  Maker Order: {match.maker_order}")

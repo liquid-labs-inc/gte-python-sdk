@@ -1,9 +1,10 @@
 """Event type classes for CLOB contract events."""
 
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-from eth_typing import ChecksumAddress, HexStr
+from eth_typing import ChecksumAddress
+from hexbytes import HexBytes
 from web3.types import EventData
 
 from .structs import OrderStruct, ICLOBPostLimitOrderArgs, ICLOBPostFillOrderArgs, ICLOBAmendArgs
@@ -13,7 +14,7 @@ from .structs import OrderStruct, ICLOBPostLimitOrderArgs, ICLOBPostFillOrderArg
 class CLOBEvent:
     """Base class for CLOB events."""
 
-    tx_hash: HexStr
+    tx_hash: HexBytes
     log_index: int
     block_number: int
     address: ChecksumAddress
