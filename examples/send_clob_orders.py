@@ -18,7 +18,7 @@ from utils import (
     show_balances,
     WALLET_ADDRESS,
     WALLET_PRIVATE_KEY,
-    MARKET_ADDRESS, show_all_orders
+    MARKET_ADDRESS, show_live_orders
 )
 
 
@@ -109,26 +109,6 @@ async def get_order_status(client: Client, market: Market, order_id: int) -> Non
         print(f"Couldn't fetch on-chain order status: {str(e)}")
 
 
-async def show_orders(client: Client, market: Market) -> None:
-    """Show orders for the user."""
-    print_separator("User Orders")
-
-    try:
-        orders = await client.execution.get_open_orders(market)
-
-        print(f"Orders for market {market.pair}:")
-        for order in orders:
-            print(f"  ID: {order.order_id}")
-            print(f"  Side: {order.side.name}")
-            print(f"  Price: {order.price}")
-            print(f"  Size: {getattr(order, 'size', order.amount)}")
-            print(f"  Status: {order.status.name if hasattr(order, 'status') else 'N/A'}")
-
-    except Exception as e:
-        print(f"Couldn't fetch on-chain orders: {str(e)}")
-        print("This feature requires AsyncWeb3 provider and a market with contract address")
-
-
 async def display_recent_matches(client: Client, market: Market, block_range: int = 1000) -> None:
     """Fetch and display recent order matches for the market."""
     print_separator("Recent Order Matches")
@@ -186,8 +166,8 @@ async def main() -> None:
     # Show balances
     await show_balances(client, market)
     # Display all orders
-    # await show_all_orders(client, market)
-
+    await show_live_orders(client, market)
+    return
     # Display recent order matches
     # await display_recent_matches(client, market)
 
@@ -209,7 +189,7 @@ async def main() -> None:
         await cancel_order_example(client, market, order_id)
 
     # Show all orders
-    # await show_orders(client, market)
+    # await show_all_orders(client, market)
 
 
 if __name__ == "__main__":

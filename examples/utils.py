@@ -128,13 +128,13 @@ async def display_token_balances(client: Client, token_address: ChecksumAddress,
         print(f"Error retrieving token details: {e}")
 
 
-async def show_all_orders(client: Client, market: Market):
-    """Show all orders for a market."""
+async def show_live_orders(client: Client, market: Market):
+    """Show live orders for a market and the account."""
     print_separator("All Orders")
 
     try:
         # Get all orders for the market
-        orders: List[Order] = await client.orderbook.get_open_orders(market, level=5)
+        orders: List[Order] = await client.execution.get_open_orders_rest(market)
 
         # Display order details
         for order in orders:

@@ -412,30 +412,21 @@ class ExecutionClient:
         return [o for o in orders if o.owner == self.main_account]
 
     async def get_open_orders_rest(
-            self, address: Optional[ChecksumAddress] = None, market_address: ChecksumAddress = None
+            self, market: Market
     ) -> List[Order]:
         """
         Get open orders for an address on a specific market using the REST API.
 
         Args:
             address: EVM address of the user (defaults to main account)
-            market_address: EVM address of the market
 
         Returns:
             List of Order objects representing open orders
         """
-        if address is None:
-            address = self.main_account
 
-        if market_address is None:
-            raise ValueError("market_address is required")
+        response = await self._rest.get_user_open_orders(self.main_account, market.address)
+        return [self._parse_open_order(order_data) for order_data in response]
 
-        try:
-            response = await self._rest.get_user_open_orders(address, market_address)
-            return [self._parse_open_order(order_data) for order_data in response]
-        except Exception as e:
-            logger.error(f"Error fetching open orders: {e}")
-            return []
 
     async def get_filled_orders(
             self, address: Optional[ChecksumAddress] = None, market_address: ChecksumAddress = None
