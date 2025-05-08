@@ -2,7 +2,7 @@ from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 
 from gte_py.api.chain.erc20 import ERC20
-from gte_py.api.chain.factory import CLOBFactory
+from gte_py.api.chain.clob_factory import CLOBFactory
 from gte_py.api.chain.clob import ICLOB
 from gte_py.api.chain.router import Router
 from gte_py.api.chain.weth import WETH

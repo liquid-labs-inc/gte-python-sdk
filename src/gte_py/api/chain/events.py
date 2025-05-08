@@ -43,6 +43,7 @@ class LimitOrderProcessedEvent(CLOBEvent):
     base_token_amount_traded: int
     taker_fee: int
 
+
 @dataclass
 class FillOrderSubmittedEvent(CLOBEvent):
     """Event emitted when a fill order is submitted."""
@@ -93,6 +94,111 @@ class OrderCanceledEvent(CLOBEvent):
     quote_token_refunded: int
     base_token_refunded: int
     settlement: int
+
+
+# CLOB Manager Events
+@dataclass
+class CLOBManagerEvent:
+    """Base class for CLOB Manager events."""
+
+    tx_hash: HexBytes
+    log_index: int
+    block_number: int
+    address: ChecksumAddress
+    event_name: str
+    raw_data: Dict[str, Any]
+    nonce: int
+
+
+@dataclass
+class AccountCreditedEvent(CLOBManagerEvent):
+    """Event emitted when an account is credited."""
+
+    account: ChecksumAddress
+    token: ChecksumAddress
+    amount: int
+
+
+@dataclass
+class AccountDebitedEvent(CLOBManagerEvent):
+    """Event emitted when an account is debited."""
+
+    account: ChecksumAddress
+    token: ChecksumAddress
+    amount: int
+
+
+@dataclass
+class AccountFeeTierUpdatedEvent(CLOBManagerEvent):
+    """Event emitted when an account fee tier is updated."""
+
+    account: ChecksumAddress
+    fee_tier: int
+
+
+@dataclass
+class DepositEvent(CLOBManagerEvent):
+    """Event emitted when a deposit is made."""
+
+    account: ChecksumAddress
+    funder: ChecksumAddress
+    token: ChecksumAddress
+    amount: int
+
+
+@dataclass
+class FeeCollectedEvent(CLOBManagerEvent):
+    """Event emitted when fees are collected."""
+
+    token: ChecksumAddress
+    fee: int
+
+
+@dataclass
+class FeeRecipientSetEvent(CLOBManagerEvent):
+    """Event emitted when the fee recipient is set."""
+
+    fee_recipient: ChecksumAddress
+
+
+# @dataclass
+# class MarketCreatedEvent(CLOBManagerEvent):
+#     """Event emitted when a market is created."""
+#
+#     creator: ChecksumAddress
+#     base_token: ChecksumAddress
+#     quote_token: ChecksumAddress
+#     market: ChecksumAddress
+#     quote_decimals: int
+#     base_decimals: int
+#     config: ICLOBConfigParams
+#     settings: ICLOBSettingsParams
+
+
+@dataclass
+class OperatorApprovedEvent(CLOBManagerEvent):
+    """Event emitted when an operator is approved."""
+
+    account: ChecksumAddress
+    operator: ChecksumAddress
+
+
+@dataclass
+class OperatorDisapprovedEvent(CLOBManagerEvent):
+    """Event emitted when an operator is disapproved."""
+
+    account: ChecksumAddress
+    operator: ChecksumAddress
+
+
+@dataclass
+class WithdrawEvent(CLOBManagerEvent):
+    """Event emitted when a withdrawal is made."""
+
+    account: ChecksumAddress
+    recipient: ChecksumAddress
+    token: ChecksumAddress
+    amount: int
 
 
 def _create_base_event_info(event_data: EventData) -> Dict[str, Any]:
@@ -270,6 +376,218 @@ def parse_order_canceled(event_data: EventData) -> OrderCanceledEvent:
     )
 
 
+# CLOB Manager event parsers
+def parse_account_credited(event_data: EventData) -> AccountCreditedEvent:
+    """
+    Parse AccountCredited event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed AccountCreditedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return AccountCreditedEvent(
+        **base_info,
+        account=args.get("account"),
+        token=args.get("token"),
+        amount=args.get("amount"),
+    )
+
+
+def parse_account_debited(event_data: EventData) -> AccountDebitedEvent:
+    """
+    Parse AccountDebited event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed AccountDebitedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return AccountDebitedEvent(
+        **base_info,
+        account=args.get("account"),
+        token=args.get("token"),
+        amount=args.get("amount"),
+    )
+
+
+def parse_account_fee_tier_updated(event_data: EventData) -> AccountFeeTierUpdatedEvent:
+    """
+    Parse AccountFeeTierUpdated event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed AccountFeeTierUpdatedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return AccountFeeTierUpdatedEvent(
+        **base_info,
+        account=args.get("account"),
+        fee_tier=args.get("feeTier"),
+    )
+
+
+def parse_deposit(event_data: EventData) -> DepositEvent:
+    """
+    Parse Deposit event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed DepositEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return DepositEvent(
+        **base_info,
+        account=args.get("account"),
+        funder=args.get("funder"),
+        token=args.get("token"),
+        amount=args.get("amount"),
+    )
+
+
+def parse_fee_collected(event_data: EventData) -> FeeCollectedEvent:
+    """
+    Parse FeeCollected event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed FeeCollectedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return FeeCollectedEvent(
+        **base_info,
+        token=args.get("token"),
+        fee=args.get("fee"),
+    )
+
+
+def parse_fee_recipient_set(event_data: EventData) -> FeeRecipientSetEvent:
+    """
+    Parse FeeRecipientSet event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed FeeRecipientSetEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return FeeRecipientSetEvent(
+        **base_info,
+        fee_recipient=args.get("feeRecipient"),
+    )
+
+
+# def parse_market_created(event_data: EventData) -> MarketCreatedEvent:
+#     """
+#     Parse MarketCreated event.
+#
+#     Args:
+#         event_data: Raw event data from web3
+#
+#     Returns:
+#         Typed MarketCreatedEvent
+#     """
+#     args = event_data.get("args", {})
+#     base_info = _create_base_event_info(event_data)
+#
+#     return MarketCreatedEvent(
+#         **base_info,
+#         creator=args.get("creator"),
+#         base_token=args.get("baseToken"),
+#         quote_token=args.get("quoteToken"),
+#         market=args.get("market"),
+#         quote_decimals=args.get("quoteDecimals"),
+#         base_decimals=args.get("baseDecimals"),
+#         config=args.get("config"),
+#         settings=args.get("settings"),
+#     )
+
+
+def parse_operator_approved(event_data: EventData) -> OperatorApprovedEvent:
+    """
+    Parse OperatorApproved event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed OperatorApprovedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return OperatorApprovedEvent(
+        **base_info,
+        account=args.get("account"),
+        operator=args.get("operator"),
+    )
+
+
+def parse_operator_disapproved(event_data: EventData) -> OperatorDisapprovedEvent:
+    """
+    Parse OperatorDisapproved event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed OperatorDisapprovedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return OperatorDisapprovedEvent(
+        **base_info,
+        account=args.get("account"),
+        operator=args.get("operator"),
+    )
+
+
+def parse_withdraw(event_data: EventData) -> WithdrawEvent:
+    """
+    Parse Withdraw event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed WithdrawEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return WithdrawEvent(
+        **base_info,
+        account=args.get("account"),
+        recipient=args.get("recipient"),
+        token=args.get("token"),
+        amount=args.get("amount"),
+    )
+
+
 # Dictionary mapping event names to their parser functions
 EVENT_PARSERS = {
     "LimitOrderSubmitted": parse_limit_order_submitted,
@@ -280,6 +598,23 @@ EVENT_PARSERS = {
     "OrderAmended": parse_order_amended,
     "OrderCanceled": parse_order_canceled,
 }
+
+# Add CLOB Manager event parsers to the global dictionary
+CLOB_MANAGER_EVENT_PARSERS = {
+    "AccountCredited": parse_account_credited,
+    "AccountDebited": parse_account_debited,
+    "AccountFeeTierUpdated": parse_account_fee_tier_updated,
+    "Deposit": parse_deposit,
+    "FeeCollected": parse_fee_collected,
+    "FeeRecipientSet": parse_fee_recipient_set,
+    # "MarketCreated": parse_market_created,
+    "OperatorApproved": parse_operator_approved,
+    "OperatorDisapproved": parse_operator_disapproved,
+    "Withdraw": parse_withdraw,
+}
+
+# Update the existing EVENT_PARSERS dictionary
+EVENT_PARSERS.update(CLOB_MANAGER_EVENT_PARSERS)
 
 
 def convert_event_data_to_typed_event(event_data: EventData) -> CLOBEvent:

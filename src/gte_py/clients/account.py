@@ -6,6 +6,7 @@ from typing_extensions import Unpack
 from web3.types import TxParams
 
 from gte_py.api.rest import RestApi
+from gte_py.api.chain.clob_manager import ICLOBManager
 from gte_py.clients.clob import CLOBClient
 from gte_py.clients.token import TokenClient
 from gte_py.configs import NetworkConfig
@@ -35,6 +36,10 @@ class AccountClient:
         self._web3 = clob._web3
         self._token = token
         self._rest = rest
+        
+        # Initialize CLOB Manager
+        self._clob_manager = ICLOBManager(web3=self._web3, contract_address=config.clob_manager_address)
+
     async def get_eth_balance(self) -> int:
         """
         Get the user's ETH balance.
@@ -197,3 +202,52 @@ class AccountClient:
         )
 
         return exchange_balance_raw
+
+    async def approve_operator(self, operator_address: ChecksumAddress, **kwargs: Unpack[TxParams]):
+        """
+        Approve an operator to act on behalf of the account.
+
+        Args:
+            operator_address: Address of the operator to approve
+            **kwargs: Additional transaction parameters
+
+        Returns:
+            Transaction result from the approve_operator operation
+        """
+        logger.info(f"Approving operator {operator_address} for account {self._account}")
+        return await self._clob_manager.approve_operator(
+            operator=operator_address,
+            **kwargs
+        ).send_wait()
+
+    async def disapprove_operator(self, operator_address: ChecksumAddress, **kwargs: Unpack[TxParams]):
+        """
+        Disapprove an operator from acting on behalf of the account.
+
+        Args:
+            operator_address: Address of the operator to disapprove
+            **kwargs: Additional transaction parameters
+
+        Returns:
+            Transaction result from the disapprove_operator operation
+        """
+        logger.info(f"Disapproving operator {operator_address} for account {self._account}")
+        return await self._clob_manager.disapprove_operator(
+            operator=operator_address,
+            **kwargs
+        ).send_wait()
+
+    async def is_operator_approved(self, operator_address: ChecksumAddress) -> bool:
+        """
+        Check if an operator is approved for the account.
+
+        Args:
+            operator_address: Address of the operator to check
+
+        Returns:
+            True if the operator is approved, False otherwise
+        """
+        return await self._clob_manager.approved_operators(
+            account=self._account,
+            operator=operator_address
+        )
