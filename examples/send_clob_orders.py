@@ -167,7 +167,7 @@ async def main() -> None:
     await show_balances(client, market)
     # Display all orders
     await show_live_orders(client, market)
-    return
+
     # Display recent order matches
     # await display_recent_matches(client, market)
 

@@ -36,7 +36,7 @@ class CLOBFactory:
         self.web3 = web3
         self.address = contract_address
 
-        loaded_abi = load_abi("factory")
+        loaded_abi = load_abi("clob_factory")
         self.contract = self.web3.eth.contract(address=self.address, abi=loaded_abi)
 
     # ================= READ METHODS =================
@@ -151,6 +151,36 @@ class CLOBFactory:
             True if the operator is approved, False otherwise
         """
         return await self.contract.functions.approvedOperators(account, operator).call()
+        
+    async def ownership_handover_expires_at(self, pending_owner: ChecksumAddress) -> int:
+        """
+        Get the timestamp when the ownership handover for a pending owner expires.
+        
+        Args:
+            pending_owner: Address of the pending owner
+            
+        Returns:
+            Timestamp when the handover expires
+        """
+        return await self.contract.functions.ownershipHandoverExpiresAt(pending_owner).call()
+        
+    async def maker_fees(self) -> int:
+        """
+        Get the packed maker fee rates.
+        
+        Returns:
+            Packed fee rates
+        """
+        return await self.contract.functions.makerFees().call()
+        
+    async def taker_fees(self) -> int:
+        """
+        Get the packed taker fee rates.
+        
+        Returns:
+            Packed fee rates
+        """
+        return await self.contract.functions.takerFees().call()
 
     # ================= WRITE METHODS =================
 
@@ -169,7 +199,6 @@ class CLOBFactory:
             quote_token: Address of the quote token
             settings: Market settings dictionary with owner, maxLimitsPerTx,
                       minLimitOrderAmountInBase, and tickSize
-            sender_address: Address of the transaction sender
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
@@ -330,6 +359,8 @@ class CLOBFactory:
         }
         return TypedContractFunction(func, params)
 
+    # ================= OWNERSHIP METHODS =================
+
     def transfer_ownership(
             self, new_owner: ChecksumAddress, **kwargs
     ) -> TypedContractFunction[None]:
@@ -360,6 +391,58 @@ class CLOBFactory:
             TypedContractFunction for the transaction
         """
         func = self.contract.functions.renounceOwnership()
+        params = {
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)
+        
+    def request_ownership_handover(self, **kwargs) -> TypedContractFunction[None]:
+        """
+        Request a handover of ownership. After calling this, the owner must complete
+        the handover by calling completeOwnershipHandover.
+        
+        Args:
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+            
+        Returns:
+            TypedContractFunction for the transaction
+        """
+        func = self.contract.functions.requestOwnershipHandover()
+        params = {
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)
+        
+    def cancel_ownership_handover(self, **kwargs) -> TypedContractFunction[None]:
+        """
+        Cancel a pending ownership handover request.
+        
+        Args:
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+            
+        Returns:
+            TypedContractFunction for the transaction
+        """
+        func = self.contract.functions.cancelOwnershipHandover()
+        params = {
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)
+        
+    def complete_ownership_handover(
+            self, pending_owner: ChecksumAddress, **kwargs
+    ) -> TypedContractFunction[None]:
+        """
+        Complete an ownership handover to a pending owner.
+        
+        Args:
+            pending_owner: Address of the pending owner
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+            
+        Returns:
+            TypedContractFunction for the transaction
+        """
+        func = self.contract.functions.completeOwnershipHandover(pending_owner)
         params = {
             **kwargs,
         }
@@ -482,6 +565,26 @@ class CLOBFactory:
             **kwargs,
         }
         return TypedContractFunction(func, tx_params)
+        
+    def initialize(
+            self, owner: ChecksumAddress, fee_recipient: ChecksumAddress, **kwargs
+    ) -> TypedContractFunction[None]:
+        """
+        Initialize the factory contract (can only be called once).
+        
+        Args:
+            owner: Address of the initial owner
+            fee_recipient: Address of the fee recipient
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+            
+        Returns:
+            TypedContractFunction for the transaction
+        """
+        func = self.contract.functions.initialize(owner, fee_recipient)
+        params = {
+            **kwargs,
+        }
+        return TypedContractFunction(func, params)
 
     # ================= HELPER METHODS =================
 

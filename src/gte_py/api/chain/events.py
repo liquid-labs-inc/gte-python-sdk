@@ -42,6 +42,7 @@ class LimitOrderProcessedEvent(CLOBEvent):
     quote_token_amount_traded: int
     base_token_amount_traded: int
     taker_fee: int
+    nonce: int
 
 
 @dataclass
@@ -94,6 +95,35 @@ class OrderCanceledEvent(CLOBEvent):
     quote_token_refunded: int
     base_token_refunded: int
     settlement: int
+
+
+@dataclass
+class TickSizeUpdatedEvent(CLOBEvent):
+    """Event emitted when the tick size is updated."""
+
+    new_tick_size: int
+
+
+@dataclass
+class MinLimitOrderAmountInBaseUpdatedEvent(CLOBEvent):
+    """Event emitted when the minimum limit order amount in base is updated."""
+
+    new_min_limit_order_amount_in_base: int
+
+
+@dataclass
+class MaxLimitOrdersPerTxUpdatedEvent(CLOBEvent):
+    """Event emitted when the maximum limit orders per transaction is updated."""
+
+    new_max_limits: int
+
+
+@dataclass
+class MaxLimitOrdersAllowlistedEvent(CLOBEvent):
+    """Event emitted when an account is added/removed from max limit orders exemption."""
+
+    account: ChecksumAddress
+    toggle: bool
 
 
 # CLOB Manager Events
@@ -211,8 +241,6 @@ def _create_base_event_info(event_data: EventData) -> Dict[str, Any]:
     Returns:
         Base event info dictionary
     """
-    args = event_data.get("args", {})
-    nonce = args.get("nonce", args.get("eventNonce", 0))
 
     return {
         "tx_hash": event_data.get("transactionHash"),
@@ -221,7 +249,6 @@ def _create_base_event_info(event_data: EventData) -> Dict[str, Any]:
         "address": event_data.get("address"),
         "event_name": event_data.get("event"),
         "raw_data": event_data,
-        "nonce": nonce,
     }
 
 
@@ -264,6 +291,7 @@ def parse_limit_order_processed(event_data: EventData) -> LimitOrderProcessedEve
         quote_token_amount_traded=args.get("quoteTokenAmountTraded"),
         base_token_amount_traded=args.get("baseTokenAmountTraded"),
         taker_fee=args.get("takerFee"),
+        nonce=args.get("nonce"),
     )
 
 
@@ -373,6 +401,83 @@ def parse_order_canceled(event_data: EventData) -> OrderCanceledEvent:
         quote_token_refunded=args.get("quoteTokenRefunded"),
         base_token_refunded=args.get("baseTokenRefunded"),
         settlement=args.get("settlement"),
+    )
+
+
+def parse_tick_size_updated(event_data: EventData) -> TickSizeUpdatedEvent:
+    """
+    Parse TickSizeUpdated event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed TickSizeUpdatedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return TickSizeUpdatedEvent(
+        **base_info,
+        new_tick_size=args.get("newTickSize"),
+    )
+
+
+def parse_min_limit_order_amount_in_base_updated(event_data: EventData) -> MinLimitOrderAmountInBaseUpdatedEvent:
+    """
+    Parse MinLimitOrderAmountInBaseUpdated event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed MinLimitOrderAmountInBaseUpdatedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return MinLimitOrderAmountInBaseUpdatedEvent(
+        **base_info,
+        new_min_limit_order_amount_in_base=args.get("newMinLimitOrderAmountInBase"),
+    )
+
+
+def parse_max_limit_orders_per_tx_updated(event_data: EventData) -> MaxLimitOrdersPerTxUpdatedEvent:
+    """
+    Parse MaxLimitOrdersPerTxUpdated event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed MaxLimitOrdersPerTxUpdatedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return MaxLimitOrdersPerTxUpdatedEvent(
+        **base_info,
+        new_max_limits=args.get("newMaxLimits"),
+    )
+
+
+def parse_max_limit_orders_allowlisted(event_data: EventData) -> MaxLimitOrdersAllowlistedEvent:
+    """
+    Parse MaxLimitOrdersAllowlisted event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed MaxLimitOrdersAllowlistedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return MaxLimitOrdersAllowlistedEvent(
+        **base_info,
+        account=args.get("account"),
+        toggle=args.get("toggle"),
     )
 
 
@@ -597,6 +702,10 @@ EVENT_PARSERS = {
     "OrderMatched": parse_order_matched,
     "OrderAmended": parse_order_amended,
     "OrderCanceled": parse_order_canceled,
+    "TickSizeUpdated": parse_tick_size_updated,
+    "MinLimitOrderAmountInBaseUpdated": parse_min_limit_order_amount_in_base_updated,
+    "MaxLimitOrdersPerTxUpdated": parse_max_limit_orders_per_tx_updated,
+    "MaxLimitOrdersAllowlisted": parse_max_limit_orders_allowlisted,
 }
 
 # Add CLOB Manager event parsers to the global dictionary

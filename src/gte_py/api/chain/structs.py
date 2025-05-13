@@ -153,6 +153,26 @@ class ICLOBCancelArgs(TypedDict):
     settlement: int
 
 
+class ICLOBConfigParams(TypedDict):
+    """Configuration parameters for CLOB initialization."""
+    
+    factory: str
+    maxNumOrders: int
+    quoteToken: str
+    baseToken: str
+    quoteSize: int
+    baseSize: int
+
+
+class ICLOBSettingsParams(TypedDict):
+    """Settings parameters for CLOB initialization."""
+    
+    status: bool
+    maxLimitsPerTx: int
+    minLimitOrderAmountInBase: int
+    tickSize: int
+
+
 """
 "components": [
   { "name": "side", "type": "uint8", "internalType": "enum Side" },
