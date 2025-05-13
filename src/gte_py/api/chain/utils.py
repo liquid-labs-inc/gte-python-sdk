@@ -6,6 +6,7 @@ import time
 import warnings
 from typing import Any, Generic, TypeVar, Callable, Tuple, Dict, Awaitable, Optional, List
 
+from async_timeout import timeout
 from eth_account import Account
 from eth_account.datastructures import SignedTransaction
 from eth_account.signers.local import LocalAccount
@@ -177,10 +178,11 @@ class TypedContractFunction(Generic[T]):
         self.result = await self.func_call.call(self.params)
         return self.result
 
-    def send_nowait(self, _show_pending: bool = True) -> Awaitable[HexBytes]:
+    def send_nowait(self) -> Awaitable[HexBytes]:
         """Asynchronous write operation"""
         try:
             tx = self.params
+            tx['nonce'] = 0 # to be updated later
             logger.info(
                 "Sending tx#%d %s with %s", self.tx_id, format_contract_function(self.func_call), tx
             )
@@ -197,7 +199,7 @@ class TypedContractFunction(Generic[T]):
 
     async def send(self) -> HexBytes:
         """Synchronous write operation"""
-        self.tx_hash = await self.send_nowait(_show_pending=False)
+        self.tx_hash = await self.send_nowait()
         logger.info("tx#%d sent: %s", self.tx_id, self.tx_hash.to_0x_hex())
         return self.tx_hash
 
@@ -461,13 +463,13 @@ class Web3RequestManager:
             tx, future = await self.request_queue.get()
 
             try:
-                nonce = await self.get_nonce()
-                # Process the transaction
-                if isinstance(tx, Awaitable):
-                    tx = await tx
+                async with timeout(3):
+                    nonce = await self.get_nonce()
+                    if isinstance(tx, Awaitable):
+                        tx = await tx
 
-                tx_hash = await self._send_transaction(tx, nonce, future)
-                logger.info(f"Transaction with nonce {nonce} sent: {tx_hash.to_0x_hex()}")
+                    tx_hash = await self._send_transaction(tx, nonce, future)
+                    logger.info(f"Transaction with nonce {nonce} sent: {tx_hash.to_0x_hex()}")
 
             except Exception as e:
                 logger.error(f"Failed to send transaction: {e}")

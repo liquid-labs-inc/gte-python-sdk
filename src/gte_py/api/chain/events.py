@@ -63,6 +63,7 @@ class FillOrderProcessedEvent(CLOBEvent):
     quote_token_amount_traded: int
     base_token_amount_traded: int
     taker_fee: int
+    nonce: int  # Added missing nonce field
 
 
 @dataclass
@@ -333,6 +334,7 @@ def parse_fill_order_processed(event_data: EventData) -> FillOrderProcessedEvent
         quote_token_amount_traded=args.get("quoteTokenAmountTraded"),
         base_token_amount_traded=args.get("baseTokenAmountTraded"),
         taker_fee=args.get("takerFee"),
+        nonce=args.get("nonce"),  # Added nonce field extraction
     )
 
 
@@ -401,6 +403,7 @@ def parse_order_canceled(event_data: EventData) -> OrderCanceledEvent:
         quote_token_refunded=args.get("quoteTokenRefunded"),
         base_token_refunded=args.get("baseTokenRefunded"),
         settlement=args.get("settlement"),
+        nonce=args.get('nonce')
     )
 
 
