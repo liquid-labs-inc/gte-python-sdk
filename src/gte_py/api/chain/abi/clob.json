@@ -1,0 +1,1818 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "acceptOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "amend",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "args",
+        "type": "tuple",
+        "internalType": "struct ICLOB.AmendArgs",
+        "components": [
+          {
+            "name": "orderId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "amountInBase",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "price",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "cancelTimestamp",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "side",
+            "type": "uint8",
+            "internalType": "enum Side"
+          },
+          {
+            "name": "limitOrderType",
+            "type": "uint8",
+            "internalType": "enum ICLOB.LimitOrderType"
+          },
+          {
+            "name": "settlement",
+            "type": "uint8",
+            "internalType": "enum ICLOB.Settlement"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "quoteDelta",
+        "type": "int256",
+        "internalType": "int256"
+      },
+      {
+        "name": "baseDelta",
+        "type": "int256",
+        "internalType": "int256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "cancel",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "args",
+        "type": "tuple",
+        "internalType": "struct ICLOB.CancelArgs",
+        "components": [
+          {
+            "name": "orderIds",
+            "type": "uint256[]",
+            "internalType": "uint256[]"
+          },
+          {
+            "name": "settlement",
+            "type": "uint8",
+            "internalType": "enum ICLOB.Settlement"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "getBaseToken",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IERC20"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getBaseTokenAmount",
+    "inputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "quoteAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getEventNonce",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getFactory",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getLimit",
+    "inputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "side",
+        "type": "uint8",
+        "internalType": "enum Side"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct Limit",
+        "components": [
+          {
+            "name": "numOrders",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "headOrder",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "tailOrder",
+            "type": "uint256",
+            "internalType": "OrderId"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getMarketConfig",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct MarketConfig",
+        "components": [
+          {
+            "name": "factory",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "maxNumOrders",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "quoteToken",
+            "type": "address",
+            "internalType": "contract IERC20"
+          },
+          {
+            "name": "baseToken",
+            "type": "address",
+            "internalType": "contract IERC20"
+          },
+          {
+            "name": "quoteSize",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "baseSize",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getMarketSettings",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct MarketSettings",
+        "components": [
+          {
+            "name": "status",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "maxLimitsPerTx",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "minLimitOrderAmountInBase",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "tickSize",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getMaxLimitExempt",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getNextBiggestPrice",
+    "inputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "side",
+        "type": "uint8",
+        "internalType": "enum Side"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getNextOrderId",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getNextOrders",
+    "inputs": [
+      {
+        "name": "startOrderId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "numOrders",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple[]",
+        "internalType": "struct Order[]",
+        "components": [
+          {
+            "name": "side",
+            "type": "uint8",
+            "internalType": "enum Side"
+          },
+          {
+            "name": "cancelTimestamp",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "id",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "prevOrderId",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "nextOrderId",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "owner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "price",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getNextSmallestPrice",
+    "inputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "side",
+        "type": "uint8",
+        "internalType": "enum Side"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getNumAsks",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getNumBids",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getOpenInterest",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "quoteOi",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "baseOi",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getOrder",
+    "inputs": [
+      {
+        "name": "orderId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct Order",
+        "components": [
+          {
+            "name": "side",
+            "type": "uint8",
+            "internalType": "enum Side"
+          },
+          {
+            "name": "cancelTimestamp",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "id",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "prevOrderId",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "nextOrderId",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "owner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "price",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getQuoteToken",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IERC20"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getQuoteTokenAmount",
+    "inputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "baseAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getTOB",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "maxBid",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "minAsk",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "initialize",
+    "inputs": [
+      {
+        "name": "marketConfig",
+        "type": "tuple",
+        "internalType": "struct MarketConfig",
+        "components": [
+          {
+            "name": "factory",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "maxNumOrders",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "quoteToken",
+            "type": "address",
+            "internalType": "contract IERC20"
+          },
+          {
+            "name": "baseToken",
+            "type": "address",
+            "internalType": "contract IERC20"
+          },
+          {
+            "name": "quoteSize",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "baseSize",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "marketSettings",
+        "type": "tuple",
+        "internalType": "struct MarketSettings",
+        "components": [
+          {
+            "name": "status",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "maxLimitsPerTx",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "minLimitOrderAmountInBase",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "tickSize",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "initialOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingOwner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "postFillOrder",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "args",
+        "type": "tuple",
+        "internalType": "struct ICLOB.PostFillOrderArgs",
+        "components": [
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "priceLimit",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "side",
+            "type": "uint8",
+            "internalType": "enum Side"
+          },
+          {
+            "name": "amountIsBase",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "fillOrderType",
+            "type": "uint8",
+            "internalType": "enum ICLOB.FillOrderType"
+          },
+          {
+            "name": "settlement",
+            "type": "uint8",
+            "internalType": "enum ICLOB.Settlement"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct ICLOB.PostFillOrderResult",
+        "components": [
+          {
+            "name": "account",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "orderId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "quoteTokenAmountTraded",
+            "type": "int256",
+            "internalType": "int256"
+          },
+          {
+            "name": "baseTokenAmountTraded",
+            "type": "int256",
+            "internalType": "int256"
+          },
+          {
+            "name": "takerFee",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "postLimitOrder",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "args",
+        "type": "tuple",
+        "internalType": "struct ICLOB.PostLimitOrderArgs",
+        "components": [
+          {
+            "name": "amountInBase",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "price",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "cancelTimestamp",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "side",
+            "type": "uint8",
+            "internalType": "enum Side"
+          },
+          {
+            "name": "clientOrderId",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "limitOrderType",
+            "type": "uint8",
+            "internalType": "enum ICLOB.LimitOrderType"
+          },
+          {
+            "name": "settlement",
+            "type": "uint8",
+            "internalType": "enum ICLOB.Settlement"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct ICLOB.PostLimitOrderResult",
+        "components": [
+          {
+            "name": "account",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "orderId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "amountPostedInBase",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "quoteTokenAmountTraded",
+            "type": "int256",
+            "internalType": "int256"
+          },
+          {
+            "name": "baseTokenAmountTraded",
+            "type": "int256",
+            "internalType": "int256"
+          },
+          {
+            "name": "takerFee",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "renounceOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setMaxLimitsExempt",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "toggle",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setMaxLimitsPerTx",
+    "inputs": [
+      {
+        "name": "newMaxLimits",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setMinLimitOrderAmountInBase",
+    "inputs": [
+      {
+        "name": "newMinLimitOrderAmountInBase",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setTickSize",
+    "inputs": [
+      {
+        "name": "tickSize",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "transferOwnership",
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "CancelFailed",
+    "inputs": [
+      {
+        "name": "orderId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FillOrderProcessed",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "orderId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "quoteTokenAmountTraded",
+        "type": "int256",
+        "indexed": false,
+        "internalType": "int256"
+      },
+      {
+        "name": "baseTokenAmountTraded",
+        "type": "int256",
+        "indexed": false,
+        "internalType": "int256"
+      },
+      {
+        "name": "takerFee",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FillOrderSubmitted",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "orderId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "args",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct ICLOB.PostFillOrderArgs",
+        "components": [
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "priceLimit",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "side",
+            "type": "uint8",
+            "internalType": "enum Side"
+          },
+          {
+            "name": "amountIsBase",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "fillOrderType",
+            "type": "uint8",
+            "internalType": "enum ICLOB.FillOrderType"
+          },
+          {
+            "name": "settlement",
+            "type": "uint8",
+            "internalType": "enum ICLOB.Settlement"
+          }
+        ]
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Initialized",
+    "inputs": [
+      {
+        "name": "version",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LimitOrderProcessed",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "orderId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amountPostedInBase",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "quoteTokenAmountTraded",
+        "type": "int256",
+        "indexed": false,
+        "internalType": "int256"
+      },
+      {
+        "name": "baseTokenAmountTraded",
+        "type": "int256",
+        "indexed": false,
+        "internalType": "int256"
+      },
+      {
+        "name": "takerFee",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LimitOrderSubmitted",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "orderId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "args",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct ICLOB.PostLimitOrderArgs",
+        "components": [
+          {
+            "name": "amountInBase",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "price",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "cancelTimestamp",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "side",
+            "type": "uint8",
+            "internalType": "enum Side"
+          },
+          {
+            "name": "clientOrderId",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "limitOrderType",
+            "type": "uint8",
+            "internalType": "enum ICLOB.LimitOrderType"
+          },
+          {
+            "name": "settlement",
+            "type": "uint8",
+            "internalType": "enum ICLOB.Settlement"
+          }
+        ]
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "MaxLimitOrdersAllowlisted",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "toggle",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "MaxLimitOrdersPerTxUpdated",
+    "inputs": [
+      {
+        "name": "newMaxLimits",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "MinLimitOrderAmountInBaseUpdated",
+    "inputs": [
+      {
+        "name": "newMinLimitOrderAmountInBase",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OrderAmended",
+    "inputs": [
+      {
+        "name": "preAmend",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct Order",
+        "components": [
+          {
+            "name": "side",
+            "type": "uint8",
+            "internalType": "enum Side"
+          },
+          {
+            "name": "cancelTimestamp",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "id",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "prevOrderId",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "nextOrderId",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "owner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "price",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "args",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct ICLOB.AmendArgs",
+        "components": [
+          {
+            "name": "orderId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "amountInBase",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "price",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "cancelTimestamp",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "side",
+            "type": "uint8",
+            "internalType": "enum Side"
+          },
+          {
+            "name": "limitOrderType",
+            "type": "uint8",
+            "internalType": "enum ICLOB.LimitOrderType"
+          },
+          {
+            "name": "settlement",
+            "type": "uint8",
+            "internalType": "enum ICLOB.Settlement"
+          }
+        ]
+      },
+      {
+        "name": "quoteTokenDelta",
+        "type": "int256",
+        "indexed": false,
+        "internalType": "int256"
+      },
+      {
+        "name": "baseTokenDelta",
+        "type": "int256",
+        "indexed": false,
+        "internalType": "int256"
+      },
+      {
+        "name": "eventNonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OrderCanceled",
+    "inputs": [
+      {
+        "name": "orderId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "quoteTokenRefunded",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "baseTokenRefunded",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "settlement",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum ICLOB.Settlement"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OrderMatched",
+    "inputs": [
+      {
+        "name": "takerOrderId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "makerOrderId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "takerOrder",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct Order",
+        "components": [
+          {
+            "name": "side",
+            "type": "uint8",
+            "internalType": "enum Side"
+          },
+          {
+            "name": "cancelTimestamp",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "id",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "prevOrderId",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "nextOrderId",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "owner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "price",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "makerOrder",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct Order",
+        "components": [
+          {
+            "name": "side",
+            "type": "uint8",
+            "internalType": "enum Side"
+          },
+          {
+            "name": "cancelTimestamp",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "id",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "prevOrderId",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "nextOrderId",
+            "type": "uint256",
+            "internalType": "OrderId"
+          },
+          {
+            "name": "owner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "price",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "tradedBase",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OrderReduced",
+    "inputs": [
+      {
+        "name": "orderId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newAmountInBase",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "refundAmountInBase",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "settlement",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum ICLOB.Settlement"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferStarted",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferred",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TickSizeUpdated",
+    "inputs": [
+      {
+        "name": "newTickSize",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "FOKNotFilled",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidAccountOrOperator",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidAmend",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidInitialization",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidMaxLimitsPerTx",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidMinLimitOrderAmountInBase",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidTickSize",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LimitOrderAmountOutOfBounds",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LimitPriceOutOfBounds",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LimitsPlacedExceedsMaxThisTx",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MaxOrdersInBookPostNotCompetitive",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoOrdersAtLimit",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NonPostOnlyAmend",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotFactory",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotInitializing",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OrderAlreadyExpired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OrderIdInUse",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OrderNotFound",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OwnableInvalidOwner",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableUnauthorizedAccount",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PostOnlyOrderWouldBeFilled",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UnauthorizedAmend",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UnauthorizedCancel",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ValueDoesNotExist",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroCostTrade",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroOrder",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroTrade",
+    "inputs": []
+  }
+]

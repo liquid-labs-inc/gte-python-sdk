@@ -3,10 +3,16 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from math import floor, log10
+from typing import Any, List, Optional, Tuple
 
 from eth_typing import ChecksumAddress
-from web3 import Web3
+from hexbytes import HexBytes
+from web3 import AsyncWeb3
+
+from gte_py.api.chain.events import LimitOrderProcessedEvent, FillOrderProcessedEvent
+from gte_py.api.chain.structs import Side as ContractSide, CLOBOrder
+from gte_py.api.chain.utils import get_current_timestamp
 
 
 class MarketType(Enum):
@@ -17,11 +23,7 @@ class MarketType(Enum):
     CLOB = "clob"
 
 
-class OrderSide(Enum):
-    """Order side - buy or sell."""
-
-    BUY = "buy"
-    SELL = "sell"
+Side = ContractSide
 
 
 class OrderType(Enum):
@@ -35,6 +37,7 @@ class TimeInForce(Enum):
     """Time in force for orders."""
 
     GTC = "GTC"  # Good till cancelled
+    GTT = "GTT"  # Good till time
     PostOnly = "PostOnly"  # Post only
     IOC = "IOC"  # Immediate or cancel
     FOK = "FOK"  # Fill or kill
@@ -50,8 +53,18 @@ class OrderStatus(Enum):
     REJECTED = "rejected"
 
 
+def round_decimals_int(n: float, sig: int) -> int:
+    """Round a number to a specified number of significant digits."""
+    n_int = round(n)
+    if n_int == 0:
+        return 0
+    else:
+        d = sig - int(floor(log10(abs(n_int)))) - 1
+        return round(n_int, d)
+
+
 @dataclass
-class Asset:
+class Token:
     """Asset model."""
 
     address: ChecksumAddress
@@ -63,17 +76,29 @@ class Asset:
     media_uri: str | None = None
     balance: float | None = None
 
+    def convert_amount_to_quantity(self, amount: int) -> float:
+        """Convert amount in base units to float."""
+        assert isinstance(amount, int), f"amount {amount} is not an integer"
+        return amount / (10 ** self.decimals)
+
+    def convert_quantity_to_amount(self, quantity: float) -> int:
+        """Convert amount in float to base units."""
+        assert isinstance(quantity, float), f"quantity {quantity} is not a float"
+        scaled = quantity * (10 ** self.decimals)
+        rounded = round_decimals_int(scaled, sig=8)
+        return rounded
+
     @classmethod
-    def from_api(cls, data: dict[str, Any], with_balance: bool = False) -> "Asset":
+    def from_api(cls, data: dict[str, Any], with_balance: bool = False) -> "Token":
         """Create an Asset object from API response data."""
         address = data.get("address", "")
         creator = data.get("creator")
 
         # Convert address strings to ChecksumAddress
         if address and isinstance(address, str):
-            address = Web3.to_checksum_address(address)
+            address = AsyncWeb3.to_checksum_address(address)
         if creator and isinstance(creator, str):
-            creator = Web3.to_checksum_address(creator)
+            creator = AsyncWeb3.to_checksum_address(creator)
 
         return cls(
             address=address,
@@ -93,37 +118,21 @@ class Market:
 
     address: ChecksumAddress
     market_type: MarketType
-    base_asset: Asset
-    quote_asset: Asset
-    tick_size_in_quote: int
-    tick_size: float
-    lot_size_in_base: int
-    lot_size: float
-    base_decimals: int = 18
-    quote_decimals: int = 18
+    base: Token
+    quote: Token
     price: float | None = None
     volume_24h: float | None = None
-    base_token_address: ChecksumAddress | None = None
-    quote_token_address: ChecksumAddress | None = None
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Market":
         """Create a Market object from API response data."""
         contract_address = data["contractAddress"]
-        base_token_address = data["baseTokenAddress"]
-        quote_token_address = data["quoteTokenAddress"]
 
         return cls(
             address=contract_address,
             market_type=MarketType(data.get("marketType", "amm")),
-            base_asset=Asset.from_api(data.get("baseAsset", {})),
-            quote_asset=Asset.from_api(data.get("quoteAsset", {})),
-            base_token_address=base_token_address,
-            quote_token_address=quote_token_address,
-            base_decimals=data.get("baseDecimals", 18),
-            quote_decimals=data.get("quoteDecimals", 18),
-            tick_size_in_quote=data.get("tickSize", 0.01),
-            lot_size_in_base=data.get("baseAtomsPerLot", 1),
+            base=Token.from_api(data.get("baseAsset", {})),
+            quote=Token.from_api(data.get("quoteAsset", {})),
             price=data.get("price"),
             volume_24h=data.get("volume24hr"),
         )
@@ -131,7 +140,7 @@ class Market:
     @property
     def pair(self) -> str:
         """Get the trading pair symbol."""
-        return f"{self.base_asset.symbol}/{self.quote_asset.symbol}"
+        return f"{self.base.symbol}/{self.quote.symbol}"
 
 
 @dataclass
@@ -177,8 +186,8 @@ class Trade:
     timestamp: int
     price: float
     size: float
-    side: OrderSide
-    tx_hash: ChecksumAddress | None = None  # Transaction hash is an Ethereum address
+    side: Side
+    tx_hash: HexBytes | None = None  # Transaction hash is an Ethereum address
     maker: ChecksumAddress | None = None
     taker: ChecksumAddress | None = None
     trade_id: int | None = None
@@ -198,18 +207,18 @@ class Trade:
 
         # Convert address strings to ChecksumAddress when present
         if tx_hash and isinstance(tx_hash, str):
-            tx_hash = Web3.to_checksum_address(tx_hash)
+            tx_hash = AsyncWeb3.to_checksum_address(tx_hash)
         if maker and isinstance(maker, str):
-            maker = Web3.to_checksum_address(maker)
+            maker = AsyncWeb3.to_checksum_address(maker)
         if taker and isinstance(taker, str):
-            taker = Web3.to_checksum_address(taker)
+            taker = AsyncWeb3.to_checksum_address(taker)
 
         return cls(
             market_address=data.get("m", ""),
             timestamp=data.get("timestamp") or data.get("t", 0),
             price=float(data.get("price") or data.get("px", 0)),
             size=float(data.get("size") or data.get("sz", 0)),
-            side=OrderSide(side_str),
+            side=Side(side_str),
             tx_hash=tx_hash,
             maker=maker,
             taker=taker,
@@ -231,7 +240,7 @@ class Position:
         """Create a Position object from API response data."""
         user = data.get("user", "")
         if user and isinstance(user, str):
-            user = Web3.to_checksum_address(user)
+            user = AsyncWeb3.to_checksum_address(user)
 
         return cls(
             market=Market.from_api(data.get("market", {})),
@@ -245,8 +254,8 @@ class Position:
 class PriceLevel:
     """Price level in orderbook."""
 
-    price: float
-    size: float
+    price: int
+    size: int
     count: int
 
 
@@ -297,29 +306,21 @@ class OrderbookUpdate:
 class Order:
     """Order model."""
 
-    id: str
+    order_id: int
     market_address: str
-    side: OrderSide
+    side: Side
     order_type: OrderType
-    amount: float
-    price: float | None
+    amount: int
+    price: int | None
     time_in_force: TimeInForce
     status: OrderStatus
-    filled_amount: float
-    filled_price: float
     created_at: int
+    owner: ChecksumAddress | None = None
 
     @property
     def datetime(self) -> datetime:
         """Get the datetime of the order."""
         return datetime.fromtimestamp(self.created_at / 1000)
-
-    @property
-    def filled_percentage(self) -> float:
-        """Get the filled percentage of the order."""
-        if self.amount == 0:
-            return 0
-        return (self.filled_amount / self.amount) * 100
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Order":
@@ -330,15 +331,93 @@ class Order:
         status_str = data.get("status", "open")
 
         return cls(
-            id=data.get("id", ""),
+            order_id=data.get("id", 0),
             market_address=data.get("marketAddress", ""),
-            side=OrderSide(side_str),
+            side=Side(side_str),
             order_type=OrderType(type_str),
-            amount=data.get("amount", 0.0),
+            amount=data.get("amount", 0),
             price=data.get("price"),
             time_in_force=TimeInForce(tif_str),
             status=OrderStatus(status_str),
-            filled_amount=data.get("filledAmount", 0.0),
-            filled_price=data.get("filledPrice", 0.0),
             created_at=data.get("createdAt", int(datetime.now().timestamp() * 1000)),
         )
+
+    @classmethod
+    def from_clob_order(cls, clob: CLOBOrder, market: Market) -> "Order":
+        status = OrderStatus.OPEN
+        if clob.amount == 0:
+            status = OrderStatus.FILLED
+        elif (
+                clob.cancelTimestamp > 0 and clob.cancelTimestamp < get_current_timestamp()
+        ):
+            status = OrderStatus.EXPIRED
+
+        # Create Order model
+        return Order(
+            order_id=clob.id,
+            market_address=market.address,
+            side=clob.side,
+            order_type=OrderType.LIMIT,
+            amount=clob.amount,
+            price=clob.price,
+            time_in_force=TimeInForce.GTC,  # Default
+            status=status,
+            owner=clob.owner,
+            created_at=0,  # Need to be retrieved from event timestamp
+        )
+
+    @classmethod
+    def from_clob_limit_order_processed(
+            cls, event: LimitOrderProcessedEvent, amount: int, side: Side, price: int
+    ) -> "Order":
+        """Create an Order object from a CLOB limit order."""
+        status = OrderStatus.OPEN
+        if event.base_token_amount_traded == amount:
+            status = OrderStatus.FILLED
+
+        # Create Order model
+        return cls(
+            order_id=event.order_id,
+            market_address=event.address,
+            side=side,
+            order_type=OrderType.LIMIT,
+            amount=amount,
+            price=price,
+            time_in_force=TimeInForce.GTC,  # Default
+            status=status,
+            owner=event.account,
+            created_at=0,  # Need to be retrieved from event timestamp
+        )
+
+    @classmethod
+    def from_clob_fill_order_processed(
+            cls, event: FillOrderProcessedEvent, amount: int, side: Side, price: int
+    ) -> "Order":
+        """Create an Order object from a CLOB limit order."""
+        status = OrderStatus.OPEN
+        if event.base_token_amount_traded == amount:
+            status = OrderStatus.FILLED
+
+        # Create Order model
+        return cls(
+            order_id=event.order_id,
+            market_address=event.address,
+            side=side,
+            order_type=OrderType.LIMIT,
+            amount=amount,
+            price=price,
+            time_in_force=TimeInForce.GTC,  # Default
+            status=status,
+            owner=event.account,
+            created_at=0,  # Need to be retrieved from event timestamp
+        )
+
+
+@dataclass
+class OrderBookSnapshot:
+    """Snapshot of the orderbook at a point in time."""
+
+    bids: List[Tuple[float, float, int]]  # (price, size, count)
+    asks: List[Tuple[float, float, int]]  # (price, size, count)
+    timestamp: int
+    market_address: Optional[str] = None
