@@ -151,6 +151,7 @@ class TypedContractFunction(Generic[T]):
         "result",
         "receipt",
         "tx_hash",
+        "tx_send",
         "tx_id",
     ]
 
@@ -163,6 +164,7 @@ class TypedContractFunction(Generic[T]):
         self.result: T | None = None
         self.receipt: dict[str, Any] | None = None
         self.tx_hash: HexBytes | Awaitable[HexBytes] | None = None
+        self.tx_send: Awaitable[None] | None = None
         self.tx_id = next_tx_id()
 
     def with_event(
@@ -191,7 +193,7 @@ class TypedContractFunction(Generic[T]):
             instance = Web3RequestManager.instances[
                 self.web3.eth.default_account
             ]
-            self.tx_hash = instance.send_request(tx)
+            self.tx_hash, self.tx_send = instance.send_request(tx)
 
             return self.tx_hash
         except ContractCustomError as e:
@@ -223,13 +225,15 @@ class TypedContractFunction(Generic[T]):
         """
         if self.result is not None:
             return self.result
-
         if self.tx_hash is None:
             raise ValueError("Transaction hash is None. Call send() first.")
         try:
             if isinstance(self.tx_hash, Awaitable):
                 self.tx_hash = await self.tx_hash
                 logger.info(f'tx_hash for tx#{self.tx_id}: {self.tx_hash.to_0x_hex()}')
+            if self.tx_send is not None:
+                await self.tx_send
+                self.tx_send = None
             if self.event is None:
                 return None
             # Wait for the transaction to be mined
@@ -354,7 +358,7 @@ class Web3RequestManager:
     def __init__(self, web3: AsyncWeb3, account: LocalAccount):
         self.web3 = web3
         self.account = account
-        self.request_queue: asyncio.Queue[Tuple[TxParams | Awaitable[TxParams], asyncio.Future[HexBytes]]] = (
+        self.request_queue: asyncio.Queue[Tuple[TxParams | Awaitable[TxParams], asyncio.Future[HexBytes], asyncio.Future[None]]] = (
             asyncio.Queue()
         )
         self.nonces: List[Nonce] = []
@@ -460,7 +464,7 @@ class Web3RequestManager:
 
     async def _process_transactions(self):
         while self.is_running:
-            tx, future = await self.request_queue.get()
+            tx, tx_hash, tx_send = await self.request_queue.get()
 
             try:
                 async with timeout(3):
@@ -468,12 +472,13 @@ class Web3RequestManager:
                     if isinstance(tx, Awaitable):
                         tx = await tx
 
-                    tx_hash = await self._send_transaction(tx, nonce, future)
+                    tx_hash = await self._send_transaction(tx, nonce, tx_hash)
                     logger.info(f"Transaction with nonce {nonce} sent: {tx_hash.to_0x_hex()}")
-
+                tx_send.set_result(None)
             except Exception as e:
                 logger.error(f"Failed to send transaction: {e}")
-                future.set_exception(e)
+                tx_hash.set_exception(e)
+                tx_send.set_exception(e)
 
     async def _monitor_confirmations(self):
         """Dedicated confirmation monitoring task"""
@@ -510,8 +515,9 @@ class Web3RequestManager:
                 await self.put_nonce(nonce)
             raise e
 
-    def send_request(self, data: TxParams | Awaitable[TxParams]) -> Awaitable[HexBytes]:
+    def send_request(self, data: TxParams | Awaitable[TxParams]) -> Tuple[Awaitable[HexBytes], Awaitable[None]]:
         """Public API to submit transactions"""
-        future = asyncio.Future()
-        self.request_queue.put_nowait((data, future))
-        return future
+        tx_hash = asyncio.Future()
+        tx_send = asyncio.Future()
+        self.request_queue.put_nowait((data, tx_hash, tx_send))
+        return tx_hash, tx_send
