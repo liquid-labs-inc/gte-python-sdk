@@ -255,12 +255,12 @@ class RestApi:
 
         # Convert bid and ask data to appropriate format
         bids = [
-            (float(bid["px"]), float(bid["sz"]), bid.get("n", 0))
+            (float(bid["price"]), float(bid["size"]), bid.get("number", 0))
             for bid in response.get("bids", [])
         ]
 
         asks = [
-            (float(ask["px"]), float(ask["sz"]), ask.get("n", 0))
+            (float(ask["price"]), float(ask["size"]), ask.get("number", 0))
             for ask in response.get("asks", [])
         ]
 

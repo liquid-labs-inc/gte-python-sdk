@@ -9,6 +9,7 @@ import asyncio
 from typing import Callable, Dict, Generic, AsyncIterator, List, Optional, TypeVar, Any, Union
 
 from web3 import AsyncWeb3
+from web3._utils.filters import AsyncLogFilter
 from web3.contract.contract import ContractEvent
 from web3.types import EventData
 
@@ -124,7 +125,7 @@ class EventStream(Generic[T]):
         self.from_block = from_block
         self.poll_interval = poll_interval
         self.filter_params = filter_params or {}
-        self.filter = None
+        self.filter: AsyncLogFilter | None = None
 
     async def __aenter__(self):
         """Setup the event filter when entering an async context."""
@@ -134,12 +135,12 @@ class EventStream(Generic[T]):
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Cleanup the event filter when exiting an async context."""
         if self.filter:
-            await self.filter.uninstall()
+            pass
 
     async def create_filter(self):
         """Create an event filter based on the provided parameters."""
         self.filter = await self.event.create_filter(
-            fromBlock=self.from_block,
+            from_block=self.from_block,
             **self.filter_params
         )
         return self
@@ -180,16 +181,12 @@ class EventStream(Generic[T]):
         if not self.filter:
             await self.create_filter()
 
-        try:
-            while True:
-                entries = await self.get_new_entries()
-                for entry in entries:
-                    yield entry
-                await asyncio.sleep(self.poll_interval)
-        finally:
-            if self.filter:
-                await self.filter.uninstall()
-                self.filter = None
+        while True:
+            entries = await self.get_new_entries()
+            for entry in entries:
+                yield entry
+            await asyncio.sleep(self.poll_interval)
+
 
     async def process_events(
         self,

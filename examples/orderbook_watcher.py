@@ -2,8 +2,8 @@
 from dotenv import load_dotenv
 
 from gte_py.api.chain.clob import ICLOB
-from gte_py.api.chain.iclob_streaming import CLOBEventStreamer
-from gte_py.clients import Client, MarketClient
+from gte_py.api.chain.utils import make_web3
+from gte_py.clients import Client, OrderbookClient
 from gte_py.configs import TESTNET_CONFIG
 
 load_dotenv()
@@ -40,12 +40,11 @@ class OrderbookWatcher:
         """
         # Initialize CLOB contract and streamer
         self.clob = clob
-        self.streamer = CLOBEventStreamer(clob, poll_interval=poll_interval)
 
         # Also initialize MarketClient for REST API access
         self.market_address = clob.address
-        self.market_client: MarketClient | None = None  # Will be set in start() method
-
+        self.orderbook_client: OrderbookClient | None = None  # Will be set in start() method
+        self.streamer = None
         self.depth = depth
         self.poll_interval = poll_interval
         self.ob: OrderBookSnapshot | None = None
@@ -134,28 +133,21 @@ class OrderbookWatcher:
         await self.init()
         self.running = True
         market = await client.info.get_market(self.market_address)
-
+        self.orderbook_client = client.orderbook
         # Initialize MarketClient if we have a client
         async def refresh_snapshot():
             while self.running:
-                self.market_client = MarketClient(market, TESTNET_CONFIG)
-                snapshot = await self.market_client.get_order_book_snapshot(market, self.depth)
+                snapshot = await self.orderbook_client.get_order_book_snapshot(market, self.depth)
                 self.update_book(snapshot)
                 await asyncio.sleep(self.poll_interval)
 
         asyncio.create_task(refresh_snapshot())
 
-        self.streamer.on_trades(self.update_trade)
-
-        # Start streams in background
-        self.streamer.stream_order_book(depth=self.depth)
-        self.streamer.stream_trades()
-
     async def stop(self):
         """Stop watching the orderbook."""
         self.running = False
-        if self.market_client:
-            await self.market_client.close()
+        if self.orderbook_client:
+            await self.orderbook_client.close()
 
 
 async def main():
@@ -173,18 +165,7 @@ async def main():
     args = parser.parse_args()
 
     console.print("[bold blue]GTE Orderbook Watcher[/bold blue]\n")
-
-    # Connect to Ethereum node
-    if args.use_http or True:
-        console.print(f"Connecting to MegaETH Testnet via HTTP: {TESTNET_CONFIG.rpc_http}")
-        web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(TESTNET_CONFIG.rpc_http))
-    else:
-        console.print(f"Connecting to MegaETH Testnet via WebSocket: {TESTNET_CONFIG.rpc_ws}")
-        web3 = AsyncWeb3(AsyncWeb3.WebSocketProvider(TESTNET_CONFIG.rpc_ws))
-
-    if not web3.is_connected():
-        console.print("[red]Failed to connect to Ethereum node![/red]")
-        return
+    web3 = await make_web3(TESTNET_CONFIG)
 
     # Initialize GTE client for market info
     client = Client(web3=web3, config=TESTNET_CONFIG)

@@ -358,6 +358,7 @@ def parse_order_matched(event_data: EventData) -> OrderMatchedEvent:
         taker_order=args.get("takerOrder"),
         maker_order=args.get("makerOrder"),
         traded_base=args.get("tradedBase"),
+        nonce=args.get('nonce')
     )
 
 
