@@ -361,7 +361,7 @@ class Web3RequestManager:
         self.request_queue: asyncio.Queue[Tuple[TxParams | Awaitable[TxParams], asyncio.Future[HexBytes], asyncio.Future[None]]] = (
             asyncio.Queue()
         )
-        self.nonces: List[Nonce] = []
+        self.free_nonces: List[Nonce] = []
         self.next_nonce: Nonce = Nonce(0)
         self.lock = asyncio.Lock()
         self.is_running = False
@@ -395,42 +395,45 @@ class Web3RequestManager:
             )
             self.next_nonce = max(latest, pending, self.next_nonce)
 
-            # Filling up nonce gaps but one at a time
-            if len(self.nonces) > 0:
-                nonce = self.nonces[0]
-                if nonce + 1 < self.next_nonce:
-                    self.logger.info(
-                        f"Nonce gap exists from {nonce} up to {self.next_nonce}"
-                    )
-                    self.nonces.pop(0)
-                    await self.fill_up_nonce_gap(nonce)
+            # we have a gap in nonce
+            if latest < pending:
+                nonce = Nonce(latest + 1)
+                self.logger.info(
+                    f"Nonce gap exists from {nonce} up to {self.next_nonce}"
+                )
+                try:
+                    self.free_nonces.remove(nonce)
+                except ValueError:
+                    pass
+
+                await self.fill_up_nonce_gap(nonce)
 
     async def get_nonce(self):
         async with self.lock:
-            if len(self.nonces) == 0:
+            if len(self.free_nonces) == 0:
                 nonce = self.next_nonce
                 self.logger.debug(f"Get nonce {nonce}")
                 self.next_nonce += 1
             else:
-                nonce = self.nonces.pop(0)
+                nonce = self.free_nonces.pop(0)
                 self.logger.debug(f"Get nonce {nonce}")
             return nonce
 
     async def put_nonce(self, nonce):
         self.logger.debug(f"Put nonce {nonce}")
-        self.nonces.append(nonce)
-        self.nonces.sort()
+        self.free_nonces.append(nonce)
+        self.free_nonces.sort()
 
-        while len(self.nonces) > 0:
-            nonce = self.nonces[-1]
+        while len(self.free_nonces) > 0:
+            nonce = self.free_nonces[-1]
             if nonce + 1 == self.next_nonce:
                 self.logger.info(f"Recycling nonce {nonce}")
-                self.nonces.pop()
+                self.free_nonces.pop()
                 self.next_nonce = nonce
             else:
                 break
 
-    async def fill_up_nonce_gap(self, nonce):
+    async def fill_up_nonce_gap(self, nonce: Nonce):
         assert nonce >= 0, "nonce should be non-negative"
         self.logger.info(f"Filling up nonce {nonce}")
         await self.cancel_transaction(nonce)
@@ -467,7 +470,7 @@ class Web3RequestManager:
             tx, tx_hash, tx_send = await self.request_queue.get()
 
             try:
-                async with timeout(3):
+                async with timeout(15):
                     nonce = await self.get_nonce()
                     if isinstance(tx, Awaitable):
                         tx = await tx
