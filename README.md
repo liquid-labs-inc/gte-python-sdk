@@ -1,8 +1,8 @@
-from hexbytes import HexBytesfrom eth_utils import to_checksum_addressfrom gte_py.api.chain.utils import make_web3
-
 # GTE-PY
 
 A Python SDK for interacting with the GTE decentralized exchange on MegaETH.
+
+`pip install gte-py`
 
 ## Overview
 
@@ -76,7 +76,6 @@ dependencies = [
   "gte_py@git+https://github.com/liquid-labs-inc/gte-python-sdk#egg=gte-py"
 ]
 ```
-
 
 ## Project Structure
 
@@ -193,4 +192,3 @@ pyright
 ## Contributing
 
 Contributions are welcome! Please check out our [Developer Guide](docs/Develop.md) for details.
-

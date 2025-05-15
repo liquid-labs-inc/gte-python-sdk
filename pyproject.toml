@@ -6,7 +6,7 @@ build-backend = "uv_build"
 
 [project]
 name = "gte-py"
-version = "0.1.0"
+version = "0.1.2"
 description = "GTE Python SDK"
 readme = "README.md"
 license = "MIT"
