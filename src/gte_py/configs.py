@@ -4,7 +4,7 @@ Chain ID	6342
 Network ID	6342
 Native Token (Symbol)	MegaETH Testnet Ether (ETH)
 Native Token Decimals	18
-RPC HTTP URL	https://carrot.megaeth.com/rpc
+RPC HTTP URL	https://api-testnet.gte.xyz/v1/exchange
 RPC WebSocket URL	wss://carrot.megaeth.com/ws
 Block Explorer	Performance Dashboard: https://uptime.megaeth.com
 Community Explorer: https://megaexplorer.xyz
@@ -56,7 +56,7 @@ TESTNET_CONFIG = NetworkConfig(
     ws_url="wss://api-testnet.gte.xyz/ws",
     chain_id=6342,
     native_token="MegaETH Testnet Ether (ETH)",
-    rpc_http=os.environ.get("MEGAETH_TESTNET_RPC_HTTP", "https://carrot.megaeth.com/rpc"),
+    rpc_http=os.environ.get("MEGAETH_TESTNET_RPC_HTTP", "https://api-testnet.gte.xyz/v1/exchange"),
     rpc_ws=os.environ.get("MEGAETH_TESTNET_RPC_WS", "wss://carrot.megaeth.com/ws"),
     block_explorer="https://megaexplorer.xyz",
     performance_dashboard="https://uptime.megaeth.com",
