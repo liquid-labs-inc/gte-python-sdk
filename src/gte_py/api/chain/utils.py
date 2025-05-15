@@ -477,7 +477,8 @@ class Web3RequestManager:
                 tx_send.set_result(None)
             except Exception as e:
                 logger.error(f"Failed to send transaction: {e}")
-                tx_hash.set_exception(e)
+                if not tx_hash.done():
+                    tx_hash.set_exception(e)
                 tx_send.set_exception(e)
 
     async def _monitor_confirmations(self):

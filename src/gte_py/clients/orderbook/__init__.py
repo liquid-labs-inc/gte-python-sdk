@@ -67,12 +67,6 @@ class OrderbookClient:
         if callback:
             self._orderbook_callbacks.append(callback)
 
-        if not self._orderbook_callbacks:
-            # If no callbacks, add a dummy one to update the orderbook state
-            self._orderbook_callbacks.append(
-                lambda update: setattr(self, "_orderbook_state", update)
-            )
-
         # Define handler for raw orderbook messages
         async def handle_orderbook_message(data):
             if data.get("s") != "book":

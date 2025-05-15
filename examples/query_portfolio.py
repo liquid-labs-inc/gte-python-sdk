@@ -1,11 +1,8 @@
 """Example of querying portfolio and LP positions with the GTE client."""
 
 import asyncio
-from typing import Dict, Any, List
 
-from web3 import AsyncWeb3
-
-from examples.utils import MARKET_ADDRESS, display_token_balances, show_balances
+from examples.utils import MARKET_ADDRESS, show_balances
 from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
