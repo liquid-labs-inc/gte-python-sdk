@@ -18,7 +18,7 @@ load_dotenv()
 WALLET_ADDRESS = AsyncWeb3.to_checksum_address(os.getenv("WALLET_ADDRESS"))
 WALLET_PRIVATE_KEY = HexStr(os.getenv("WALLET_PRIVATE_KEY"))
 MARKET_ADDRESS = AsyncWeb3.to_checksum_address(
-    os.getenv("MARKET_ADDRESS", "0x0F3642714B9516e3d17a936bAced4de47A6FFa5F"))  # gBTC/cUSD
+    os.getenv("MARKET_ADDRESS", "0x5ca9f32d4ce7cc0f782213c446c2ae14b754a623"))  # ETH/USD
 
 
 def print_separator(title: str) -> None:
