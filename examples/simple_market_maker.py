@@ -13,18 +13,18 @@ from gte_py.contracts.erc20 import ERC20
 from gte_py.contracts.iclob import ICLOB
 
 # --- Config ---
-BINANCE_BOOK_URL = "https://api.binance.com/api/v3/depth?symbol=BTCUSDT&limit=5"
-ORDER_SIZE = 0.2  # BTC
+BINANCE_BOOK_URL = "https://api.binance.com/api/v3/depth?symbol=SUIUSDT&limit=5"
+ORDER_SIZE = 1  # BTC
 UPDATE_INTERVAL = 0.0  # seconds
-RISK_AVERSION = 0.05
+RISK_AVERSION = 0.01
 VOL_EMA_ALPHA = 0.1
-GBTC_CUSD_MARKET_ADDRESS = "0x0F3642714B9516e3d17a936bAced4de47A6FFa5F"
-TARGET_SPREAD = 1.0
+GBTC_CUSD_MARKET_ADDRESS = "0x40a986641335f0eB2AeD9e04e26A0d183ba43958"
+TARGET_SPREAD = 0.02
 
 # Load environment variables for wallet
 load_dotenv()
-WALLET_ADDRESS_RAW = os.getenv("WALLET_ADDRESS")
-WALLET_PRIVATE_KEY_RAW = os.getenv("WALLET_PRIVATE_KEY")
+WALLET_ADDRESS_RAW = os.getenv("WALLET_ADDRESS_1")
+WALLET_PRIVATE_KEY_RAW = os.getenv("WALLET_PRIVATE_KEY_1")
 
 if not WALLET_ADDRESS_RAW or not WALLET_PRIVATE_KEY_RAW:
     raise ValueError("WALLET_ADDRESS and WALLET_PRIVATE_KEY must be set in your environment.")
@@ -123,6 +123,7 @@ async def get_market_info(client, market_address) -> Market:
 async def main():
     network = TESTNET_CONFIG
     web3 = Web3(Web3.HTTPProvider(network.rpc_http))
+    print("WALLET_ADDRESS", WALLET_ADDRESS)
     client = Client(web3=web3, config=network, sender_address=WALLET_ADDRESS)
     price_index = MicropriceIndex()
     estimator = EMAEstimator()
