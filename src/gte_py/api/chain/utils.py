@@ -363,7 +363,7 @@ class Web3RequestManager:
             asyncio.Queue()
         )
         self.free_nonces: List[Nonce] = []
-        self.last_latest_nonce: Nonce = Nonce(0)
+        self._prev_latest_nonce: Nonce = Nonce(0)
         self.next_nonce: Nonce = Nonce(0)
         self.lock = asyncio.Lock()
         self.is_running = False
@@ -395,11 +395,14 @@ class Web3RequestManager:
             pending: Nonce = await self.web3.eth.get_transaction_count(
                 self.account.address, block_identifier="pending"
             )
-            self.next_nonce = max(latest, pending, self.next_nonce)
-            nonce = Nonce(latest + 1)
-            # we have the nonce to be recycled properly, or blocked
-            if latest < pending and (nonce in self.free_nonces or latest == self.last_latest_nonce):
-                self.logger.info(
+            # do not update from latest, as there could be blocked transactions already
+            self.next_nonce = max(latest, self.next_nonce)
+            nonce = latest
+            if latest < pending and (nonce in self.free_nonces or latest == self._prev_latest_nonce):
+                # nonce to be recycled
+                # or
+                # transactions stuck for 5 seconds
+                self.logger.warning(
                     f"Nonce gap exists from {nonce} up to {self.next_nonce}"
                 )
                 try:
@@ -408,7 +411,8 @@ class Web3RequestManager:
                     pass
 
                 await self.fill_up_nonce_gap(nonce)
-            self.last_latest_nonce = latest
+
+            self._prev_latest_nonce = latest
 
     async def get_nonce(self):
         async with self.lock:
@@ -498,9 +502,11 @@ class Web3RequestManager:
             tx["nonce"] = nonce
             if "from" not in tx:
                 tx["from"] = self.account.address
-            if "maxFeePerGas" not in tx:
-                gas_price = await self.web3.eth.gas_price
-                tx["maxFeePerGas"] = gas_price
+
+            if "maxPriorityFeePerGas" not in tx:
+                priority_fee = await self.web3.eth.max_priority_fee
+                tx["maxPriorityFeePerGas"] = priority_fee
+
             if "gas" not in tx:
                 gas = await self.web3.eth.estimate_gas(tx)
                 effective_gas = int(gas * 1.5)
