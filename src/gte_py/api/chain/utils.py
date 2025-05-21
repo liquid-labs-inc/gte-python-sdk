@@ -396,7 +396,7 @@ class Web3RequestManager:
             pending: Nonce = await self.web3.eth.get_transaction_count(
                 self.account.address, block_identifier="pending"
             )
-            self.logger.info(f"Latest nonce: {latest}, pending nonce: {pending}, next nonce: {self.next_nonce}")
+            self.logger.info(f"Latest nonce: {latest - 1}, pending nonce: {pending - 1}, next nonce: {self.next_nonce}")
             # do not update from latest, as there could be blocked transactions already
             self.next_nonce = max(latest, self.next_nonce)
             nonce = latest
