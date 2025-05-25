@@ -193,7 +193,7 @@ class TypedContractFunction(Generic[T]):
             instance = Web3RequestManager.instances[
                 self.web3.eth.default_account
             ]
-            self.tx_hash, self.tx_send = instance.send_request(tx)
+            self.tx_hash, self.tx_send = instance.submit_tx(tx)
 
             return self.tx_hash
         except ContractCustomError as e:
@@ -358,12 +358,12 @@ class Web3RequestManager:
     def __init__(self, web3: AsyncWeb3, account: LocalAccount):
         self.web3 = web3
         self.account = account
-        self.request_queue: asyncio.Queue[
+        self._tx_queue: asyncio.Queue[
             Tuple[TxParams | Awaitable[TxParams], asyncio.Future[HexBytes], asyncio.Future[None]]] = (
             asyncio.Queue()
         )
         self.free_nonces: List[Nonce] = []
-        self.last_latest_nonce: Nonce = Nonce(0)
+        self._prev_latest_nonce: Nonce = Nonce(0)
         self.next_nonce: Nonce = Nonce(0)
         self.lock = asyncio.Lock()
         self.is_running = False
@@ -389,17 +389,22 @@ class Web3RequestManager:
     async def sync_nonce(self):
         """Update nonce from blockchain state"""
         async with self.lock:
+            self.logger.info('Trying to sync nonce')
             latest: Nonce = await self.web3.eth.get_transaction_count(
                 self.account.address, block_identifier="latest"
             )
             pending: Nonce = await self.web3.eth.get_transaction_count(
                 self.account.address, block_identifier="pending"
             )
-            self.next_nonce = max(latest, pending, self.next_nonce)
-            nonce = Nonce(latest + 1)
-            # we have the nonce to be recycled properly, or blocked
-            if latest < pending and (nonce in self.free_nonces or latest == self.last_latest_nonce):
-                self.logger.info(
+            self.logger.info(f"Latest nonce: {latest - 1}, pending nonce: {pending - 1}, next nonce: {self.next_nonce}")
+            # do not update from latest, as there could be blocked transactions already
+            self.next_nonce = max(latest, self.next_nonce)
+            nonce = latest
+            if latest < pending and (nonce in self.free_nonces or latest == self._prev_latest_nonce):
+                # nonce to be recycled
+                # or
+                # transactions stuck for 5 seconds
+                self.logger.warning(
                     f"Nonce gap exists from {nonce} up to {self.next_nonce}"
                 )
                 try:
@@ -407,8 +412,9 @@ class Web3RequestManager:
                 except ValueError:
                     pass
 
-                await self.fill_up_nonce_gap(nonce)
-            self.last_latest_nonce = latest
+                await self.cancel_tx(nonce)
+
+            self._prev_latest_nonce = latest
 
     async def get_nonce(self):
         async with self.lock:
@@ -422,25 +428,21 @@ class Web3RequestManager:
             return nonce
 
     async def put_nonce(self, nonce):
-        self.logger.debug(f"Put nonce {nonce}")
-        self.free_nonces.append(nonce)
-        self.free_nonces.sort()
+        async with self.lock:
+            self.logger.debug(f"Put nonce {nonce}")
+            self.free_nonces.append(nonce)
+            self.free_nonces.sort()
 
-        while len(self.free_nonces) > 0:
-            nonce = self.free_nonces[-1]
-            if nonce + 1 == self.next_nonce:
-                self.logger.info(f"Recycling nonce {nonce}")
-                self.free_nonces.pop()
-                self.next_nonce = nonce
-            else:
-                break
+            while len(self.free_nonces) > 0:
+                nonce = self.free_nonces[-1]
+                if nonce + 1 == self.next_nonce:
+                    self.logger.info(f"Recycling nonce {nonce}")
+                    self.free_nonces.pop()
+                    self.next_nonce = nonce
+                else:
+                    break
 
-    async def fill_up_nonce_gap(self, nonce: Nonce):
-        assert nonce >= 0, "nonce should be non-negative"
-        self.logger.info(f"Filling up nonce {nonce}")
-        await self.cancel_transaction(nonce)
-
-    async def cancel_transaction(self, nonce: Nonce) -> Optional[HexBytes]:
+    async def cancel_tx(self, nonce: Nonce) -> Optional[HexBytes]:
         """
         Cancel a pending transaction by submitting a replacement with higher gas price.
 
@@ -450,26 +452,25 @@ class Web3RequestManager:
         Returns:
             Transaction hash of the cancellation transaction if successful, None otherwise
         """
-        async with self.lock:
-            # Get current gas price and increase it
-            gas_price = await self.web3.eth.gas_price
-            gas_price_multiplier = 1.5
-            new_gas_price = Wei(int(gas_price * gas_price_multiplier))
+        gas_price = await self.web3.eth.max_priority_fee
+        gas_price_multiplier = 1.5
+        new_priority_fee_per_gas = Wei(int(gas_price * gas_price_multiplier))
 
-            # Create a transaction sending 0 ETH to ourselves (cancellation)
-            cancel_tx: TxParams = {
-                "from": self.account.address,
-                "to": self.account.address,
-                "value": Wei(0),
-                "nonce": Nonce(nonce),
-                "gasPrice": new_gas_price,
-                "gas": 21000  # Minimum gas limit
-            }
-            await self._send_transaction(cancel_tx, nonce)
+        # Create a transaction sending 0 ETH to ourselves (cancellation)
+        cancel_tx: TxParams = {
+            "from": self.account.address,
+            "to": self.account.address,
+            "value": Wei(0),
+            "nonce": Nonce(nonce),
+            "maxPriorityFeePerGas": new_priority_fee_per_gas,
+            "gas": 21000  # Minimum gas limit
+        }
+        self.logger.info(f"Cancelling transaction nonce {nonce} with maxPriorityFeePerGas {new_priority_fee_per_gas}")
+        await self._send_transaction(cancel_tx, nonce)
 
     async def _process_transactions(self):
         while self.is_running:
-            tx, tx_hash, tx_send = await self.request_queue.get()
+            tx, tx_hash, tx_send = await self._tx_queue.get()
 
             try:
                 async with timeout(15):
@@ -498,9 +499,11 @@ class Web3RequestManager:
             tx["nonce"] = nonce
             if "from" not in tx:
                 tx["from"] = self.account.address
-            if "maxFeePerGas" not in tx:
-                gas_price = await self.web3.eth.gas_price
-                tx["maxFeePerGas"] = gas_price
+
+            if "maxPriorityFeePerGas" not in tx:
+                priority_fee = await self.web3.eth.max_priority_fee
+                tx["maxPriorityFeePerGas"] = priority_fee
+
             if "gas" not in tx:
                 gas = await self.web3.eth.estimate_gas(tx)
                 effective_gas = int(gas * 1.5)
@@ -521,9 +524,9 @@ class Web3RequestManager:
                 await self.put_nonce(nonce)
             raise e
 
-    def send_request(self, data: TxParams | Awaitable[TxParams]) -> Tuple[Awaitable[HexBytes], Awaitable[None]]:
+    def submit_tx(self, tx: TxParams | Awaitable[TxParams]) -> Tuple[Awaitable[HexBytes], Awaitable[None]]:
         """Public API to submit transactions"""
         tx_hash = asyncio.Future()
         tx_send = asyncio.Future()
-        self.request_queue.put_nowait((data, tx_hash, tx_send))
+        self._tx_queue.put_nowait((tx, tx_hash, tx_send))
         return tx_hash, tx_send
