@@ -400,6 +400,7 @@ class Web3RequestManager:
             # do not update from latest, as there could be blocked transactions already
             self.next_nonce = max(latest, self.next_nonce)
             nonce = latest
+            to_cancel = None
             if latest < pending and (nonce in self.free_nonces or latest == self._prev_latest_nonce):
                 # nonce to be recycled
                 # or
@@ -411,10 +412,13 @@ class Web3RequestManager:
                     self.free_nonces.remove(nonce)
                 except ValueError:
                     pass
-
-                await self.cancel_tx(nonce)
+                to_cancel = nonce
 
             self._prev_latest_nonce = latest
+
+        # it has to be outside the lock to avoid deadlock
+        if to_cancel is not None:
+            await self.cancel_tx(nonce)
 
     async def get_nonce(self):
         async with self.lock:
