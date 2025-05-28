@@ -467,7 +467,8 @@ class Web3RequestManager:
             "value": Wei(0),
             "nonce": Nonce(nonce),
             "maxFeePerGas": Wei(int(block['baseFeePerGas'] * gas_price_multiplier)),
-            "maxPriorityFeePerGas": Wei(int(max_priority_fee * gas_price_multiplier)),
+            # we sometimes receive max_priority_fee=0, which is not helpful
+            "maxPriorityFeePerGas": Wei(max(1, int(max_priority_fee * gas_price_multiplier))),
             "gas": 21000  # Minimum gas limit
         }
         self.logger.info(
