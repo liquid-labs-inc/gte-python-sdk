@@ -456,9 +456,9 @@ class Web3RequestManager:
         Returns:
             Transaction hash of the cancellation transaction if successful, None otherwise
         """
-        gas_price = await self.web3.eth.max_priority_fee
+        max_priority_fee = await self.web3.eth.max_priority_fee
+        block = await self.web3.eth.get_block(block_identifier="latest")
         gas_price_multiplier = 1.5
-        new_priority_fee_per_gas = Wei(int(gas_price * gas_price_multiplier))
 
         # Create a transaction sending 0 ETH to ourselves (cancellation)
         cancel_tx: TxParams = {
@@ -466,10 +466,12 @@ class Web3RequestManager:
             "to": self.account.address,
             "value": Wei(0),
             "nonce": Nonce(nonce),
-            "maxPriorityFeePerGas": new_priority_fee_per_gas,
+            "maxFeePerGas": Wei(int(block['baseFeePerGas'] * gas_price_multiplier)),
+            "maxPriorityFeePerGas": Wei(int(max_priority_fee * gas_price_multiplier)),
             "gas": 21000  # Minimum gas limit
         }
-        self.logger.info(f"Cancelling transaction nonce {nonce} with maxPriorityFeePerGas {new_priority_fee_per_gas}")
+        self.logger.info(
+            f"Cancelling transaction nonce {nonce} with {cancel_tx}")
         await self._send_transaction(cancel_tx, nonce)
 
     async def _process_transactions(self):
