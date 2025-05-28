@@ -400,6 +400,7 @@ class Web3RequestManager:
             # do not update from latest, as there could be blocked transactions already
             self.next_nonce = max(latest, self.next_nonce)
             nonce = latest
+            to_cancel = None
             if latest < pending and (nonce in self.free_nonces or latest == self._prev_latest_nonce):
                 # nonce to be recycled
                 # or
@@ -411,10 +412,13 @@ class Web3RequestManager:
                     self.free_nonces.remove(nonce)
                 except ValueError:
                     pass
-
-                await self.cancel_tx(nonce)
+                to_cancel = nonce
 
             self._prev_latest_nonce = latest
+
+        # it has to be outside the lock to avoid deadlock
+        if to_cancel is not None:
+            await self.cancel_tx(nonce)
 
     async def get_nonce(self):
         async with self.lock:
@@ -452,9 +456,9 @@ class Web3RequestManager:
         Returns:
             Transaction hash of the cancellation transaction if successful, None otherwise
         """
-        gas_price = await self.web3.eth.max_priority_fee
+        max_priority_fee = await self.web3.eth.max_priority_fee
+        block = await self.web3.eth.get_block(block_identifier="latest")
         gas_price_multiplier = 1.5
-        new_priority_fee_per_gas = Wei(int(gas_price * gas_price_multiplier))
 
         # Create a transaction sending 0 ETH to ourselves (cancellation)
         cancel_tx: TxParams = {
@@ -462,10 +466,13 @@ class Web3RequestManager:
             "to": self.account.address,
             "value": Wei(0),
             "nonce": Nonce(nonce),
-            "maxPriorityFeePerGas": new_priority_fee_per_gas,
+            "maxFeePerGas": Wei(int(block['baseFeePerGas'] * gas_price_multiplier)),
+            # we sometimes receive max_priority_fee=0, which is not helpful
+            "maxPriorityFeePerGas": Wei(max(1, int(max_priority_fee * gas_price_multiplier))),
             "gas": 21000  # Minimum gas limit
         }
-        self.logger.info(f"Cancelling transaction nonce {nonce} with maxPriorityFeePerGas {new_priority_fee_per_gas}")
+        self.logger.info(
+            f"Cancelling transaction nonce {nonce} with {cancel_tx}")
         await self._send_transaction(cancel_tx, nonce)
 
     async def _process_transactions(self):
@@ -491,7 +498,12 @@ class Web3RequestManager:
         """Dedicated confirmation monitoring task"""
         while self.is_running:
             await asyncio.sleep(5)  # Check every 5 seconds
-            await self.sync_nonce()
+            try:
+                await self.sync_nonce()
+            except Exception as e:
+                self.logger.error(f"Error during nonce synchronization: {e}")
+                # Handle the error, e.g., log it or retry
+                continue
 
     async def _send_transaction(self, tx: TxParams, nonce: Nonce, future: asyncio.Future[HexBytes] | None = None):
         """Transaction sending implementation"""
