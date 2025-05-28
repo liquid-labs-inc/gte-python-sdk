@@ -498,7 +498,12 @@ class Web3RequestManager:
         """Dedicated confirmation monitoring task"""
         while self.is_running:
             await asyncio.sleep(5)  # Check every 5 seconds
-            await self.sync_nonce()
+            try:
+                await self.sync_nonce()
+            except Exception as e:
+                self.logger.error(f"Error during nonce synchronization: {e}")
+                # Handle the error, e.g., log it or retry
+                continue
 
     async def _send_transaction(self, tx: TxParams, nonce: Nonce, future: asyncio.Future[HexBytes] | None = None):
         """Transaction sending implementation"""
