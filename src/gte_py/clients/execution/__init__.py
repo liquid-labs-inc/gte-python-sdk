@@ -15,7 +15,7 @@ from gte_py.api.rest import RestApi
 from gte_py.clients.clob import CLOBClient
 from gte_py.clients.orderbook import OrderbookClient
 from gte_py.clients.token import TokenClient
-from gte_py.models import Market, Order, OrderStatus, Side, OrderType, TimeInForce
+from gte_py.models import Market, Order, OrderStatus, Side, OrderType, TimeInForce, Trade
 
 logger = logging.getLogger(__name__)
 
@@ -411,6 +411,21 @@ class ExecutionClient:
         orders = await self._orderbook.get_open_orders(market, level=level)
         return [o for o in orders if o.owner == self.main_account]
 
+    async def get_trades(self, market: Market, limit: int = 100, offset: int = 0) -> List[Order]:
+        """
+        Get trades for a specific market using the REST API.
+
+        Args:
+            market: Market to get trades from
+            limit: Number of trades to retrieve (default 100)
+            offset: Offset for pagination (default 0)
+
+        Returns:
+            List of Order objects representing trades
+        """
+        response = await self._rest.get_trades(market.address, limit, offset)
+        return [Trade.from_api(trade) for trade in response]
+
     async def get_open_orders_rest(
             self, market: Market
     ) -> List[Order]:
@@ -426,7 +441,6 @@ class ExecutionClient:
 
         response = await self._rest.get_user_open_orders(self.main_account, market.address)
         return [self._parse_open_order(order_data) for order_data in response]
-
 
     async def get_filled_orders(
             self, address: Optional[ChecksumAddress] = None, market_address: ChecksumAddress = None
