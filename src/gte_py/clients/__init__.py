@@ -11,7 +11,6 @@ from gte_py.api.chain.clob_client import CLOBClient
 from .info import InfoClient
 from .market import MarketClient
 from .token import TokenClient
-from gte_py.clients.market.trades import TradesClient
 from ..api.rest import RestApi
 from ..configs import NetworkConfig
 
@@ -68,6 +67,7 @@ class Client:
                 token=self.token,
                 rest=self.rest,
                 market=self.market,
+                user=self.user
             )
 
         self._sender_address = account
