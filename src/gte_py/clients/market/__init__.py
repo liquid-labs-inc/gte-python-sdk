@@ -8,13 +8,13 @@ from typing import Any, Tuple, List
 
 from eth_typing import ChecksumAddress
 
+from gte_py.api.chain.clob_client import CLOBClient
 from gte_py.api.rest import RestApi
 from gte_py.api.ws import WebSocketApi
-from gte_py.clients import TradesClient
 from gte_py.clients.info import InfoClient
-from gte_py.api.chain.clob_client import CLOBClient
+from gte_py.clients.market.trades import TradesClient
 from gte_py.configs import NetworkConfig
-from gte_py.models import Candle, OrderbookUpdate, PriceLevel, OrderBookSnapshot, Market, Side, Order, Trade
+from gte_py.models import OrderbookUpdate, PriceLevel, OrderBookSnapshot, Market, Side, Order, Trade
 
 logger = logging.getLogger(__name__)
 
