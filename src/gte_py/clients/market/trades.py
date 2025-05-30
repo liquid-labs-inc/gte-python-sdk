@@ -63,7 +63,6 @@ class TradesClient:
                 size=float(trade_data.get("sz")),
                 timestamp=trade_data.get("t"),
                 tx_hash=trade_data.get("h"),
-                trade_id=trade_data.get("id"),
             )
 
             self._last_trade = trade

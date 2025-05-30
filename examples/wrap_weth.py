@@ -27,7 +27,7 @@ async def get_weth_balance(client: Client, web3: AsyncWeb3, weth_address: str) -
     weth_balance = await weth.convert_amount_to_quantity(weth_balance_raw)
 
     # Get exchange balance through the client
-    exchange_balance = await client.account.get_token_balance(weth_address)
+    exchange_balance = await client.user.get_token_balance(weth_address)
 
     # Get native ETH balance
     eth_balance = web3.from_wei(await web3.eth.get_balance(WALLET_ADDRESS, 'latest'), 'ether')
@@ -43,7 +43,7 @@ async def wrap_eth_example(client: Client, web3: AsyncWeb3, weth_address: str, a
 
     print(f"Creating transaction to wrap {amount_eth} ETH to WETH...")
 
-    await client.account.wrap_eth(
+    await client.user.wrap_eth(
         weth_address=weth_address,
         amount=to_wei(amount_eth, 'ether'),
 
@@ -56,7 +56,7 @@ async def unwrap_eth_example(client: Client, web3: AsyncWeb3, weth_address: str,
 
     print(f"Creating transaction to unwrap {amount_eth} WETH to ETH...")
 
-    await client.account.unwrap_eth(
+    await client.user.unwrap_eth(
         weth_address=weth_address,
         amount=to_wei(amount_eth, 'ether'),
 

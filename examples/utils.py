@@ -90,7 +90,7 @@ async def show_balances(client: Client, market: Market) -> None:
     print_separator("Token Balances")
 
     print(f"Getting balances for {market.base.symbol} and {market.quote.symbol}...")
-    wei = await client.account.get_eth_balance()
+    wei = await client.user.get_eth_balance()
     print("ETH balance:", AsyncWeb3.from_wei(wei, "ether"))
 
     await display_token_balances(client, market.base.address)
@@ -112,7 +112,7 @@ async def display_token_balances(client: Client, token_address: ChecksumAddress,
     try:
         # Get wallet and exchange balances
         token = client.token.get_erc20(token_address)
-        exchange_balance = await client.account.get_token_balance(token_address)
+        exchange_balance = await client.user.get_token_balance(token_address)
         exchange_balance = await token.convert_amount_to_quantity(exchange_balance)
 
         token_balance = await token.balance_of(WALLET_ADDRESS)
@@ -134,7 +134,7 @@ async def show_live_orders(client: Client, market: Market):
 
     try:
         # Get all orders for the market
-        orders: List[Order] = await client.execution.get_open_orders_rest(market)
+        orders: List[Order] = await client.execution.get_open_orders(market)
 
         # Display order details
         for order in orders:

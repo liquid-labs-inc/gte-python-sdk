@@ -1,17 +1,16 @@
 """Simple example demonstrating how to watch a market's orderbook using WebSocket ETH RPC."""
 from dotenv import load_dotenv
+load_dotenv()
 
 from gte_py.api.chain.clob import ICLOB
 from gte_py.api.chain.utils import make_web3
-from gte_py.clients import Client, OrderbookClient
+from gte_py.clients import Client, MarketClient
 from gte_py.configs import TESTNET_CONFIG
 
-load_dotenv()
 import argparse
 import asyncio
 import logging
 import os
-import time
 
 from rich.console import Console
 from rich.table import Table
@@ -43,7 +42,7 @@ class OrderbookWatcher:
 
         # Also initialize MarketClient for REST API access
         self.market_address = clob.address
-        self.orderbook_client: OrderbookClient | None = None  # Will be set in start() method
+        self.orderbook_client: MarketClient | None = None  # Will be set in start() method
         self.streamer = None
         self.depth = depth
         self.poll_interval = poll_interval
@@ -79,11 +78,6 @@ class OrderbookWatcher:
         """Update orderbook data from a snapshot."""
         self.ob = snapshot
         await self._refresh_table()
-
-    def update_trade(self, trade):
-        """Update last trade info."""
-        self.last_trade = trade
-        self._refresh_table()
 
     async def _refresh_table(self):
         """Refresh the display table with current data."""
@@ -133,7 +127,7 @@ class OrderbookWatcher:
         await self.init()
         self.running = True
         market = await client.info.get_market(self.market_address)
-        self.orderbook_client = client.orderbook
+        self.orderbook_client = client.market
         # Initialize MarketClient if we have a client
         async def refresh_snapshot():
             while self.running:
