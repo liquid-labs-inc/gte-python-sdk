@@ -24,14 +24,14 @@ async def display_portfolio(client: Client) -> None:
 
     try:
         # Get the full portfolio information
-        portfolio = await client.account.get_portfolio()
+        portfolio = await client.user.get_portfolio()
 
         # Display total USD value
-        total_usd_balance = await client.account.get_total_usd_balance()
+        total_usd_balance = await client.user.get_total_usd_balance()
         print(f"Total Portfolio Value: ${total_usd_balance:.2f} USD")
 
         # Display individual token balances
-        token_balances = await client.account.get_token_balances()
+        token_balances = await client.user.get_token_balances()
 
         print("\nToken Balances:")
         print("--------------------------------------------------------------")
@@ -64,7 +64,7 @@ async def display_lp_positions(client: Client) -> None:
 
     try:
         # Get LP positions
-        lp_positions = await client.account.get_lp_positions()
+        lp_positions = await client.user.get_lp_positions()
 
         if not lp_positions:
             print("No LP positions found.")

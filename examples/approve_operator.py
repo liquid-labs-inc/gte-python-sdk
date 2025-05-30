@@ -23,7 +23,7 @@ async def check_operator_status(client: Client, operator_address: ChecksumAddres
     """Check if an operator is already approved."""
     print_separator("Checking Operator Status")
 
-    is_approved = await client.account.is_operator_approved(operator_address)
+    is_approved = await client.user.is_operator_approved(operator_address)
 
     if is_approved:
         print(f"Operator {operator_address} is already approved")
@@ -40,7 +40,7 @@ async def approve_operator_example(client: Client, operator_address: ChecksumAdd
     print(f"Approving operator {operator_address}...")
 
     # Approve the operator
-    await client.account.approve_operator(
+    await client.user.approve_operator(
         operator_address=operator_address,
         gas=300000  # Set appropriate gas limit
     )
@@ -48,7 +48,7 @@ async def approve_operator_example(client: Client, operator_address: ChecksumAdd
     print(f"Operator {operator_address} approval transaction submitted")
 
     # Check if approval was successful
-    is_approved = await client.account.is_operator_approved(operator_address)
+    is_approved = await client.user.is_operator_approved(operator_address)
 
     if is_approved:
         print(f"Operator {operator_address} is now approved")
@@ -62,7 +62,7 @@ async def disapprove_operator_example(client: Client, operator_address: Checksum
     print(f"Disapproving operator {operator_address}...")
 
     # Disapprove the operator
-    await client.account.disapprove_operator(
+    await client.user.disapprove_operator(
         operator_address=operator_address,
         gas=300000  # Set appropriate gas limit
     )
@@ -70,7 +70,7 @@ async def disapprove_operator_example(client: Client, operator_address: Checksum
     print(f"Operator {operator_address} disapproval transaction submitted")
 
     # Check if disapproval was successful
-    is_approved = await client.account.is_operator_approved(operator_address)
+    is_approved = await client.user.is_operator_approved(operator_address)
 
     if not is_approved:
         print(f"Operator {operator_address} is now disapproved")

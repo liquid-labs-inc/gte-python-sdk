@@ -5,13 +5,13 @@ import logging
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 
-from .account import AccountClient
+from .user import UserClient
 from .execution import ExecutionClient
-from .clob import CLOBClient
+from gte_py.api.chain.clob_client import CLOBClient
 from .info import InfoClient
-from .orderbook import OrderbookClient
+from .market import MarketClient
 from .token import TokenClient
-from .trades import TradesClient
+from gte_py.clients.market.trades import TradesClient
 from ..api.rest import RestApi
 from ..configs import NetworkConfig
 
@@ -22,10 +22,10 @@ class Client:
     """User-friendly client for interacting with GTE."""
 
     def __init__(
-        self,
-        web3: AsyncWeb3,
-        config: NetworkConfig,
-        account: ChecksumAddress | None = None,
+            self,
+            web3: AsyncWeb3,
+            config: NetworkConfig,
+            account: ChecksumAddress | None = None,
     ):
         """
         Initialize the client.
@@ -48,15 +48,14 @@ class Client:
         self.info = InfoClient(
             web3=self._web3, rest=self.rest, clob_client=self.clob, token_client=self.token
         )
-        self.orderbook: OrderbookClient = OrderbookClient(config, self.rest, self.info, self.clob)
+        self.market: MarketClient = MarketClient(config, self.rest, self.info, self.clob)
         if not account:
-            self.account = None
+            self.user = None
         else:
-            self.account = AccountClient(
+            self.user = UserClient(
                 config=config,
                 account=account, clob=self.clob, token=self.token, rest=self.rest
             )
-        self.trades = TradesClient(config, self.rest)
 
         if not account:
             self.execution = None
@@ -68,7 +67,7 @@ class Client:
                 clob=self.clob,
                 token=self.token,
                 rest=self.rest,
-                orderbook=self.orderbook,
+                market=self.market,
             )
 
         self._sender_address = account

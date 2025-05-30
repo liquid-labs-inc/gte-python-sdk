@@ -15,7 +15,7 @@ async def query_market_trades(client: Client, market_address: ChecksumAddress) -
     print_separator("Market Trades Query")
 
     # Get trades for the market
-    trades = await client.trades.get_trades(market_address)
+    trades = await client.market.get_trades(market_address)
 
     # Display trade information
     print(f"Trades for market {market_address}:")
