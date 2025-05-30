@@ -85,11 +85,12 @@ class AccountClient:
                     amount=wrap_amount,
                     **kwargs
                 )
-
-        # First approve the factory to spend tokens
-        await token.approve(
-            spender=self._clob.get_factory_address(), amount=amount, **kwargs
-        ).send_wait()
+        allowance = await token.allowance(owner=self._account, spender=self._clob.get_factory_address())
+        if allowance < amount:
+            # approve the factory to spend tokens
+            await token.approve(
+                spender=self._clob.get_factory_address(), amount=amount, **kwargs
+            ).send_wait()
 
         # Then deposit the tokens
         await self._clob.clob_factory.deposit(
