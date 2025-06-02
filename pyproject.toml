@@ -126,10 +126,10 @@ exclude_lines = [
     "if __name__ == ['\"]__main__['\"]:$",
 ]
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     "rich>=14.0.0",
-    "dotenv>=0.9.9",
+    "python-dotenv>=1.0.0,<2",
     "tabulate",
     "pytest>=7.0",
     "coverage>=7.5",
