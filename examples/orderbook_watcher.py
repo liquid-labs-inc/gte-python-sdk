@@ -75,23 +75,23 @@ class OrderbookWatcher:
         self.table.add_column("Ask Price", justify="left", style="red")
         self.table.add_column("Ask Size", justify="left", style="cyan")
 
-    def update_book(self, snapshot: OrderBookSnapshot):
+    async def update_book(self, snapshot: OrderBookSnapshot):
         """Update orderbook data from a snapshot."""
         self.ob = snapshot
-        self._refresh_table()
+        await self._refresh_table()
 
     def update_trade(self, trade):
         """Update last trade info."""
         self.last_trade = trade
         self._refresh_table()
 
-    def _refresh_table(self):
+    async def _refresh_table(self):
         """Refresh the display table with current data."""
         # Clear existing rows
         self.table.rows = []
 
         # Get top of book prices
-        tob = asyncio.run(self.clob.get_tob())
+        tob = await self.clob.get_tob()
         max_bid, min_ask = tob
 
         # Update title with market info
@@ -138,7 +138,7 @@ class OrderbookWatcher:
         async def refresh_snapshot():
             while self.running:
                 snapshot = await self.orderbook_client.get_order_book_snapshot(market, self.depth)
-                self.update_book(snapshot)
+                await self.update_book(snapshot)
                 await asyncio.sleep(self.poll_interval)
 
         asyncio.create_task(refresh_snapshot())

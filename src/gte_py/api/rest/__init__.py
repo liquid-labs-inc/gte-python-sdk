@@ -298,6 +298,8 @@ class RestApi:
         self,
         user_address: str | ChecksumAddress,
         market_address: str | ChecksumAddress | None = None,
+        limit: int = 100,
+        offset: int = 0
     ) -> dict:
         """Get trades for a user.
 
@@ -311,6 +313,8 @@ class RestApi:
         params = {}
         if market_address:
             params["market_address"] = market_address
+        params["limit"] = limit
+        params["offset"] = offset
         return await self._request("GET", f"/v1/users/{user_address}/trades", params=params)
 
     async def get_user_open_orders(

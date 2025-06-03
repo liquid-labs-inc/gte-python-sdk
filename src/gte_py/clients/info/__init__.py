@@ -82,7 +82,7 @@ class InfoClient:
             token_address=token_address,
         )
 
-        markets = [Market.from_api(market_data) for market_data in response.get("markets", [])]
+        markets = [Market.from_api(market_data) for market_data in response]
 
         return markets
 
@@ -112,7 +112,7 @@ class InfoClient:
         # Create a market info object
         market_info = Market(
             address=address.address,
-            market_type=MarketType.CLOB,
+            market_type=MarketType.CLOB_SPOT,
             base=base_asset,
             quote=quote_asset,
         )

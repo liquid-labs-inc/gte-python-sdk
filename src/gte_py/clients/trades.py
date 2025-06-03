@@ -23,7 +23,7 @@ class TradesClient:
         """Connect to the WebSocket."""
         await self._ws.connect()
 
-    async def get_trades(self, market: ChecksumAddress, limit: int = 100, offset: int = 0):
+    async def get_trades(self, market: ChecksumAddress, limit: int = 100, offset: int = 0) -> list[Trade]:
         """
         Get trades for a specific symbol.
 
@@ -31,7 +31,8 @@ class TradesClient:
 
         :return: The response from the API.
         """
-        return await self._rest.get_trades(market, limit, offset)
+        trades = await self._rest.get_trades(market, limit, offset)
+        return [Trade.from_api(trade) for trade in trades]
 
     # Trade methods
     async def subscribe_trades(

@@ -7,6 +7,7 @@ from math import floor, log10
 from typing import Any, List, Optional, Tuple
 
 from eth_typing import ChecksumAddress
+from eth_utils import to_checksum_address
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
 
@@ -20,7 +21,8 @@ class MarketType(Enum):
 
     AMM = "amm"
     LAUNCHPAD = "launchpad"
-    CLOB = "clob"
+    CLOB_SPOT = "clob-spot"
+    CLOB_PERP = "clob-perp"
 
 
 Side = ContractSide
@@ -71,7 +73,6 @@ class Token:
     decimals: int
     name: str
     symbol: str
-    creator: ChecksumAddress | None = None
     total_supply: float | None = None
     media_uri: str | None = None
     balance: float | None = None
@@ -91,21 +92,13 @@ class Token:
     @classmethod
     def from_api(cls, data: dict[str, Any], with_balance: bool = False) -> "Token":
         """Create an Asset object from API response data."""
-        address = data.get("address", "")
-        creator = data.get("creator")
-
-        # Convert address strings to ChecksumAddress
-        if address and isinstance(address, str):
-            address = AsyncWeb3.to_checksum_address(address)
-        if creator and isinstance(creator, str):
-            creator = AsyncWeb3.to_checksum_address(creator)
+        address = to_checksum_address(data["address"])
 
         return cls(
             address=address,
             decimals=data.get("decimals", 18),
             name=data.get("name", ""),
             symbol=data.get("symbol", ""),
-            creator=creator,
             total_supply=data.get("totalSupply"),
             media_uri=data.get("mediaUri"),
             balance=data.get("balance") if with_balance else None,
@@ -126,13 +119,13 @@ class Market:
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Market":
         """Create a Market object from API response data."""
-        contract_address = data["contractAddress"]
+        contract_address = data["address"]
 
         return cls(
-            address=contract_address,
-            market_type=MarketType(data.get("marketType", "amm")),
-            base=Token.from_api(data.get("baseAsset", {})),
-            quote=Token.from_api(data.get("quoteAsset", {})),
+            address=to_checksum_address(contract_address),
+            market_type=MarketType(data["marketType"]),
+            base=Token.from_api(data["baseToken"]),
+            quote=Token.from_api(data["quoteToken"]),
             price=data.get("price"),
             volume_24h=data.get("volume24hr"),
         )
@@ -182,15 +175,14 @@ class Candle:
 class Trade:
     """Trade model."""
 
-    market_address: str  # Virtual market address
-    timestamp: int
+    market_address: ChecksumAddress
+    timestamp: int # e.g. 1748406437000
     price: float
     size: float
     side: Side
     tx_hash: HexBytes | None = None  # Transaction hash is an Ethereum address
     maker: ChecksumAddress | None = None
     taker: ChecksumAddress | None = None
-    trade_id: int | None = None
 
     @property
     def datetime(self) -> datetime:
@@ -200,29 +192,20 @@ class Trade:
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Trade":
         """Create a Trade object from API response data."""
-        side_str = data.get("side") or data.get("sd", "buy")
-        tx_hash = data.get("transactionHash") or data.get("h")
-        maker = data.get("maker")
-        taker = data.get("taker")
-
-        # Convert address strings to ChecksumAddress when present
-        if tx_hash and isinstance(tx_hash, str):
-            tx_hash = AsyncWeb3.to_checksum_address(tx_hash)
-        if maker and isinstance(maker, str):
-            maker = AsyncWeb3.to_checksum_address(maker)
-        if taker and isinstance(taker, str):
-            taker = AsyncWeb3.to_checksum_address(taker)
+        side = Side.from_str(data.get("side"))
+        tx_hash = HexBytes(data["txnHash"])
+        maker = data["maker"] and to_checksum_address(data["maker"]) or None
+        taker = data["taker"] and to_checksum_address(data["taker"]) or None
 
         return cls(
-            market_address=data.get("m", ""),
-            timestamp=data.get("timestamp") or data.get("t", 0),
-            price=float(data.get("price") or data.get("px", 0)),
-            size=float(data.get("size") or data.get("sz", 0)),
-            side=Side(side_str),
+            market_address=to_checksum_address(data['marketAddress']),
+            timestamp=data.get("timestamp"),
+            price=float(data["price"]),
+            size=float(data["size"]),
+            side=side,
             tx_hash=tx_hash,
             maker=maker,
             taker=taker,
-            trade_id=data.get("id"),
         )
 
 

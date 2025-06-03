@@ -12,7 +12,14 @@ class Side(IntEnum):
 
     BUY = 0
     SELL = 1
-
+    @classmethod
+    def from_str(cls, side_str: str) -> "Side":
+        if side_str.lower() == "buy":
+            return cls.BUY
+        elif side_str.lower() == "sell":
+            return cls.SELL
+        else:
+            raise ValueError(f"Invalid side: {side_str}. Must be 'buy' or 'sell'.")
 
 class Settlement(IntEnum):
     """Settlement type enum."""
