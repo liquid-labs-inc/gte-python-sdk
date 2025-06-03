@@ -169,8 +169,6 @@ async def main():
 
     # Initialize GTE client for market info
     client = Client(web3=web3, config=TESTNET_CONFIG)
-    # markets = await client.info.get_markets()
-    # print(markets)
 
     # Get market details
     market_address = AsyncWeb3.to_checksum_address(args.market)
