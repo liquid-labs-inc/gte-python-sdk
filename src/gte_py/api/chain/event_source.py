@@ -10,7 +10,7 @@ from typing import Callable, Dict, Generic, AsyncIterator, List, Optional, TypeV
 
 from web3 import AsyncWeb3
 from web3._utils.filters import AsyncLogFilter
-from web3.contract.contract import ContractEvent
+from web3.contract.async_contract import AsyncContractEvent
 from web3.types import EventData
 
 T = TypeVar('T')
@@ -27,7 +27,7 @@ class EventSource(Generic[T]):
     def __init__(
         self,
         web3: AsyncWeb3,
-        event: ContractEvent,
+        event: AsyncContractEvent,
         parser: Callable[[EventData], T],
     ):
         """
@@ -102,7 +102,7 @@ class EventStream(Generic[T]):
     def __init__(
         self,
         web3: AsyncWeb3,
-        event: ContractEvent,
+        event: AsyncContractEvent,
         parser: Callable[[EventData], T],
         from_block: Union[int, str] = "latest",
         poll_interval: float = 2.0,
