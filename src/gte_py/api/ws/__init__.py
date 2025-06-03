@@ -3,12 +3,13 @@
 import asyncio
 import json
 import logging
-import uuid
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union, TypedDict, cast
+from typing import Any, Dict, List, Union, TypedDict, Tuple
 
 import aiohttp
+from eth_typing import ChecksumAddress
+from eth_utils import to_checksum_address
 
 logger = logging.getLogger(__name__)
 
@@ -17,44 +18,44 @@ class OrderBookLevel(TypedDict):
     """Order book level data structure."""
     px: str  # Price
     sz: str  # Size
-    n: int   # Number of orders at this price level
+    n: int  # Number of orders at this price level
 
 
 class OrderBookData(TypedDict):
     """Order book data structure."""
     a: List[OrderBookLevel]  # Asks sorted from lowest to highest price
     b: List[OrderBookLevel]  # Bids sorted from highest to lowest price
-    t: int                   # Timestamp in milliseconds
-    m: str                   # Market address
+    t: int  # Timestamp in milliseconds
+    m: str  # Market address
 
 
 class TradeData(TypedDict):
     """Trade data structure."""
     sd: str  # Side ('buy' or 'sell')
-    m: str   # Market address
+    m: str  # Market address
     px: str  # Price
     sz: str  # Size
-    h: str   # Transaction hash
+    h: str  # Transaction hash
     id: int  # Trade ID
-    t: int   # Timestamp in milliseconds
+    t: int  # Timestamp in milliseconds
 
 
 class CandleData(TypedDict):
     """Candle data structure."""
-    m: str   # Market address
-    t: int   # Timestamp in milliseconds
-    i: str   # Interval
-    o: str   # Open price
-    h: str   # High price
-    l: str   # Low price
-    c: str   # Close price
-    v: str   # Volume
-    n: int   # Number of trades
+    m: str  # Market address
+    t: int  # Timestamp in milliseconds
+    i: str  # Interval
+    o: str  # Open price
+    h: str  # High price
+    l: str  # Low price
+    c: str  # Close price
+    v: str  # Volume
+    n: int  # Number of trades
 
 
 class WebSocketMessage(TypedDict):
     """WebSocket message structure."""
-    s: str   # Stream type
+    s: str  # Stream type
     d: Union[OrderBookData, TradeData, CandleData]  # Data
 
 
@@ -101,7 +102,7 @@ class WebSocketApi:
         """
         self.ws_url = ws_url
         self.ws: aiohttp.client.ClientWebSocketResponse | None = None
-        self.callbacks = {}
+        self.callbacks: Dict[Tuple[str, ChecksumAddress], Callable] = {}
         self.running = False
         self.task = None
         self.request_id = 0
@@ -160,12 +161,13 @@ class WebSocketApi:
         """
         if "s" in data:  # Stream data
             stream_type = data["s"]
-            
+
             # Parse data based on stream type
             inner = data['d']
+            market = to_checksum_address(inner['m'])
 
             if stream_type in self.callbacks:
-                for callback in self.callbacks.get(stream_type, []):
+                for callback in self.callbacks.get((stream_type, market), []):
                     try:
                         # Pass both raw and parsed data to callback
                         await callback(inner)
@@ -176,13 +178,13 @@ class WebSocketApi:
             if "error" in data:
                 logger.error(f"WebSocket subscription error: {data['error']}")
 
-
-    async def subscribe(self, method: str, params: dict, callback: Callable[[TypedDict], Any]):
+    async def subscribe(self, method: str, params: dict, market: ChecksumAddress, callback: Callable[[TypedDict], Any]):
         """Subscribe to a topic.
 
         Args:
             method: Topic to subscribe to (e.g., "trades.subscribe")
             params: Parameters for the subscription
+            market: Market address to subscribe to
             callback: Function to call when a message is received with (raw_data)
         """
         if not self.running or not self.ws:
@@ -191,10 +193,7 @@ class WebSocketApi:
         # Extract the stream type from the method
         stream_type = method.split(".")[0]
 
-        # Register callback
-        if stream_type not in self.callbacks:
-            self.callbacks[stream_type] = []
-        self.callbacks[stream_type].append(callback)
+        self.callbacks[(stream_type, market)] = callback
 
         # Send subscription request
         request_id = self._next_request_id()
@@ -202,7 +201,7 @@ class WebSocketApi:
         await self.ws.send_json(request)
         logger.debug(f"Sent subscription request: {request}")
 
-    async def unsubscribe(self, method: str, params: dict):
+    async def unsubscribe(self, method: str, params: dict, market: ChecksumAddress):
         """Unsubscribe from a topic.
 
         Args:
@@ -218,30 +217,30 @@ class WebSocketApi:
 
         # Clean up callbacks for this stream type
         stream_type = method.split(".")[0]
-        if stream_type in self.callbacks:
-            del self.callbacks[stream_type]
+        if (stream_type, market) in self.callbacks:
+            self.callbacks.pop((stream_type, market))
 
         logger.debug(f"Sent unsubscription request: {request}")
 
     # WebSocket API methods
-    async def subscribe_trades(self, market: str, callback: Callable[[TradeData], Any]):
+    async def subscribe_trades(self, market: ChecksumAddress, callback: Callable[[TradeData], Any]):
         """Subscribe to trades for a market.
 
         Args:
             market: Market address
             callback: Function to call when a trade is received with (raw_data)
         """
-        await self.subscribe("trades.subscribe", {"market": market}, callback)
+        await self.subscribe("trades.subscribe", {"market": market}, market, callback)
 
-    async def unsubscribe_trades(self, market: str):
+    async def unsubscribe_trades(self, market: ChecksumAddress):
         """Unsubscribe from trades for a market.
 
         Args:
             market: Market address
         """
-        await self.unsubscribe("trades.unsubscribe", {"market": market})
+        await self.unsubscribe("trades.unsubscribe", {"market": market}, market)
 
-    async def subscribe_candles(self, market: str, interval: str, callback: Callable[[CandleData], Any]):
+    async def subscribe_candles(self, market: ChecksumAddress, interval: str, callback: Callable[[CandleData], Any]):
         """Subscribe to candles for a market.
 
         Args:
@@ -250,7 +249,7 @@ class WebSocketApi:
             callback: Function to call when a candle is received with (raw_data)
         """
         await self.subscribe(
-            "candles.subscribe", {"market": market, "interval": interval}, callback
+            "candles.subscribe", {"market": market, "interval": interval}, market, callback
         )
 
     async def unsubscribe_candles(self, market: str, interval: str):
@@ -260,10 +259,10 @@ class WebSocketApi:
             market: Market address
             interval: Candle interval
         """
-        await self.unsubscribe("candles.unsubscribe", {"market": market, "interval": interval})
+        await self.unsubscribe("candles.unsubscribe", {"market": market, "interval": interval}, market)
 
     async def subscribe_orderbook(
-        self, market: str, limit: int = 10, callback: Callable[[OrderBookData], Any] | None = None
+            self, market: ChecksumAddress, limit: int = 10, callback: Callable[[OrderBookData], Any] | None = None
     ):
         """Subscribe to orderbook for a market.
 
@@ -272,44 +271,13 @@ class WebSocketApi:
             limit: Number of levels to include (defaults to 10)
             callback: Function to call when an orderbook update is received with (raw_data)
         """
-        # Register with book stream type
-        stream_type = "book"
-        if callback is not None:
-            if stream_type not in self.callbacks:
-                self.callbacks[stream_type] = []
-            self.callbacks[stream_type].append(callback)
+        await self.subscribe('book.subscribe', {"market": market, "limit": limit}, market, callback)
 
-        # Send subscription request using new format
-        request_id = self._next_request_id()
-        request = {
-            "id": request_id,
-            "method": "book.subscribe",
-            "params": {"market": market, "limit": limit},
-        }
-
-        if self.ws:
-            await self.ws.send_json(request)
-            logger.debug(f"Sent orderbook subscription request: {request}")
-        else:
-            logger.error("WebSocket not connected")
-
-    async def unsubscribe_orderbook(self, market: str, limit: int = 10):
+    async def unsubscribe_orderbook(self, market: ChecksumAddress, limit: int = 10):
         """Unsubscribe from orderbook for a market.
 
         Args:
             market: Market address
             limit: Number of levels that was used for subscription
         """
-        # Send unsubscription request using new format
-        request = {"method": "book.unsubscribe", "params": {"market": market, "limit": limit}}
-
-        if self.ws:
-            await self.ws.send_json(request)
-
-            # Clean up callbacks for this stream type
-            if "book" in self.callbacks:
-                del self.callbacks["book"]
-
-            logger.debug(f"Sent orderbook unsubscription request: {request}")
-        else:
-            logger.error("WebSocket not connected")
+        await self.unsubscribe('book.unsubscribe', {"market": market, "limit": limit}, market)

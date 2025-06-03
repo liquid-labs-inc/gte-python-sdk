@@ -1,5 +1,8 @@
 """Simple example demonstrating how to watch a market's orderbook using WebSocket ETH RPC."""
 import sys
+
+from examples.utils import MARKET_ADDRESS
+
 sys.path.append(".")
 from gte_py.api.chain.clob import ICLOB
 from gte_py.api.chain.utils import make_web3
@@ -19,9 +22,6 @@ from gte_py.models import OrderBookSnapshot
 
 # Initialize console for rich text output
 console = Console()
-
-# Default market address - replace with your market of interest
-MARKET_ADDRESS = os.getenv("MARKET_ADDRESS", "0xfaf0BB6F2f4690CA4319e489F6Dc742167B9fB10")  # MEOW/WETH
 
 
 class OrderbookWatcher:

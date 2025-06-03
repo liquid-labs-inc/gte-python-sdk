@@ -61,7 +61,8 @@ class TradesClient:
                 price=float(raw_data['px']),
                 size=float(raw_data['sz']),
                 timestamp= raw_data['t'],
-                tx_hash=HexBytes(raw_data['h'])
+                tx_hash=HexBytes(raw_data['h']),
+                trade_id=raw_data['id']
             )
 
             self._last_trade = trade
