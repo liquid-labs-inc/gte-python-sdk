@@ -18,6 +18,7 @@ class TradesClient:
         self._ws = WebSocketApi(config.ws_url)
         self._trade_callbacks = []
         self._rest = rest
+        self._last_trade = None  # Store the last received trade
 
     async def connect(self):
         """Connect to the WebSocket."""
@@ -50,20 +51,41 @@ class TradesClient:
             # If no callbacks, add a dummy one to store the last trade
             self._trade_callbacks.append(lambda trade: setattr(self, "_last_trade", trade))
 
-        # Define handler for raw trade messages
-        async def handle_trade_message(data):
-            if data.get("s") != "trades":
+        # Define handler for raw trade messages that handles both raw and parsed data
+        async def handle_trade_message(raw_data, parsed_data):
+            if raw_data.get("s") != "trades":
                 return
 
-            trade_data = data.get("d", {})
-            trade = Trade(
-                market_address=trade_data.get("m"),
-                side=trade_data.get("sd"),
-                price=float(trade_data.get("px")),
-                size=float(trade_data.get("sz")),
-                timestamp=trade_data.get("t"),
-                tx_hash=trade_data.get("h"),
-            )
+            # Extract trade data from raw data as fallback
+            trade_data = raw_data.get("d", {})
+            
+            # Use parsed_data if available, otherwise fallback to parsing raw_data
+            if parsed_data:
+                # Make sure timestamp is processed correctly
+                timestamp = None
+                if parsed_data.get("timestamp"):
+                    try:
+                        timestamp = int(parsed_data.get("timestamp").timestamp() * 1000)
+                    except (AttributeError, TypeError):
+                        timestamp = trade_data.get("t")
+                
+                trade = Trade(
+                    market_address=parsed_data.get("market"),
+                    side=parsed_data.get("side"),
+                    price=parsed_data.get("price"),
+                    size=parsed_data.get("size"),
+                    timestamp=timestamp or trade_data.get("t", 0),  # Fallback to raw data timestamp or 0
+                    tx_hash=parsed_data.get("tx_hash"),
+                )
+            else:
+                trade = Trade(
+                    market_address=trade_data.get("m"),
+                    side=trade_data.get("sd"),
+                    price=float(trade_data.get("px", 0)),
+                    size=float(trade_data.get("sz", 0)),
+                    timestamp=trade_data.get("t", 0),  # Default to 0 if not available
+                    tx_hash=trade_data.get("h"),
+                )
 
             self._last_trade = trade
 
@@ -73,9 +95,9 @@ class TradesClient:
                 except Exception as e:
                     logger.error(f"Error in trade callback: {e}")
 
-        await self._ws.subscribe_trades([market.address], handle_trade_message)
+        await self._ws.subscribe_trades(market.address, handle_trade_message)
 
     async def unsubscribe_trades(self, market: Market):
         """Unsubscribe from real-time trades."""
-        await self._ws.unsubscribe_trades([market.address])
+        await self._ws.unsubscribe_trades(market.address)
         self._trade_callbacks = []
