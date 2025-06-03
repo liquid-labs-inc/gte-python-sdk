@@ -2,11 +2,13 @@ import asyncio
 from typing import Callable, Any
 
 from eth_typing import ChecksumAddress
+from eth_utils import to_checksum_address
+from hexbytes import HexBytes
 
 from gte_py.api.rest import RestApi, logger
-from gte_py.api.ws import WebSocketApi
+from gte_py.api.ws import WebSocketApi, TradeData
 from gte_py.configs import NetworkConfig
-from gte_py.models import Market, Trade
+from gte_py.models import Market, Trade, Side
 
 
 class TradesClient:
@@ -52,40 +54,15 @@ class TradesClient:
             self._trade_callbacks.append(lambda trade: setattr(self, "_last_trade", trade))
 
         # Define handler for raw trade messages that handles both raw and parsed data
-        async def handle_trade_message(raw_data, parsed_data):
-            if raw_data.get("s") != "trades":
-                return
-
-            # Extract trade data from raw data as fallback
-            trade_data = raw_data.get("d", {})
-            
-            # Use parsed_data if available, otherwise fallback to parsing raw_data
-            if parsed_data:
-                # Make sure timestamp is processed correctly
-                timestamp = None
-                if parsed_data.get("timestamp"):
-                    try:
-                        timestamp = int(parsed_data.get("timestamp").timestamp() * 1000)
-                    except (AttributeError, TypeError):
-                        timestamp = trade_data.get("t")
-                
-                trade = Trade(
-                    market_address=parsed_data.get("market"),
-                    side=parsed_data.get("side"),
-                    price=parsed_data.get("price"),
-                    size=parsed_data.get("size"),
-                    timestamp=timestamp or trade_data.get("t", 0),  # Fallback to raw data timestamp or 0
-                    tx_hash=parsed_data.get("tx_hash"),
-                )
-            else:
-                trade = Trade(
-                    market_address=trade_data.get("m"),
-                    side=trade_data.get("sd"),
-                    price=float(trade_data.get("px", 0)),
-                    size=float(trade_data.get("sz", 0)),
-                    timestamp=trade_data.get("t", 0),  # Default to 0 if not available
-                    tx_hash=trade_data.get("h"),
-                )
+        async def handle_trade_message(raw_data: TradeData):
+            trade = Trade(
+                market_address=to_checksum_address(raw_data['m']),
+                side=Side.from_str(raw_data['sd']),
+                price=float(raw_data['px']),
+                size=float(raw_data['sz']),
+                timestamp= raw_data['t'],
+                tx_hash=HexBytes(raw_data['h'])
+            )
 
             self._last_trade = trade
 

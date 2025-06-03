@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict
 
-from gte_py.api.ws import WebSocketApi
+from gte_py.api.ws import WebSocketApi, CandleData, TradeData, OrderBookData
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
 from gte_py.models import Market
@@ -19,11 +19,11 @@ from utils import (
 
 
 # Define pretty-print handler for order book updates
-async def handle_orderbook_data(raw_data: dict, parsed_data: dict):
+async def handle_orderbook_data(raw_data: OrderBookData):
     """Handle and display parsed orderbook data."""
     print_separator("ORDER BOOK UPDATE")
-    market = parsed_data["market"]
-    timestamp = parsed_data["timestamp"]
+    market = raw_data['m']
+    timestamp = datetime.fromtimestamp(raw_data['t'] / 1000)  # Convert milliseconds to seconds
     
     print(f"Market: {market}")
     print(f"Time: {timestamp.strftime('%Y-%m-%d %H:%M:%S.%f')}")
@@ -32,53 +32,54 @@ async def handle_orderbook_data(raw_data: dict, parsed_data: dict):
     print("\nTop 5 Asks (Sell Orders):")
     print("-------------------------")
     print("Price\t\tSize\t\tCount")
-    for ask in parsed_data["asks"][:5]:  # Display top 5 asks
-        print(f"{ask['price']:,.2f}\t\t{ask['size']:,.6f}\t\t{ask['count']}")
+    for ask in raw_data["a"][:5]:  # Display top 5 asks
+        print(f"{ask['px']}\t\t{ask['sz']}\t\t{ask['n']}")
     
     # Display top bids (ordered from highest to lowest)
     print("\nTop 5 Bids (Buy Orders):")
     print("------------------------")
     print("Price\t\tSize\t\tCount")
-    for bid in parsed_data["bids"][:5]:  # Display top 5 bids
-        print(f"{bid['price']:,.2f}\t\t{bid['size']:,.6f}\t\t{bid['count']}")
+    for bid in raw_data["b"][:5]:
+        print(f"{bid['px']}\t\t{bid['sz']}\t\t{bid['n']}")
     print("\n")
 
 
 # Define pretty-print handler for trade updates
-async def handle_trade_data(raw_data: dict, parsed_data: dict):
+async def handle_trade_data(raw_data: TradeData):
     """Handle and display parsed trade data."""
     print_separator("TRADE EXECUTED")
-    side = parsed_data["side"].upper()
-    price = parsed_data["price"]
-    size = parsed_data["size"]
-    timestamp = parsed_data["timestamp"]
-    trade_id = parsed_data["trade_id"]
+    side = raw_data["sd"].upper()
+    price = float(raw_data["px"])
+    size = float(raw_data["sz"])
+    timestamp = datetime.fromtimestamp(raw_data["t"] // 1000)
+    trade_id = raw_data["id"]
+    tx_hash = raw_data['h']
     
     # Add color formatting based on trade side
     side_fmt = f"\033[32m{side}\033[0m" if side == "BUY" else f"\033[31m{side}\033[0m"
     
+    print(f"Market: {raw_data['m']}")
     print(f"Trade ID: {trade_id}")
     print(f"Side: {side_fmt}")
     print(f"Price: {price:,.2f}")
     print(f"Size: {size:,.6f}")
     print(f"Value: {price * size:,.2f}")
     print(f"Time: {timestamp.strftime('%Y-%m-%d %H:%M:%S.%f')}")
-    print(f"Tx Hash: {parsed_data['tx_hash'][:10]}...")
     print("\n")
 
 
 # Define pretty-print handler for candle updates
-async def handle_candle_data(raw_data: dict, parsed_data: dict):
+async def handle_candle_data(raw_data: CandleData):
     """Handle and display parsed candle data."""
     print_separator("CANDLE UPDATE")
-    interval = parsed_data["interval"]
-    timestamp = parsed_data["timestamp"]
-    open_price = parsed_data["open"]
-    close_price = parsed_data["close"]
-    high_price = parsed_data["high"]
-    low_price = parsed_data["low"]
-    volume = parsed_data["volume"]
-    trade_count = parsed_data["trade_count"]
+    interval = raw_data["i"]
+    timestamp = datetime.fromtimestamp(raw_data["t"] // 1000)
+    open_price = float(raw_data["o"])
+    close_price = float(raw_data["c"])
+    high_price = float(raw_data["h"])
+    low_price = float(raw_data["l"])
+    volume = float(raw_data["v"])
+    trade_count = raw_data["n"]
     
     # Calculate price change and determine if it's up or down
     price_change = close_price - open_price

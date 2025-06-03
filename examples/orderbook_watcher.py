@@ -93,7 +93,6 @@ class OrderbookWatcher:
             f"{self.market_symbol} | "
             f"TOB: {max_bid}/{min_ask} | "
             f"Spread: {spread if spread else 'N/A'} | "
-            f"Last update: {time.strftime('%H:%M:%S')}"
         )
 
         # Sort bids (highest to lowest) and asks (lowest to highest)
