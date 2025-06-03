@@ -183,6 +183,7 @@ class Trade:
     tx_hash: HexBytes | None = None  # Transaction hash is an Ethereum address
     maker: ChecksumAddress | None = None
     taker: ChecksumAddress | None = None
+    trade_id: int | None = None
 
     @property
     def datetime(self) -> datetime:
