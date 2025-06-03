@@ -8,17 +8,18 @@ from typing import Any, Tuple, List
 
 from eth_typing import ChecksumAddress
 
+from gte_py.api.chain.clob_client import CLOBClient
 from gte_py.api.rest import RestApi
 from gte_py.api.ws import WebSocketApi
 from gte_py.clients.info import InfoClient
-from gte_py.clients.clob import CLOBClient
+from gte_py.clients.market.trades import TradesClient
 from gte_py.configs import NetworkConfig
-from gte_py.models import Candle, OrderbookUpdate, PriceLevel, OrderBookSnapshot, Market, Side, Order
+from gte_py.models import OrderbookUpdate, PriceLevel, OrderBookSnapshot, Market, Side, Order, Trade
 
 logger = logging.getLogger(__name__)
 
 
-class OrderbookClient:
+class MarketClient:
     """WebSocket-based client for real-time market data."""
 
     def __init__(self, config: NetworkConfig, rest: RestApi, info: InfoClient, clob: CLOBClient):
@@ -31,12 +32,10 @@ class OrderbookClient:
         self._ws_client = WebSocketApi(ws_url=config.ws_url)
         self._rest = rest
         self._info_client = info
-        self._trade_callbacks = []
         self._orderbook_callbacks = []
-        self._last_trade = None
-        self._last_candle = {}  # Keyed by interval
         self._orderbook_state: dict[ChecksumAddress, OrderbookUpdate] = {}
         self._clob = clob
+        self._trades = TradesClient(config, rest)
 
     async def connect(self):
         """Connect to the WebSocket."""
@@ -46,10 +45,6 @@ class OrderbookClient:
     async def close(self):
         """Close the WebSocket connection."""
         await self._ws_client.close()
-
-    def get_last_candle(self, interval: str = "1m") -> Candle | None:
-        """Get the most recent candle for the specified interval."""
-        return self._last_candle.get(interval)
 
     # Orderbook methods
     async def subscribe_orderbook(
@@ -241,3 +236,6 @@ class OrderbookClient:
         clob = self._clob.get_clob(market.address)
         order = await clob.get_order(order_id)
         return Order.from_clob_order(order, market)
+
+    async def get_trades(self, market: ChecksumAddress, limit: int = 100, offset: int = 0) -> list[Trade]:
+        return await self._trades.get_trades(market, limit, offset)

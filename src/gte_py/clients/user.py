@@ -1,20 +1,21 @@
 import logging
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any
 
 from eth_typing import ChecksumAddress
 from typing_extensions import Unpack
 from web3.types import TxParams
 
-from gte_py.api.rest import RestApi
+from gte_py.api.chain.clob_client import CLOBClient
 from gte_py.api.chain.clob_manager import ICLOBManager
-from gte_py.clients.clob import CLOBClient
+from gte_py.api.rest import RestApi
 from gte_py.clients.token import TokenClient
 from gte_py.configs import NetworkConfig
+from gte_py.models import Market, Order, Trade
 
 logger = logging.getLogger(__name__)
 
 
-class AccountClient:
+class UserClient:
     def __init__(
             self,
             config: NetworkConfig,
@@ -36,7 +37,7 @@ class AccountClient:
         self._web3 = clob._web3
         self._token = token
         self._rest = rest
-        
+
         # Initialize CLOB Manager
         self._clob_manager = ICLOBManager(web3=self._web3, contract_address=config.clob_manager_address)
 
@@ -252,3 +253,67 @@ class AccountClient:
             account=self._account,
             operator=operator_address
         )
+
+    async def get_trades(self, market: Market, limit: int = 100, offset: int = 0) -> List[Order]:
+        """
+        Get trades for a specific market using the REST API.
+
+        Args:
+            market: Market to get trades from
+            limit: Number of trades to retrieve (default 100)
+            offset: Offset for pagination (default 0)
+
+        Returns:
+            List of Order objects representing trades
+        """
+        response = await self._rest.get_trades(market.address, limit, offset)
+        return [Trade.from_api(trade) for trade in response]
+
+    async def get_open_orders(
+            self, market: Market | None = None
+    ) -> List[Order]:
+        """
+        Get open orders for an address on a specific market using the REST API.
+
+        Args:
+            market: EVM address of the market (optional, defaults to None)
+
+
+        Returns:
+            List of Order objects representing open orders
+        """
+
+        response = await self._rest.get_user_open_orders(self._account, market and market.address)
+        return [Order.from_api(order_data) for order_data in response]
+
+    async def get_filled_orders(
+            self, market: Market | None = None
+    ) -> List[Order]:
+        """
+        Get filled orders for an address on a specific market using the REST API.
+
+        Args:
+            market: EVM address of the market (optional, defaults to None)
+
+        Returns:
+            List of Order objects representing filled orders
+        """
+
+        response = await self._rest.get_user_filled_orders(self._account, market and market.address)
+        return [Order.from_api(order_data) for order_data in response]
+
+    async def get_order_history(
+            self, market: Market | None = None
+    ) -> List[Order]:
+        """
+        Get order history for an address on a specific market using the REST API.
+
+        Args:
+            market: EVM address of the market (optional, defaults to None)
+
+        Returns:
+            List of Order objects representing order history
+        """
+
+        response = await self._rest.get_user_order_history(self._account, market and market.address)
+        return [Order.from_api(order_data) for order_data in response]

@@ -31,7 +31,7 @@ async def get_token_balances(client: Client, token: Token) -> float:
         Tuple containing (wallet_balance, exchange_balance)
     """
     try:
-        exchange_balance = await client.account.get_token_balance(token.address)
+        exchange_balance = await client.user.get_token_balance(token.address)
         return exchange_balance
     except Exception as e:
         print(f"Error getting balances for {token.symbol}: {e}")
@@ -63,7 +63,7 @@ async def ensure_token_deposit(
         print(f"Creating transaction to approve and deposit {quantity} {token.symbol}...")
 
         # This will handle both approval and deposit as needed
-        await client.account.ensure_deposit(
+        await client.user.ensure_deposit(
             token_address=token.address,
             amount=token_amount,
             gas=gas_limit

@@ -1,21 +1,22 @@
 """Order execution functionality for the GTE client."""
 
 import logging
-from typing import Optional, List, Tuple, Dict, Any, Awaitable
+from typing import Optional, Tuple, Awaitable
 
 from eth_typing import ChecksumAddress
 from typing_extensions import Unpack
 from web3 import AsyncWeb3
 from web3.types import TxParams
 
+from gte_py.api.chain.clob_client import CLOBClient
 from gte_py.api.chain.events import OrderCanceledEvent, FillOrderProcessedEvent, LimitOrderProcessedEvent
-from gte_py.api.chain.structs import Side, Settlement, LimitOrderType, FillOrderType, CLOBOrder
-from gte_py.api.chain.utils import get_current_timestamp, TypedContractFunction
+from gte_py.api.chain.structs import Side, Settlement, LimitOrderType, FillOrderType
+from gte_py.api.chain.utils import TypedContractFunction
 from gte_py.api.rest import RestApi
-from gte_py.clients.clob import CLOBClient
-from gte_py.clients.orderbook import OrderbookClient
+from gte_py.clients import UserClient
+from gte_py.clients.market import MarketClient
 from gte_py.clients.token import TokenClient
-from gte_py.models import Market, Order, OrderStatus, Side, OrderType, TimeInForce, Trade
+from gte_py.models import Market, Order, OrderStatus, Side, TimeInForce
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,8 @@ class ExecutionClient:
             clob: CLOBClient,
             token: TokenClient,
             rest: RestApi,
-            orderbook: OrderbookClient
+            market: MarketClient,
+            user: UserClient
     ):
         """
         Initialize the execution client.
@@ -50,14 +52,15 @@ class ExecutionClient:
             clob: CLOBClient instance
             token: TokenClient instance
             rest: Optional RestApi instance for API interactions
-            orderbook: OrderbookClient instance for order book interactions
+            market: MarketClient instance for order book reads
         """
         self._web3 = web3
         self._rest = rest
-        self.clob = clob
-        self.token = token
+        self._clob = clob
+        self._token = token
         self.main_account = main_account
-        self._orderbook = orderbook
+        self._market = market
+        self._user = user
 
     def place_limit_order_tx(
             self,
@@ -85,7 +88,7 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
         # Get the CLOB contract
-        clob = self.clob.get_clob(market.address)
+        clob = self._clob.get_clob(market.address)
 
         # Convert model types to contract types
         contract_side = Side.BUY if side == Side.BUY else Side.SELL
@@ -198,7 +201,7 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
         # Get the CLOB contract
-        clob = self.clob.get_clob(market.address)
+        clob = self._clob.get_clob(market.address)
 
         # Convert model types to contract types
         contract_side = Side.BUY if side == Side.BUY else Side.SELL
@@ -279,7 +282,7 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
         # Get the CLOB contract
-        clob = self.clob.get_clob(market.address)
+        clob = self._clob.get_clob(market.address)
 
         # Get the current order
         order = await clob.get_order(order_id)
@@ -335,7 +338,7 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
         # Get the CLOB contract
-        clob = self.clob.get_clob(market.address)
+        clob = self._clob.get_clob(market.address)
 
         # Create cancel args
         args = clob.create_cancel_args(order_ids=[order_id], settlement=Settlement.INSTANT)
@@ -355,7 +358,7 @@ class ExecutionClient:
             market: Market to cancel orders on
             **kwargs: Additional transaction parameters
         """
-        orders = await self.get_open_orders(market, **kwargs)
+        orders = await self._user.get_open_orders(market)
         for order in orders:
             if order.status != OrderStatus.OPEN:
                 continue
@@ -376,239 +379,16 @@ class ExecutionClient:
         """
 
         account = account or self.main_account
-        token = self.token.get_erc20(token_address)
+        token = self._token.get_erc20(token_address)
 
         # Get wallet balance
         wallet_balance_raw = await token.balance_of(account)
         wallet_balance = await token.convert_amount_to_quantity(wallet_balance_raw)
 
         # Get exchange balance
-        exchange_balance_raw = await self.clob.clob_factory.get_account_balance(
+        exchange_balance_raw = await self._clob.clob_factory.get_account_balance(
             account, token_address
         )
         exchange_balance = await token.convert_amount_to_quantity(exchange_balance_raw)
 
         return wallet_balance, exchange_balance
-
-    async def get_order(self, market: Market, order_id: int) -> Order:
-        return await self._orderbook.get_order(market, order_id)
-
-    async def get_open_orders(
-            self, market: Market, level: int | None = None
-    ) -> List[Order]:
-        """
-        Get all orders for a specific market and address from the chain directly.
-        This is a fallback method when the REST API is not available.
-
-        Args:
-            market: Market to get orders from
-            level: Number of price levels to retrieve (None for all)
-
-
-        Returns:
-            List of Order objects
-        """
-        orders = await self._orderbook.get_open_orders(market, level=level)
-        return [o for o in orders if o.owner == self.main_account]
-
-    async def get_trades(self, market: Market, limit: int = 100, offset: int = 0) -> List[Order]:
-        """
-        Get trades for a specific market using the REST API.
-
-        Args:
-            market: Market to get trades from
-            limit: Number of trades to retrieve (default 100)
-            offset: Offset for pagination (default 0)
-
-        Returns:
-            List of Order objects representing trades
-        """
-        response = await self._rest.get_trades(market.address, limit, offset)
-        return [Trade.from_api(trade) for trade in response]
-
-    async def get_open_orders_rest(
-            self, market: Market
-    ) -> List[Order]:
-        """
-        Get open orders for an address on a specific market using the REST API.
-
-        Args:
-            address: EVM address of the user (defaults to main account)
-
-        Returns:
-            List of Order objects representing open orders
-        """
-
-        response = await self._rest.get_user_open_orders(self.main_account, market.address)
-        return [self._parse_open_order(order_data) for order_data in response]
-
-    async def get_filled_orders(
-            self, address: Optional[ChecksumAddress] = None, market_address: ChecksumAddress = None
-    ) -> List[Order]:
-        """
-        Get filled orders for an address on a specific market using the REST API.
-
-        Args:
-            address: EVM address of the user (defaults to main account)
-            market_address: EVM address of the market
-
-        Returns:
-            List of Order objects representing filled orders
-        """
-        if address is None:
-            address = self.main_account
-
-        if market_address is None:
-            raise ValueError("market_address is required")
-
-        try:
-            response = await self._rest.get_user_filled_orders(address, market_address)
-            return [self._parse_filled_order(order_data) for order_data in response]
-        except Exception as e:
-            logger.error(f"Error fetching filled orders: {e}")
-            return []
-
-    async def get_order_history(
-            self, address: Optional[ChecksumAddress] = None, market_address: ChecksumAddress = None
-    ) -> List[Order]:
-        """
-        Get order history for an address on a specific market using the REST API.
-
-        Args:
-            address: EVM address of the user (defaults to main account)
-            market_address: EVM address of the market
-
-        Returns:
-            List of Order objects representing order history
-        """
-        if address is None:
-            address = self.main_account
-
-        if market_address is None:
-            raise ValueError("market_address is required")
-
-        try:
-            response = await self._rest.get_user_order_history(address, market_address)
-            return [self._parse_order_history(order_data) for order_data in response]
-        except Exception as e:
-            logger.error(f"Error fetching order history: {e}")
-            return []
-
-    def _convert_contract_order_to_model(
-            self,
-            market: Market,
-            order_data: CLOBOrder,
-    ) -> Order:
-        """
-        Convert contract order data to Order model.
-
-        Args:
-            order_data: Order data from the contract
-            market: Address of the market
-
-        Returns:
-            Order model
-        """
-
-        # Determine order status
-        status = OrderStatus.OPEN
-        if order_data.amount == 0:
-            status = OrderStatus.FILLED
-        elif (
-                order_data.cancelTimestamp > 0 and order_data.cancelTimestamp < get_current_timestamp()
-        ):
-            status = OrderStatus.EXPIRED
-
-        # Create Order model
-        return Order(
-            order_id=order_data.id,
-            market_address=market.address,
-            side=order_data.side,
-            order_type=OrderType.LIMIT,
-            amount=order_data.amount,
-            price=order_data.price,
-            time_in_force=TimeInForce.GTC,  # Default
-            status=status,
-            owner=order_data.owner,
-            created_at=0,  # Need to be retrieved from event timestamp
-        )
-
-    def _parse_open_order(self, order_data: Dict[str, Any]) -> Order:
-        """
-        Parse open order data from REST API response.
-
-        Args:
-            order_data: Order data from the API
-
-        Returns:
-            Order object
-        """
-        return Order(
-            order_id=int(order_data.get("orderId", 0)),
-            market_address=order_data.get("marketAddress"),
-            side=Side.BUY if order_data.get("side") == "bid" else Side.SELL,
-            order_type=OrderType.LIMIT,
-            amount=order_data.get("originalSize", 0),
-            price=order_data.get("limitPrice", 0),
-            time_in_force=TimeInForce.GTC,  # Default for open orders
-            status=OrderStatus.OPEN,
-            owner=order_data.get("owner", None),  # May be provided in some API responses
-            created_at=order_data.get("placedAt", 0),
-        )
-
-    def _parse_filled_order(self, order_data: Dict[str, Any]) -> Order:
-        """
-        Parse filled order data from REST API response.
-
-        Args:
-            order_data: Order data from the API
-
-        Returns:
-            Order object
-        """
-        return Order(
-            order_id=int(order_data.get("orderId", 0)),
-            market_address=order_data.get("marketAddress"),
-            side=Side.BUY if order_data.get("side") == "bid" else Side.SELL,
-            order_type=OrderType.LIMIT,  # Assuming all filled orders were limit orders
-            amount=order_data.get("sizeFilled", 0),
-            price=order_data.get("price", 0),
-            time_in_force=TimeInForce.GTC,  # Default
-            status=OrderStatus.FILLED,
-            owner=order_data.get("owner", None),
-            created_at=0,  # Not provided
-        )
-
-    def _parse_order_history(self, order_data: Dict[str, Any]) -> Order:
-        """
-        Parse order history data from REST API response.
-
-        Args:
-            order_data: Order data from the API
-
-        Returns:
-            Order object
-        """
-        # Determine order status based on available data
-        status = OrderStatus.OPEN
-        if order_data.get("status") == "filled":
-            status = OrderStatus.FILLED
-        elif order_data.get("status") == "canceled":
-            status = OrderStatus.CANCELLED
-
-        order_type = OrderType.LIMIT
-        if order_data.get("orderType") == "fill":
-            order_type = OrderType.MARKET
-
-        return Order(
-            order_id=int(order_data.get("orderId", 0)),
-            market_address=order_data.get("marketAddress"),
-            side=Side.BUY if order_data.get("side") == "bid" else Side.SELL,
-            order_type=order_type,
-            amount=order_data.get("originalSize", 0),
-            price=order_data.get("limitPrice", 0),
-            time_in_force=TimeInForce.GTC,  # Default
-            status=status,
-            owner=order_data.get("owner", None),
-            created_at=order_data.get("placedAt", 0),
-        )

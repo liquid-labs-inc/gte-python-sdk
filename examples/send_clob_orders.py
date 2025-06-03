@@ -29,7 +29,7 @@ async def approve_and_deposit_example(client: Client, market: Market, quantity: 
     # Get the quote token address
     print(f"Creating transaction to approve and deposit {quantity} {market.quote.symbol}...")
     # Get deposit transactions - this returns a list containing [approve_tx, deposit_tx]
-    await client.account.ensure_deposit(
+    await client.user.ensure_deposit(
         token_address=market.quote.address,
         amount=market.quote.convert_quantity_to_amount(quantity * price),
         gas=50 * 10000000
@@ -37,7 +37,7 @@ async def approve_and_deposit_example(client: Client, market: Market, quantity: 
 
     # Now deposit the base token
     print(f"Creating transaction to approve and deposit {quantity} {market.base.symbol}...")
-    await client.account.ensure_deposit(
+    await client.user.ensure_deposit(
         token_address=market.base.address,
         amount=market.base.convert_quantity_to_amount(quantity),
         gas=50 * 10000000
@@ -47,7 +47,21 @@ async def approve_and_deposit_example(client: Client, market: Market, quantity: 
 async def limit_order_example(client: Client, market: Market, quantity: float, price: float) -> list[int]:
     """Example of creating a limit order."""
     print_separator("Limit Order Example")
+    order_futures = []
+    for i in range(15):
+        order = client.execution.place_limit_order(
+            market=market,
+            side=Side.BUY,
+            amount=market.base.convert_quantity_to_amount(quantity),
+            price=market.quote.convert_quantity_to_amount(price),
+            time_in_force=TimeInForce.GTC,
+            gas=50 * 10000000
+        )
+        order_futures.append(order)
+    # Wait for all orders to be created
+    await asyncio.gather(*order_futures)
 
+    return []
     results = []
     print(f"Creating BUY limit order at price: {price}")
     order = await client.execution.place_limit_order(
@@ -96,7 +110,7 @@ async def get_order_status(client: Client, market: Market, order_id: int) -> Non
     print_separator("Order Status Example")
 
     try:
-        order = await client.execution.get_order(market, order_id=order_id)
+        order = await client.market.get_order(market, order_id=order_id)
 
         print(f"Order ID: {order.order_id}")
         print(f"Market: {market.pair}")
@@ -173,7 +187,7 @@ async def main() -> None:
 
     print("\nNOTE: For WETH wrapping and unwrapping examples, see wrap_weth.py")
 
-    bid, ask = await client.orderbook.get_tob(market)
+    bid, ask = await client.market.get_tob(market)
     price = market.base.convert_amount_to_quantity(bid)
     quantity = 1.0
 
@@ -183,7 +197,6 @@ async def main() -> None:
     # Check balances after deposit
     await show_balances(client, market)
 
-    # Order examples
     order_ids = await limit_order_example(client, market, quantity=quantity, price=price)
     for order_id in order_ids:
         await cancel_order_example(client, market, order_id)
