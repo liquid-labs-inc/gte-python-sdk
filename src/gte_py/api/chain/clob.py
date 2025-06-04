@@ -30,7 +30,6 @@ from .structs import (
     Side,
 )
 from .utils import TypedContractFunction, load_abi
-from gte_py.models import OrderBookSnapshot
 
 # Type variable for contract function return types
 T = TypeVar("T")
