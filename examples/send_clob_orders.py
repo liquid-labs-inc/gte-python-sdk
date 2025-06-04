@@ -1,5 +1,6 @@
 """Example of on-chain trading with the GTE client."""
-
+import sys
+sys.path.append(".")
 import asyncio
 import logging
 from typing import Optional
