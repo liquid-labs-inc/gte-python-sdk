@@ -14,24 +14,30 @@ from .events import (
     DepositEvent,
     FeeCollectedEvent,
     FeeRecipientSetEvent,
-    # MarketCreatedEvent,
+    MarketCreatedEvent,
     OperatorApprovedEvent,
     OperatorDisapprovedEvent,
-    RolesApprovedEvent,
-    RolesDisapprovedEvent,
     WithdrawEvent,
+    InitializedEvent,
+    OwnershipHandoverCanceledEvent,
+    OwnershipHandoverRequestedEvent,
+    OwnershipTransferredEvent,
     parse_account_credited,
     parse_account_debited,
     parse_account_fee_tier_updated,
     parse_deposit,
     parse_fee_collected,
     parse_fee_recipient_set,
-    # parse_market_created,
+    parse_market_created,
     parse_operator_approved,
     parse_operator_disapproved,
     parse_roles_approved,
     parse_roles_disapproved,
     parse_withdraw,
+    parse_initialized,
+    parse_ownership_handover_canceled,
+    parse_ownership_handover_requested,
+    parse_ownership_transferred,
 )
 from .utils import TypedContractFunction, load_abi
 
@@ -116,11 +122,11 @@ class ICLOBManager:
             parser=parse_fee_recipient_set
         )
 
-        # self._market_created_event_source = EventSource(
-        #     web3=self.web3,
-        #     event=self.contract.events.MarketCreated,
-        #     parser=parse_market_created
-        # )
+        self._market_created_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.MarketCreated,
+            parser=parse_market_created
+        )
 
         self._operator_approved_event_source = EventSource(
             web3=self.web3,
@@ -150,6 +156,30 @@ class ICLOBManager:
             web3=self.web3,
             event=self.contract.events.Withdraw,
             parser=parse_withdraw
+        )
+
+        self._initialized_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.Initialized,
+            parser=parse_initialized
+        )
+        
+        self._ownership_handover_canceled_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.OwnershipHandoverCanceled,
+            parser=parse_ownership_handover_canceled
+        )
+        
+        self._ownership_handover_requested_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.OwnershipHandoverRequested,
+            parser=parse_ownership_handover_requested
+        )
+        
+        self._ownership_transferred_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.OwnershipTransferred,
+            parser=parse_ownership_transferred
         )
 
     # ================= READ METHODS =================
@@ -366,28 +396,6 @@ class ICLOBManager:
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    # def create_market(
-    #         self, base_token: ChecksumAddress, quote_token: ChecksumAddress, settings: ICLOBSettingsParams,
-    #         **kwargs: Unpack[TxParams]
-    # ) -> TypedContractFunction[ChecksumAddress]:
-    #     """
-    #     Create a new market for a token pair.
-    #
-    #     Args:
-    #         base_token: The base token address
-    #         quote_token: The quote token address
-    #         settings: The market settings parameters
-    #         **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-    #
-    #     Returns:
-    #         TypedContractFunction that can be used to execute the transaction
-    #     """
-    #     func = self.contract.functions.createMarket(base_token, quote_token, settings)
-    #     params = {**kwargs}
-    #     return TypedContractFunction(func, params).with_event(
-    #         self.contract.events.MarketCreated, parse_market_created
-    #     )
-
     def credit_account(
             self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
     ) -> TypedContractFunction[None]:
@@ -593,23 +601,6 @@ class ICLOBManager:
         return TypedContractFunction(func, params).with_event(
             self.contract.events.FeeRecipientSet, parse_fee_recipient_set
         )
-
-    # def settle_incoming_order(
-    #         self, params: ICLOBSettleParams, **kwargs: Unpack[TxParams]
-    # ) -> TypedContractFunction[int]:
-    #     """
-    #     Settle an incoming order (market only).
-    #
-    #     Args:
-    #         params: The settlement parameters
-    #         **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-    #
-    #     Returns:
-    #         TypedContractFunction that can be used to execute the transaction
-    #     """
-    #     func = self.contract.functions.settleIncomingOrder(params)
-    #     params_tx = {**kwargs}
-    #     return TypedContractFunction(func, params_tx)
 
     def transfer_ownership(
             self, new_owner: ChecksumAddress, **kwargs: Unpack[TxParams]
@@ -869,83 +860,47 @@ class ICLOBManager:
             from_block=from_block, poll_interval=poll_interval, **filter_params
         )
 
-    # async def get_market_created_events(
-    #         self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
-    # ) -> List[MarketCreatedEvent]:
-    #     """
-    #     Get historical MarketCreated events.
-    #
-    #     Args:
-    #         from_block: Starting block number
-    #         to_block: Ending block number or 'latest'
-    #         **filter_params: Additional filter parameters
-    #
-    #     Returns:
-    #         List of MarketCreated events
-    #     """
-    #     return await self._market_created_event_source.get_historical(
-    #         from_block=from_block, to_block=to_block, **filter_params
-    #     )
-    #
-    # def stream_market_created_events(
-    #         self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
-    # ) -> EventStream[MarketCreatedEvent]:
-    #     """
-    #     Stream MarketCreated events asynchronously.
-    #
-    #     Args:
-    #         from_block: Starting block number or 'latest'
-    #         poll_interval: Interval between polls in seconds
-    #         **filter_params: Additional filter parameters
-    #
-    #     Returns:
-    #         EventStream of MarketCreated events
-    #     """
-    #     return self._market_created_event_source.get_streaming(
-    #         from_block=from_block, poll_interval=poll_interval, **filter_params
-    #     )
-
-    async def get_operator_approved_events(
+    async def get_market_created_events(
             self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
-    ) -> List[OperatorApprovedEvent]:
+    ) -> List[MarketCreatedEvent]:
         """
-        Get historical OperatorApproved events.
-        
+        Get historical MarketCreated events.
+
         Args:
             from_block: Starting block number
             to_block: Ending block number or 'latest'
             **filter_params: Additional filter parameters
-            
+
         Returns:
-            List of OperatorApproved events
+            List of MarketCreated events
         """
-        return await self._operator_approved_event_source.get_historical(
+        return await self._market_created_event_source.get_historical(
             from_block=from_block, to_block=to_block, **filter_params
         )
 
-    def stream_operator_approved_events(
+    def stream_market_created_events(
             self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
-    ) -> EventStream[OperatorApprovedEvent]:
+    ) -> EventStream[MarketCreatedEvent]:
         """
-        Stream OperatorApproved events asynchronously.
-        
+        Stream MarketCreated events asynchronously.
+
         Args:
             from_block: Starting block number or 'latest'
             poll_interval: Interval between polls in seconds
             **filter_params: Additional filter parameters
-            
+
         Returns:
-            EventStream of OperatorApproved events
+            EventStream of MarketCreated events
         """
-        return self._operator_approved_event_source.get_streaming(
+        return self._market_created_event_source.get_streaming(
             from_block=from_block, poll_interval=poll_interval, **filter_params
         )
 
-    async def get_operator_disapproved_events(
+    async def get_initialized_events(
             self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
-    ) -> List[OperatorDisapprovedEvent]:
+    ) -> List[InitializedEvent]:
         """
-        Get historical OperatorDisapproved events.
+        Get historical Initialized events.
         
         Args:
             from_block: Starting block number
@@ -953,17 +908,17 @@ class ICLOBManager:
             **filter_params: Additional filter parameters
             
         Returns:
-            List of OperatorDisapproved events
+            List of Initialized events
         """
-        return await self._operator_disapproved_event_source.get_historical(
+        return await self._initialized_event_source.get_historical(
             from_block=from_block, to_block=to_block, **filter_params
         )
 
-    def stream_operator_disapproved_events(
+    def stream_initialized_events(
             self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
-    ) -> EventStream[OperatorDisapprovedEvent]:
+    ) -> EventStream[InitializedEvent]:
         """
-        Stream OperatorDisapproved events asynchronously.
+        Stream Initialized events asynchronously.
         
         Args:
             from_block: Starting block number or 'latest'
@@ -971,53 +926,17 @@ class ICLOBManager:
             **filter_params: Additional filter parameters
             
         Returns:
-            EventStream of OperatorDisapproved events
+            EventStream of Initialized events
         """
-        return self._operator_disapproved_event_source.get_streaming(
-            from_block=from_block, poll_interval=poll_interval, **filter_params
-        )
-
-    async def get_roles_approved_events(
-            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
-    ) -> List[RolesApprovedEvent]:
-        """
-        Get historical RolesApproved events.
-        
-        Args:
-            from_block: Starting block number
-            to_block: Ending block number or 'latest'
-            **filter_params: Additional filter parameters
-            
-        Returns:
-            List of RolesApproved events
-        """
-        return await self._roles_approved_event_source.get_historical(
-            from_block=from_block, to_block=to_block, **filter_params
-        )
-
-    def stream_roles_approved_events(
-            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
-    ) -> EventStream[RolesApprovedEvent]:
-        """
-        Stream RolesApproved events asynchronously.
-        
-        Args:
-            from_block: Starting block number or 'latest'
-            poll_interval: Interval between polls in seconds
-            **filter_params: Additional filter parameters
-            
-        Returns:
-            EventStream of RolesApproved events
-        """
-        return self._roles_approved_event_source.get_streaming(
+        return self._initialized_event_source.get_streaming(
             from_block=from_block, poll_interval=poll_interval, **filter_params
         )
         
-    async def get_roles_disapproved_events(
+    async def get_ownership_handover_canceled_events(
             self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
-    ) -> List[RolesDisapprovedEvent]:
+    ) -> List[OwnershipHandoverCanceledEvent]:
         """
-        Get historical RolesDisapproved events.
+        Get historical OwnershipHandoverCanceled events.
         
         Args:
             from_block: Starting block number
@@ -1025,17 +944,17 @@ class ICLOBManager:
             **filter_params: Additional filter parameters
             
         Returns:
-            List of RolesDisapproved events
+            List of OwnershipHandoverCanceled events
         """
-        return await self._roles_disapproved_event_source.get_historical(
+        return await self._ownership_handover_canceled_event_source.get_historical(
             from_block=from_block, to_block=to_block, **filter_params
         )
 
-    def stream_roles_disapproved_events(
+    def stream_ownership_handover_canceled_events(
             self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
-    ) -> EventStream[RolesDisapprovedEvent]:
+    ) -> EventStream[OwnershipHandoverCanceledEvent]:
         """
-        Stream RolesDisapproved events asynchronously.
+        Stream OwnershipHandoverCanceled events asynchronously.
         
         Args:
             from_block: Starting block number or 'latest'
@@ -1043,8 +962,80 @@ class ICLOBManager:
             **filter_params: Additional filter parameters
             
         Returns:
-            EventStream of RolesDisapproved events
+            EventStream of OwnershipHandoverCanceled events
         """
-        return self._roles_disapproved_event_source.get_streaming(
+        return self._ownership_handover_canceled_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+        
+    async def get_ownership_handover_requested_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[OwnershipHandoverRequestedEvent]:
+        """
+        Get historical OwnershipHandoverRequested events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of OwnershipHandoverRequested events
+        """
+        return await self._ownership_handover_requested_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_ownership_handover_requested_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[OwnershipHandoverRequestedEvent]:
+        """
+        Stream OwnershipHandoverRequested events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of OwnershipHandoverRequested events
+        """
+        return self._ownership_handover_requested_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+        
+    async def get_ownership_transferred_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[OwnershipTransferredEvent]:
+        """
+        Get historical OwnershipTransferred events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of OwnershipTransferred events
+        """
+        return await self._ownership_transferred_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_ownership_transferred_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[OwnershipTransferredEvent]:
+        """
+        Stream OwnershipTransferred events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of OwnershipTransferred events
+        """
+        return self._ownership_transferred_event_source.get_streaming(
             from_block=from_block, poll_interval=poll_interval, **filter_params
         )

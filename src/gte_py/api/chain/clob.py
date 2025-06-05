@@ -4,7 +4,6 @@ from eth_typing import ChecksumAddress
 from typing_extensions import Unpack
 from web3 import AsyncWeb3
 from web3.types import TxParams
-
 from .event_source import EventSource, EventStream
 from .events import (
     LimitOrderProcessedEvent,
@@ -34,11 +33,6 @@ from .utils import TypedContractFunction, load_abi
 # Type variable for contract function return types
 T = TypeVar("T")
 
-
-class CLOBError(Exception):
-    """Base exception for CLOB contract errors"""
-
-    pass
 
 
 class ICLOB:
@@ -111,7 +105,6 @@ class ICLOB:
         """Get the base token used in the CLOB."""
         return await self.contract.functions.getBaseToken().call()
 
-    # factory, mask?, quote, base, quote size, base size
     async def get_market_config(
             self,
     ) -> tuple[ChecksumAddress, int, ChecksumAddress, ChecksumAddress, int, int]:
@@ -156,27 +149,6 @@ class ICLOB:
     async def get_limit(self, price: int, side: Side) -> tuple[int, int, int]:
         """
         Get the limit level details at a specific price level for a given side.
-        {
-            "type": "function",
-            "name": "getLimit",
-            "inputs": [
-              { "name": "price", "type": "uint256", "internalType": "uint256" },
-              { "name": "side", "type": "uint8", "internalType": "enum Side" }
-            ],
-            "outputs": [
-              {
-                "name": "",
-                "type": "tuple",
-                "internalType": "struct Limit",
-                "components": [
-                  { "name": "numOrders", "type": "uint64", "internalType": "uint64" },
-                  { "name": "headOrder", "type": "uint256", "internalType": "OrderId" },
-                  { "name": "tailOrder", "type": "uint256", "internalType": "OrderId" }
-                ]
-              }
-            ],
-            "stateMutability": "view"
-          }
         Args:
             price: The price level
             side: The side (BUY=0, SELL=1)
@@ -220,7 +192,7 @@ class ICLOB:
         """
         return await self.contract.functions.getNextSmallestPrice(price, side).call()
 
-    async def get_next_orders(self, start_order_id: int, num_orders: int) -> dict:
+    async def get_next_orders(self, start_order_id: int, num_orders: int) -> list[CLOBOrder]:
         """
         Get a list of orders starting from a specific order ID.
 
@@ -231,7 +203,8 @@ class ICLOB:
         Returns:
             List of order details
         """
-        return await self.contract.functions.getNextOrders(start_order_id, num_orders).call()
+        orders = await self.contract.functions.getNextOrders(start_order_id, num_orders).call()
+        return [CLOBOrder.from_tuple(order) for order in orders]
 
     async def get_next_order_id(self) -> int:
         """Get the next order ID that will be assigned to a new order."""
@@ -254,30 +227,6 @@ class ICLOB:
         """
         return await self.contract.functions.getBaseTokenAmount(price, quote_amount).call()
 
-    async def get_base_token_account_balance(self, account: ChecksumAddress) -> int:
-        """
-        Get the base token account balance for a specific account.
-
-        Args:
-            account: The address of the account
-
-        Returns:
-            The base token account balance
-        """
-        return await self.contract.functions.getBaseTokenAccountBalance(account).call()
-
-    async def get_quote_token_account_balance(self, account: ChecksumAddress) -> int:
-        """
-        Get the quote token account balance for a specific account.
-
-        Args:
-            account: The address of the account
-
-        Returns:
-            The quote token account balance
-        """
-        return await self.contract.functions.getQuoteTokenAccountBalance(account).call()
-
     async def get_quote_token_amount(self, price: int, base_amount: int) -> int:
         """
         Calculate the quote token amount for a given price and base token amount.
@@ -290,6 +239,10 @@ class ICLOB:
             The quote token amount
         """
         return await self.contract.functions.getQuoteTokenAmount(price, base_amount).call()
+
+    async def get_tick_size(self) -> int:
+        """Get the tick size for the CLOB."""
+        return await self.contract.functions.getTickSize().call()
 
     async def get_event_nonce(self) -> int:
         """Get the current event nonce."""
@@ -314,6 +267,10 @@ class ICLOB:
     async def pending_owner(self) -> ChecksumAddress:
         """Get the pending owner of the CLOB contract."""
         return await self.contract.functions.pendingOwner().call()
+    
+    async def gte_router(self) -> ChecksumAddress:
+        """Get the GTE router associated with the CLOB."""
+        return await self.contract.functions.gteRouter().call()
 
     # ================= WRITE METHODS =================
 
