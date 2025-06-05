@@ -127,6 +127,37 @@ class MaxLimitOrdersAllowlistedEvent(CLOBEvent):
     toggle: bool
 
 
+@dataclass
+class CancelFailedEvent(CLOBEvent):
+    """Event emitted when a cancel operation fails."""
+
+    order_id: int
+    owner: ChecksumAddress
+
+
+@dataclass
+class InitializedEvent(CLOBEvent):
+    """Event emitted when a contract is initialized."""
+
+    version: int
+
+
+@dataclass
+class OwnershipTransferStartedEvent(CLOBEvent):
+    """Event emitted when ownership transfer is started."""
+
+    previous_owner: ChecksumAddress
+    new_owner: ChecksumAddress
+
+
+@dataclass
+class OwnershipTransferredEvent(CLOBEvent):
+    """Event emitted when ownership is transferred."""
+
+    previous_owner: ChecksumAddress
+    new_owner: ChecksumAddress
+
+
 # CLOB Manager Events
 @dataclass
 class CLOBManagerEvent:
@@ -192,18 +223,18 @@ class FeeRecipientSetEvent(CLOBManagerEvent):
     fee_recipient: ChecksumAddress
 
 
-# @dataclass
-# class MarketCreatedEvent(CLOBManagerEvent):
-#     """Event emitted when a market is created."""
-#
-#     creator: ChecksumAddress
-#     base_token: ChecksumAddress
-#     quote_token: ChecksumAddress
-#     market: ChecksumAddress
-#     quote_decimals: int
-#     base_decimals: int
-#     config: ICLOBConfigParams
-#     settings: ICLOBSettingsParams
+@dataclass
+class MarketCreatedEvent(CLOBManagerEvent):
+    """Event emitted when a market is created."""
+
+    creator: ChecksumAddress
+    base_token: ChecksumAddress
+    quote_token: ChecksumAddress
+    market: ChecksumAddress
+    quote_decimals: int
+    base_decimals: int
+    config: dict
+    settings: dict
 
 
 @dataclass
@@ -230,6 +261,46 @@ class WithdrawEvent(CLOBManagerEvent):
     recipient: ChecksumAddress
     token: ChecksumAddress
     amount: int
+
+
+@dataclass
+class OwnershipHandoverCanceledEvent(CLOBManagerEvent):
+    """Event emitted when an ownership handover is canceled."""
+    
+    pending_owner: ChecksumAddress
+
+
+@dataclass
+class OwnershipHandoverRequestedEvent(CLOBManagerEvent):
+    """Event emitted when an ownership handover is requested."""
+    
+    pending_owner: ChecksumAddress
+
+
+@dataclass
+class OwnershipTransferredEvent(CLOBManagerEvent):
+    """Event emitted when ownership is transferred."""
+    
+    old_owner: ChecksumAddress
+    new_owner: ChecksumAddress
+
+
+@dataclass
+class RolesApprovedEvent(CLOBManagerEvent):
+    """Event emitted when roles are approved for an operator."""
+
+    account: ChecksumAddress
+    operator: ChecksumAddress
+    roles: int
+
+
+@dataclass
+class RolesDisapprovedEvent(CLOBManagerEvent):
+    """Event emitted when roles are disapproved for an operator."""
+
+    account: ChecksumAddress
+    operator: ChecksumAddress
+    roles: int
 
 
 def _create_base_event_info(event_data: EventData) -> Dict[str, Any]:
@@ -485,6 +556,134 @@ def parse_max_limit_orders_allowlisted(event_data: EventData) -> MaxLimitOrdersA
     )
 
 
+def parse_cancel_failed(event_data: EventData) -> CancelFailedEvent:
+    """
+    Parse CancelFailed event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed CancelFailedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return CancelFailedEvent(
+        **base_info,
+        order_id=args.get("orderId"),
+        owner=args.get("owner"),
+        nonce=args.get("nonce"),
+    )
+
+
+def parse_initialized(event_data: EventData) -> InitializedEvent:
+    """
+    Parse Initialized event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed InitializedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    # Initialized events typically don't have a nonce field, so we set it to 0
+    return InitializedEvent(
+        **base_info,
+        version=args.get("version"),
+        nonce=0,
+    )
+
+
+def parse_ownership_transfer_started(event_data: EventData) -> OwnershipTransferStartedEvent:
+    """
+    Parse OwnershipTransferStarted event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed OwnershipTransferStartedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    # Ownership events typically don't have a nonce field, so we set it to 0
+    return OwnershipTransferStartedEvent(
+        **base_info,
+        previous_owner=args.get("previousOwner"),
+        new_owner=args.get("newOwner"),
+        nonce=0,
+    )
+
+
+def parse_ownership_handover_canceled(event_data: EventData) -> OwnershipHandoverCanceledEvent:
+    """
+    Parse OwnershipHandoverCanceled event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed OwnershipHandoverCanceledEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+    
+    # This event doesn't have a nonce in the standard Ownable contract
+    return OwnershipHandoverCanceledEvent(
+        **base_info,
+        pending_owner=args.get("pendingOwner"),
+        nonce=0,
+    )
+
+
+def parse_ownership_handover_requested(event_data: EventData) -> OwnershipHandoverRequestedEvent:
+    """
+    Parse OwnershipHandoverRequested event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed OwnershipHandoverRequestedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+    
+    # This event doesn't have a nonce in the standard Ownable contract
+    return OwnershipHandoverRequestedEvent(
+        **base_info,
+        pending_owner=args.get("pendingOwner"),
+        nonce=0,
+    )
+
+
+def parse_ownership_transferred(event_data: EventData) -> OwnershipTransferredEvent:
+    """
+    Parse OwnershipTransferred event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed OwnershipTransferredEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+    
+    # This event doesn't have a nonce in the standard Ownable contract
+    return OwnershipTransferredEvent(
+        **base_info,
+        old_owner=args.get("oldOwner"),
+        new_owner=args.get("newOwner"),
+        nonce=0,
+    )
+
+
 # CLOB Manager event parsers
 def parse_account_credited(event_data: EventData) -> AccountCreditedEvent:
     """
@@ -609,30 +808,31 @@ def parse_fee_recipient_set(event_data: EventData) -> FeeRecipientSetEvent:
     )
 
 
-# def parse_market_created(event_data: EventData) -> MarketCreatedEvent:
-#     """
-#     Parse MarketCreated event.
-#
-#     Args:
-#         event_data: Raw event data from web3
-#
-#     Returns:
-#         Typed MarketCreatedEvent
-#     """
-#     args = event_data.get("args", {})
-#     base_info = _create_base_event_info(event_data)
-#
-#     return MarketCreatedEvent(
-#         **base_info,
-#         creator=args.get("creator"),
-#         base_token=args.get("baseToken"),
-#         quote_token=args.get("quoteToken"),
-#         market=args.get("market"),
-#         quote_decimals=args.get("quoteDecimals"),
-#         base_decimals=args.get("baseDecimals"),
-#         config=args.get("config"),
-#         settings=args.get("settings"),
-#     )
+def parse_market_created(event_data: EventData) -> MarketCreatedEvent:
+    """
+    Parse MarketCreated event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed MarketCreatedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return MarketCreatedEvent(
+        **base_info,
+        creator=args.get("creator"),
+        base_token=args.get("baseToken"),
+        quote_token=args.get("quoteToken"),
+        market=args.get("market"),
+        quote_decimals=args.get("quoteDecimals"),
+        base_decimals=args.get("baseDecimals"),
+        config=args.get("config"),
+        settings=args.get("settings"),
+        nonce=args.get("eventNonce", 0),
+    )
 
 
 def parse_operator_approved(event_data: EventData) -> OperatorApprovedEvent:
@@ -652,6 +852,7 @@ def parse_operator_approved(event_data: EventData) -> OperatorApprovedEvent:
         **base_info,
         account=args.get("account"),
         operator=args.get("operator"),
+        nonce=args.get("eventNonce", 0),
     )
 
 
@@ -672,7 +873,53 @@ def parse_operator_disapproved(event_data: EventData) -> OperatorDisapprovedEven
         **base_info,
         account=args.get("account"),
         operator=args.get("operator"),
+        nonce=args.get("eventNonce", 0),
     )
+
+
+def parse_roles_approved(event_data: EventData) -> RolesApprovedEvent:
+    """
+    Parse RolesApproved event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed RolesApprovedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return RolesApprovedEvent(
+        **base_info,
+        account=args.get("account"),
+        operator=args.get("operator"),
+        roles=args.get("roles"),
+        nonce=args.get("eventNonce", 0),
+    )
+
+
+def parse_roles_disapproved(event_data: EventData) -> RolesDisapprovedEvent:
+    """
+    Parse RolesDisapproved event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed RolesDisapprovedEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+
+    return RolesDisapprovedEvent(
+        **base_info,
+        account=args.get("account"),
+        operator=args.get("operator"),
+        roles=args.get("roles"),
+        nonce=args.get("eventNonce", 0),
+    )
+
 
 
 def parse_withdraw(event_data: EventData) -> WithdrawEvent:
@@ -694,8 +941,8 @@ def parse_withdraw(event_data: EventData) -> WithdrawEvent:
         recipient=args.get("recipient"),
         token=args.get("token"),
         amount=args.get("amount"),
+        nonce=args.get("eventNonce", 0),
     )
-
 
 
 # Dictionary mapping event names to their parser functions
@@ -711,6 +958,10 @@ EVENT_PARSERS = {
     "MinLimitOrderAmountInBaseUpdated": parse_min_limit_order_amount_in_base_updated,
     "MaxLimitOrdersPerTxUpdated": parse_max_limit_orders_per_tx_updated,
     "MaxLimitOrdersAllowlisted": parse_max_limit_orders_allowlisted,
+    "CancelFailed": parse_cancel_failed,
+    "Initialized": parse_initialized,
+    "OwnershipTransferStarted": parse_ownership_transfer_started,
+    "OwnershipTransferred": parse_ownership_transferred,
 }
 
 # Add CLOB Manager event parsers to the global dictionary
@@ -721,10 +972,13 @@ CLOB_MANAGER_EVENT_PARSERS = {
     "Deposit": parse_deposit,
     "FeeCollected": parse_fee_collected,
     "FeeRecipientSet": parse_fee_recipient_set,
-    # "MarketCreated": parse_market_created,
+    "MarketCreated": parse_market_created,
     "OperatorApproved": parse_operator_approved,
     "OperatorDisapproved": parse_operator_disapproved,
     "Withdraw": parse_withdraw,
+    "OwnershipHandoverCanceled": parse_ownership_handover_canceled,
+    "OwnershipHandoverRequested": parse_ownership_handover_requested,
+    "OwnershipTransferred": parse_ownership_transferred,
 }
 
 # Update the existing EVENT_PARSERS dictionary
@@ -751,6 +1005,7 @@ def convert_event_data_to_typed_event(event_data: EventData) -> CLOBEvent:
 
     # Return base event for unknown event types
     args = event_data.get("args", {})
+    
     nonce = args.get("nonce", args.get("eventNonce", 0))
 
     return CLOBEvent(

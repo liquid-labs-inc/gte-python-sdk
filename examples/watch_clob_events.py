@@ -57,7 +57,7 @@ def handle_order_amended(event):
     """Handle an order amended event."""
     print(f"ORDER AMENDED: Quote Delta: {event.quote_token_delta}")
     print(f"  Base Delta: {event.base_token_delta}")
-    print(f"  Event Nonce: {event.event_nonce}")
+    print(f"  Event Nonce: {event.nonce}")
     print(f"  Pre-amend: {event.pre_amend}")
     print(f"  Args: {event.args}")
     print(f"  Timestamp: {datetime.now().strftime('%H:%M:%S')}")
@@ -109,7 +109,7 @@ async def watch_all_market_activity(clob: ICLOB, duration_seconds=60):
 
     print(f"Streaming events for {duration_seconds} seconds...")
 
-    # Create streams for all event types
+    # Create streams for essential event types
     limit_stream = clob.stream_limit_order_processed_events()
     fill_stream = clob.stream_fill_order_processed_events()
     cancel_stream = clob.stream_order_canceled_events()
@@ -146,30 +146,6 @@ async def process_stream_async(stream: EventStream, handler, exit_condition):
             break
 
 
-def watch_order_book_changes_blocking(clob, duration_seconds=60):
-    """Watch order book changes synchronously (blocking)."""
-    print_separator("Watching Order Book Changes (Blocking)")
-
-    print(f"Streaming events for {duration_seconds} seconds...")
-    print("Press Ctrl+C to stop early")
-
-    try:
-        # Set an end time
-        end_time = datetime.now() + timedelta(seconds=duration_seconds)
-
-        # Use the built-in watching function with a timeout
-        def should_exit():
-            return datetime.now() >= end_time
-
-        # Use the dedicated method that handles all event types
-        clob.watch_order_book_changes(exit_condition=should_exit)
-
-    except KeyboardInterrupt:
-        print("\nStopped by user")
-
-    print(f"Finished watching order book changes")
-
-
 async def main():
     """Run the CLOB event watching examples."""
     # Get configuration and AsyncWeb3 connection
@@ -189,19 +165,12 @@ async def main():
     # Initialize CLOB contract wrapper
     print(f"Initializing CLOB contract at {MARKET_ADDRESS}...")
     clob = client.clob.get_clob(AsyncWeb3.to_checksum_address(MARKET_ADDRESS))
-
-    # Initialize the event clob
-    print("Creating event clob...")
     
     # Example 1: Watch for all market activity for 30 seconds
     await watch_all_market_activity(clob, duration_seconds=30)
 
     # Example 2: Watch for specific account activity for 30 seconds
     await watch_account_orders(clob, WALLET_ADDRESS, duration_seconds=30)
-
-    # Example 3: Watch order book changes (blocking for 30 seconds)
-    # Uncomment to use this example:
-    # watch_order_book_changes_blocking(clob, duration_seconds=30)
 
     print("\nAll examples completed. Exiting.")
 
