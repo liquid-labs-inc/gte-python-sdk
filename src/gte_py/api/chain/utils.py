@@ -18,25 +18,10 @@ from web3.contract.async_contract import AsyncContractFunction
 from web3.exceptions import ContractCustomError, Web3Exception
 from web3.middleware import SignAndSendRawMiddlewareBuilder, validation
 from web3.types import TxParams, EventData, Nonce, Wei
+from gte_py.api.chain.errors import ERROR_EXCEPTIONS
 
 from gte_py.configs import NetworkConfig
-from gte_py.error import (
-    InsufficientBalance,
-    NotFactory,
-    FOKNotFilled,
-    UnauthorizedAmend,
-    UnauthorizedCancel,
-    InvalidAmend,
-    OrderAlreadyExpired,
-    InvalidAccountOrOperator,
-    PostOnlyOrderWouldBeFilled,
-    MaxOrdersInBookPostNotCompetitive,
-    NonPostOnlyAmend,
-    ZeroCostTrade,
-    ZeroTrade,
-    ZeroOrder,
-    TransferFromFailed,
-)
+
 
 logger = logging.getLogger(__name__)
 
@@ -85,23 +70,6 @@ def load_abi(abi_name: str) -> list[dict[str, Any]]:
         return json.load(f)
 
 
-ERROR_EXCEPTIONS = {
-    "0xf4d678b8": InsufficientBalance,
-    "0x32cc7236": NotFactory,
-    "0x87e393a7": FOKNotFilled,
-    "0x60ab4840": UnauthorizedAmend,
-    "0x45bb6073": UnauthorizedCancel,
-    "0x4b22649a": InvalidAmend,
-    "0x3154078e": OrderAlreadyExpired,
-    "0x3d104567": InvalidAccountOrOperator,
-    "0x52409ba3": PostOnlyOrderWouldBeFilled,
-    "0x315ff5e5": MaxOrdersInBookPostNotCompetitive,
-    "0xc1008f10": NonPostOnlyAmend,  # Fixed: changed from string to exception class
-    "0xd8a00083": ZeroCostTrade,
-    "0x4ef36a18": ZeroTrade,
-    "0xb82df155": ZeroOrder,
-    "0x7939f424": TransferFromFailed,
-}
 
 
 def convert_web3_error(error: ContractCustomError, cause: str) -> Exception:
