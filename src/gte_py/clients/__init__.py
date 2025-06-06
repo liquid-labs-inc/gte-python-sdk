@@ -5,14 +5,14 @@ import logging
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 
+from gte_py.api.chain.clob_client import CLOBClient
+from gte_py.api.chain.token_client import TokenClient
+from gte_py.api.rest import RestApi
+from gte_py.configs import NetworkConfig
 from .user import UserClient
 from .execution import ExecutionClient
-from gte_py.api.chain.clob_client import CLOBClient
 from .info import InfoClient
 from .market import MarketClient
-from .token import TokenClient
-from ..api.rest import RestApi
-from ..configs import NetworkConfig
 
 logger = logging.getLogger(__name__)
 
