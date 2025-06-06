@@ -6,6 +6,9 @@ from typing_extensions import Unpack
 from web3 import AsyncWeb3
 from web3.types import TxParams
 
+from gte_py.api.chain.events import RolesApprovedEvent, DepositEvent, RolesDisapprovedEvent
+from gte_py.api.chain.utils import TypedContractFunction
+
 from .event_source import EventSource, EventStream
 from .events import (
     AccountCreditedEvent,
@@ -330,7 +333,8 @@ class ICLOBManager:
 
     # ================= WRITE METHODS =================
 
-    def approve_operator(self, operator: ChecksumAddress, roles: int = 1, **kwargs: Unpack[TxParams]) -> TypedContractFunction[None]:
+    def approve_operator(self, operator: ChecksumAddress, roles: int, **kwargs: Unpack[TxParams]) -> \
+    TypedContractFunction[RolesApprovedEvent]:
         """
         Approve an operator for the caller's account with specific roles.
 
@@ -441,7 +445,7 @@ class ICLOBManager:
     def deposit(
             self, account: ChecksumAddress, token: ChecksumAddress, amount: int, from_operator: bool,
             **kwargs: Unpack[TxParams]
-    ) -> TypedContractFunction[None]:
+    ) -> TypedContractFunction[DepositEvent]:
         """
         Deposit tokens into an account.
 
@@ -462,8 +466,8 @@ class ICLOBManager:
         )
 
     def disapprove_operator(
-            self, operator: ChecksumAddress, roles: int = 1, **kwargs: Unpack[TxParams]
-    ) -> TypedContractFunction[None]:
+            self, operator: ChecksumAddress, roles: int, **kwargs: Unpack[TxParams]
+    ) -> TypedContractFunction[RolesDisapprovedEvent]:
         """
         Disapprove an operator for the caller's account for specific roles.
 
