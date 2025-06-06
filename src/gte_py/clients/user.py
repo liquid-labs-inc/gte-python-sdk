@@ -7,6 +7,7 @@ from web3.types import TxParams
 
 from gte_py.api.chain.clob_client import CLOBClient
 from gte_py.api.chain.clob_manager import ICLOBManager
+from gte_py.api.chain.structs import OperatorRole
 from gte_py.api.rest import RestApi
 from gte_py.api.chain.token_client import TokenClient
 from gte_py.configs import NetworkConfig
@@ -205,22 +206,14 @@ class UserClient:
 
         return exchange_balance_raw
 
-    def _encode_rules(self, *,
-                      trade: bool = False,
-                      deposit: bool = False,
-                      withdraw: bool = False) -> int:
-        roles = 0
-        if trade:
-            roles |= 1 << 0
-        if deposit:
-            roles |= 1 << 1
-        if withdraw:
-            roles |= 1 << 2
-        return roles
+    def _encode_rules(self, roles: list[OperatorRole]) -> int:
+        roles_int = 0
+        for role in roles:
+            roles_int |= role.value
+        return roles_int
 
     async def approve_operator(self, operator_address: ChecksumAddress,
-                               trade: bool = False,
-                               deposit: bool = False,
+                               roles: list[OperatorRole] = None,
                                unsafe_withdraw: bool = False,
                                **kwargs: Unpack[TxParams]):
         """
@@ -228,51 +221,42 @@ class UserClient:
 
         Args:
             operator_address: Address of the operator to approve
-            trade: Whether to allow trading operations
-            deposit: Whether to allow depositing tokens
             unsafe_withdraw: Whether to allow unsafe withdrawals
             **kwargs: Additional transaction parameters
 
         Returns:
             Transaction result from the approve_operator operation
         """
-        roles = self._encode_rules(
-            trade=trade,
-            deposit=deposit,
-            withdraw=unsafe_withdraw
-        )
-        logger.info(f"Approving operator {operator_address} for account {self._account} with roles {roles:#x}")
+        if OperatorRole.WITHDRAW in roles and not unsafe_withdraw:
+            raise ValueError("Unsafe withdraw must be enabled to approve withdraw role")
+        roles_int = self._encode_rules(roles)
+        logger.info(f"Approving operator {operator_address} for account {self._account} with roles {roles}")
 
         return await self._clob_manager.approve_operator(
             operator=operator_address,
-            roles=roles,
+            roles=roles_int,
             **kwargs
         ).send_wait()
 
     async def disapprove_operator(self, operator_address: ChecksumAddress,
-                                  trade: bool = False,
-                                  deposit: bool = False,
-                                  withdraw: bool = False,
+                                 roles: list[OperatorRole],
                                   **kwargs: Unpack[TxParams]):
         """
         Disapprove an operator from acting on behalf of the account.
 
         Args:
             operator_address: Address of the operator to disapprove
+            roles: List of roles to disapprove
             **kwargs: Additional transaction parameters
 
         Returns:
             Transaction result from the disapprove_operator operation
         """
-        roles = self._encode_rules(
-            trade=trade,
-            deposit=deposit,
-            withdraw=withdraw
-        )
-        logger.info(f"Disapproving operator {operator_address} for account {self._account} with roles {roles:#x}")
+        roles_int = self._encode_rules(roles)
+        logger.info(f"Disapproving operator {operator_address} for account {self._account} with roles {roles}")
         return await self._clob_manager.disapprove_operator(
             operator=operator_address,
-            roles=roles,
+            roles=roles_int,
             **kwargs
         ).send_wait()
 
