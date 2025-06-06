@@ -469,8 +469,7 @@ class Web3RequestManager:
             try:
                 await self.sync_nonce()
             except Exception as e:
-                self.logger.error(f"Error during nonce synchronization: {e}")
-                # Handle the error, e.g., log it or retry
+                self.logger.error(f"Error during nonce synchronization", exc_info=e)
                 continue
 
     async def _send_transaction(self, tx: TxParams, nonce: Nonce, future: asyncio.Future[HexBytes] | None = None):

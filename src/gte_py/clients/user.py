@@ -254,7 +254,7 @@ class UserClient:
             operator=operator_address
         )
 
-    async def get_trades(self, market: Market, limit: int = 100, offset: int = 0) -> List[Order]:
+    async def get_trades(self, market: Market, limit: int = 100, offset: int = 0) -> List[Trade]:
         """
         Get trades for a specific market using the REST API.
 

@@ -30,19 +30,13 @@ async def get_token_balances(client: Client, token: Token) -> float:
     Returns:
         Tuple containing (wallet_balance, exchange_balance)
     """
-    try:
-        exchange_balance = await client.user.get_token_balance(token.address)
-        return exchange_balance
-    except Exception as e:
-        print(f"Error getting balances for {token.symbol}: {e}")
-        return 0.0
-
+    exchange_balance = await client.user.get_token_balance(token.address)
+    return exchange_balance
 
 async def ensure_token_deposit(
         client: Client,
         token: Token,
         quantity: float,
-        gas_limit: int = 50 * 10000000
 ) -> bool:
     """
     Ensure a token is approved and deposited to the exchange.
@@ -51,30 +45,23 @@ async def ensure_token_deposit(
         client: Initialized GTE client
         token: Token to deposit
         quantity: Quantity to deposit in token units
-        gas_limit: Gas limit for transaction
-        
+
     Returns:
         bool: True if deposit was successful, False otherwise
     """
     print_separator(f"Deposit {token.symbol}")
 
-    try:
-        token_amount = token.convert_quantity_to_amount(quantity)
-        print(f"Creating transaction to approve and deposit {quantity} {token.symbol}...")
+    token_amount = token.convert_quantity_to_amount(quantity)
+    print(f"Creating transaction to approve and deposit {quantity} {token.symbol}...")
 
-        # This will handle both approval and deposit as needed
-        await client.user.ensure_deposit(
-            token_address=token.address,
-            amount=token_amount,
-            gas=gas_limit
-        )
+    # This will handle both approval and deposit as needed
+    await client.user.ensure_deposit(
+        token_address=token.address,
+        amount=token_amount,
+    )
 
-        print(f"Successfully deposited {quantity} {token.symbol} to the exchange")
-        return True
-
-    except Exception as e:
-        print(f"Error during token deposit: {e}")
-        return False
+    print(f"Successfully deposited {quantity} {token.symbol} to the exchange")
+    return True
 
 
 async def select_token_from_market(market: Market) -> Optional[Token]:

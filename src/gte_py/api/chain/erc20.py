@@ -74,7 +74,7 @@ class ERC20:
         """
         return await self.contract.functions.balanceOf(account).call()
 
-    def allowance(self, owner: ChecksumAddress, spender: ChecksumAddress) -> int:
+    async def allowance(self, owner: ChecksumAddress, spender: ChecksumAddress) -> int:
         """
         Get the remaining number of tokens that `spender` is allowed to spend on behalf of `owner`.
 
