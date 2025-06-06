@@ -345,6 +345,7 @@ class Web3RequestManager:
         self.is_running = True
         self.confirmation_task = asyncio.create_task(self._monitor_confirmations())
         self.process_transactions_task = asyncio.create_task(self._process_transactions())
+        self.logger.info("Web3RequestManager started for account %s. next nonce %s", self.account.address, self.next_nonce)
 
     async def stop(self):
         """Graceful shutdown"""
