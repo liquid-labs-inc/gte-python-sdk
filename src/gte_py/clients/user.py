@@ -128,6 +128,7 @@ class UserClient:
             return False
         logger.info("Not enough tokens %s in the exchange: asked for %d, got %d", token_address, amount,
                     exchange_balance)
+        amount -= exchange_balance
         await self.deposit(token_address, amount, **kwargs)
         return True
 

@@ -49,7 +49,7 @@ class Client:
         )
         self.market: MarketClient = MarketClient(config, self.rest, self.info, self.clob)
         if not account:
-            self.user = None
+            self.user: UserClient = None
         else:
             self.user = UserClient(
                 config=config,
@@ -57,7 +57,7 @@ class Client:
             )
 
         if not account:
-            self.execution = None
+            self.execution: ExecutionClient = None
         else:
             # Initialize execution client for trading operations
             self.execution = ExecutionClient(
