@@ -45,16 +45,16 @@ async def main() -> None:
         market=market,
         side=Side.BUY,
         amount=market.base.convert_quantity_to_amount(quantity),
-        price=int(bid * 0.8),
-        time_in_force=TimeInForce.GTC,
+        price=bid,
+        time_in_force=TimeInForce.POST_ONLY,
         gas=50 * 10000000
     )
     print(f"Placed order: {order.order_id} at price {bid * 0.8} for {quantity} {market.base.symbol}")
     amend_order = await client.execution.amend_order(
         market=market,
         order_id=order.order_id,
-        new_price=int(bid * 0.9),
-        new_amount=market.base.convert_quantity_to_amount(quantity * 2),
+        new_price=bid,
+        new_amount=market.base.convert_quantity_to_amount(quantity * 0.5),
         gas=50 * 10000000
     )
     print(f"Amended order: {amend_order.order_id} to new price {bid * 0.9} and amount {quantity * 2} {market.base.symbol}")

@@ -119,12 +119,8 @@ class ExecutionClient:
         else:
             if time_in_force == TimeInForce.GTC:
                 tif = LimitOrderType.GOOD_TILL_CANCELLED
-            elif time_in_force == TimeInForce.FOK:
-                tif = LimitOrderType.FILL_OR_KILL
-            elif time_in_force == TimeInForce.IOC:
-                tif = LimitOrderType.IMMEDIATE_OR_CANCEL
-            elif time_in_force == TimeInForce.GTT:
-                tif = LimitOrderType.GOOD_TILL_TIME
+            elif time_in_force == TimeInForce.POST_ONLY:
+                tif = LimitOrderType.POST_ONLY
             else:
                 raise ValueError(f"Unknown time_in_force: {time_in_force}")
             # Create post limit order args
@@ -303,7 +299,7 @@ class ExecutionClient:
             price=price_in_ticks,
             side=side,
             cancel_timestamp=0,  # No expiration
-            limit_order_type=LimitOrderType.GOOD_TILL_CANCELLED,
+            limit_order_type=LimitOrderType.POST_ONLY,
             settlement=Settlement.INSTANT,
         )
 
