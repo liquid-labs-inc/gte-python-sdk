@@ -87,7 +87,7 @@ def convert_web3_error(error: ContractCustomError, cause: str) -> Exception:
     if error_code in ERROR_EXCEPTIONS:
         exception_class = ERROR_EXCEPTIONS[error_code]
         return exception_class(cause)
-    return error  # Return original error if no mapping exists
+    return Exception(f"Web3 error: {error_code} in {cause}. ")
 
 
 T = TypeVar("T")
@@ -169,9 +169,16 @@ class TypedContractFunction(Generic[T]):
 
     async def send(self) -> HexBytes:
         """Synchronous write operation"""
-        self.tx_hash = await self.send_nowait()
-        logger.info("tx#%d sent: %s", self.tx_id, self.tx_hash.to_0x_hex())
-        return self.tx_hash
+        try:
+            self.tx_hash = await self.send_nowait()
+            await self.tx_send
+            self.tx_send = None
+            logger.info("tx#%d sent: %s", self.tx_id, self.tx_hash.to_0x_hex())
+            return self.tx_hash
+        except ContractCustomError as e:
+            if isinstance(self.tx_hash, Awaitable):
+                self.tx_hash = await self.tx_hash
+            raise convert_web3_error(e, format_contract_function(self.func_call, self.tx_hash)) from e
 
     async def build_transaction(self) -> TxParams:
         return await self.func_call.build_transaction(self.params)
@@ -222,6 +229,8 @@ class TypedContractFunction(Generic[T]):
                 return self.event_parser(logs[0])
             return logs[0]["args"]
         except ContractCustomError as e:
+            if isinstance(self.tx_hash, Awaitable):
+                self.tx_hash = None
             raise convert_web3_error(e, format_contract_function(self.func_call, self.tx_hash)) from e
 
     async def send_wait(self) -> T:
@@ -475,7 +484,7 @@ class Web3RequestManager:
                 self.logger.error(f"Error during nonce synchronization", exc_info=e)
                 continue
 
-    async def _send_transaction(self, tx: TxParams, nonce: Nonce, future: asyncio.Future[HexBytes] | None = None):
+    async def _send_transaction(self, tx: TxParams, nonce: Nonce, tx_hash_future: asyncio.Future[HexBytes] | None = None):
         """Transaction sending implementation"""
         try:
             tx["nonce"] = nonce
@@ -492,8 +501,9 @@ class Web3RequestManager:
                 effective_gas = int(gas * 1.5)
                 tx["gas"] = effective_gas
             signed_tx: SignedTransaction = self.web3.eth.account.sign_transaction(tx, self.account.key)
-            if future:
-                future.set_result(signed_tx.hash)
+            if tx_hash_future:
+                tx_hash_future.set_result(signed_tx.hash)
+            await self.web3.eth.call(tx)
             await self.web3.eth.send_raw_transaction(signed_tx.raw_transaction)
             return signed_tx.hash
         except Exception as e:

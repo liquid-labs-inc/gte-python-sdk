@@ -32,9 +32,7 @@ class LimitOrderType(IntEnum):
     """Limit order type enum."""
 
     GOOD_TILL_CANCELLED = 0
-    IMMEDIATE_OR_CANCEL = 1
-    FILL_OR_KILL = 2
-    GOOD_TILL_TIME = 3
+    POST_ONLY = 1
 
 
 class FillOrderType(IntEnum):

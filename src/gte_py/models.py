@@ -41,7 +41,7 @@ class TimeInForce(Enum):
 
     GTC = "GTC"  # Good till cancelled
     GTT = "GTT"  # Good till time
-    PostOnly = "PostOnly"  # Post only
+    POST_ONLY = "POST_ONLY"  # Post only
     IOC = "IOC"  # Immediate or cancel
     FOK = "FOK"  # Fill or kill
 
