@@ -1,0 +1,65 @@
+"""Example of on-chain trading with the GTE client."""
+import sys
+sys.path.append(".")
+import asyncio
+import logging
+from typing import Optional
+
+from web3.types import TxReceipt
+
+# from examples.utils import show_all_orders
+from gte_py.api.chain.utils import make_web3
+from gte_py.clients import Client
+from gte_py.configs import TESTNET_CONFIG
+from gte_py.models import Side, TimeInForce, Market
+
+from utils import (
+    print_separator,
+    display_market_info,
+    show_balances,
+    WALLET_ADDRESS,
+    WALLET_PRIVATE_KEY,
+    MARKET_ADDRESS, show_live_orders
+)
+
+
+async def main() -> None:
+    """Run the on-chain trading examples."""
+    network = TESTNET_CONFIG
+
+    print("Initializing AsyncWeb3...")
+    web3 = await make_web3(network, WALLET_ADDRESS, WALLET_PRIVATE_KEY)
+
+    # Initialize client with AsyncWeb3
+    print("Initializing GTE client...")
+
+    client = Client(web3=web3, config=network, account=WALLET_ADDRESS)
+    await client.init()
+    # Get a market to work with
+    market = await display_market_info(client, MARKET_ADDRESS)
+
+    bid, ask = await client.market.get_tob(market)
+    quantity = 1.0
+
+    order = await client.execution.place_limit_order(
+        market=market,
+        side=Side.BUY,
+        amount=market.base.convert_quantity_to_amount(quantity),
+        price=int(bid * 0.8),
+        time_in_force=TimeInForce.GTC,
+        gas=50 * 10000000
+    )
+    print(f"Placed order: {order.order_id} at price {bid * 0.8} for {quantity} {market.base.symbol}")
+    amend_order = await client.execution.amend_order(
+        market=market,
+        order_id=order.order_id,
+        new_price=int(bid * 0.9),
+        new_amount=market.base.convert_quantity_to_amount(quantity * 2),
+        gas=50 * 10000000
+    )
+    print(f"Amended order: {amend_order.order_id} to new price {bid * 0.9} and amount {quantity * 2} {market.base.symbol}")
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
+    asyncio.run(main())
