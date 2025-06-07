@@ -338,9 +338,11 @@ class Web3RequestManager:
         self.confirmation_task = None
         self.process_transactions_task = None
         self.logger = logging.getLogger(__name__)
+        self.chain_id = None
 
     async def start(self):
         """Initialize and start processing"""
+        self.chain_id = await self.web3.eth.chain_id
         await self.sync_nonce()
         self.is_running = True
         self.confirmation_task = asyncio.create_task(self._monitor_confirmations())
@@ -477,6 +479,7 @@ class Web3RequestManager:
         """Transaction sending implementation"""
         try:
             tx["nonce"] = nonce
+            tx['chainId'] = self.chain_id
             if "from" not in tx:
                 tx["from"] = self.account.address
 

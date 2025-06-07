@@ -85,7 +85,7 @@ class ERC20:
         Returns:
             Remaining allowance in token base units
         """
-        return self.contract.functions.allowance(owner, spender).call()
+        return await self.contract.functions.allowance(owner, spender).call()
 
     # ================= WRITE METHODS =================
 
