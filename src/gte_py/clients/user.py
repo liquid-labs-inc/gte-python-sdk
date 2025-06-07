@@ -216,6 +216,7 @@ class UserClient:
     async def approve_operator(self, operator_address: ChecksumAddress,
                                roles: list[OperatorRole] = None,
                                unsafe_withdraw: bool = False,
+                               unsafe_launchpad_fill: bool = False,
                                **kwargs: Unpack[TxParams]):
         """
         Approve an operator to act on behalf of the account.
@@ -230,6 +231,8 @@ class UserClient:
         """
         if OperatorRole.WITHDRAW in roles and not unsafe_withdraw:
             raise ValueError("Unsafe withdraw must be enabled to approve withdraw role")
+        if OperatorRole.LAUNCHPAD_FILL in roles and not unsafe_launchpad_fill:
+            raise ValueError("Unsafe launchpad fill must be enabled to approve launchpad fill role")
         roles_int = self._encode_rules(roles)
         logger.info(f"Approving operator {operator_address} for account {self._account} with roles {roles}")
 

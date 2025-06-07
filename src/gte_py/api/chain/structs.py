@@ -275,6 +275,7 @@ class LaunchDetails(TypedDict):
 
 class OperatorRole(enum.IntEnum):
     # TODO: to be updated
-    ADMIN = 1
-    DEPOSIT = 2
-    WITHDRAW = 4
+    ADMIN = 1 << 0
+    DEPOSIT = 1 << 1
+    WITHDRAW = 1 << 2
+    LAUNCHPAD_FILL = 1 << 3

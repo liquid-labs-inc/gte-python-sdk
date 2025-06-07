@@ -17,7 +17,7 @@ from web3 import AsyncWeb3
 from web3.contract.async_contract import AsyncContractFunction
 from web3.exceptions import ContractCustomError, Web3Exception
 from web3.middleware import SignAndSendRawMiddlewareBuilder, validation
-from web3.types import TxParams, EventData, Nonce, Wei
+from web3.types import TxParams, EventData, Nonce, Wei, TxReceipt
 from gte_py.api.chain.errors import ERROR_EXCEPTIONS
 
 from gte_py.configs import NetworkConfig
@@ -205,7 +205,7 @@ class TypedContractFunction(Generic[T]):
             if self.event is None:
                 return None
             # Wait for the transaction to be mined
-            self.receipt = await self.web3.eth.wait_for_transaction_receipt(self.tx_hash)
+            self.receipt: TxReceipt = await self.web3.eth.wait_for_transaction_receipt(self.tx_hash)
             if self.receipt['status'] != 1:
                 raise Web3Exception("transaction failed: " +
                                     format_contract_function(self.func_call, self.tx_hash) +
