@@ -7,6 +7,7 @@ import aiohttp
 from eth_typing import ChecksumAddress
 
 from gte_py.models import OrderBookSnapshot
+from gte_py.api.rest.models import MarketDetail
 
 logger = logging.getLogger(__name__)
 
@@ -174,14 +175,14 @@ class RestApi:
             params["newlyGraduated"] = newly_graduated
         return await self._request("GET", "/v1/markets", params=params)
 
-    async def get_market(self, market_address: str | ChecksumAddress) -> dict:
+    async def get_market(self, market_address: str | ChecksumAddress) -> "MarketDetail":
         """Get market by address.
 
         Args:
             market_address: EVM address of the market
 
         Returns:
-            Dict: Market information
+            MarketDetail: Typed market information
         """
         return await self._request("GET", f"/v1/markets/{market_address}")
 

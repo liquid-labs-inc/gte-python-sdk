@@ -1,8 +1,9 @@
 """Example of wrapping and unwrapping ETH with the GTE client."""
-
+import sys
+sys.path.append(".")
 import asyncio
 
-from eth_utils import to_wei
+from eth_utils.currency import to_wei
 from web3 import AsyncWeb3
 
 from gte_py.api.chain.utils import make_web3
@@ -80,7 +81,7 @@ async def main() -> None:
 
     # Initialize client with AsyncWeb3
     print("Initializing GTE client...")
-    client = Client(web3=web3, config=network, account=web3.eth.default_account)
+    client = Client(web3=web3, config=network, account=WALLET_ADDRESS)
     await client.init()
 
     # Show balances before operations

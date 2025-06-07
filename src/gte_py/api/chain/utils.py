@@ -17,26 +17,11 @@ from web3 import AsyncWeb3
 from web3.contract.async_contract import AsyncContractFunction
 from web3.exceptions import ContractCustomError, Web3Exception
 from web3.middleware import SignAndSendRawMiddlewareBuilder, validation
-from web3.types import TxParams, EventData, Nonce, Wei
+from web3.types import TxParams, EventData, Nonce, Wei, TxReceipt
+from gte_py.api.chain.errors import ERROR_EXCEPTIONS
 
 from gte_py.configs import NetworkConfig
-from gte_py.error import (
-    InsufficientBalance,
-    NotFactory,
-    FOKNotFilled,
-    UnauthorizedAmend,
-    UnauthorizedCancel,
-    InvalidAmend,
-    OrderAlreadyExpired,
-    InvalidAccountOrOperator,
-    PostOnlyOrderWouldBeFilled,
-    MaxOrdersInBookPostNotCompetitive,
-    NonPostOnlyAmend,
-    ZeroCostTrade,
-    ZeroTrade,
-    ZeroOrder,
-    TransferFromFailed,
-)
+
 
 logger = logging.getLogger(__name__)
 
@@ -85,23 +70,6 @@ def load_abi(abi_name: str) -> list[dict[str, Any]]:
         return json.load(f)
 
 
-ERROR_EXCEPTIONS = {
-    "0xf4d678b8": InsufficientBalance,
-    "0x32cc7236": NotFactory,
-    "0x87e393a7": FOKNotFilled,
-    "0x60ab4840": UnauthorizedAmend,
-    "0x45bb6073": UnauthorizedCancel,
-    "0x4b22649a": InvalidAmend,
-    "0x3154078e": OrderAlreadyExpired,
-    "0x3d104567": InvalidAccountOrOperator,
-    "0x52409ba3": PostOnlyOrderWouldBeFilled,
-    "0x315ff5e5": MaxOrdersInBookPostNotCompetitive,
-    "0xc1008f10": NonPostOnlyAmend,  # Fixed: changed from string to exception class
-    "0xd8a00083": ZeroCostTrade,
-    "0x4ef36a18": ZeroTrade,
-    "0xb82df155": ZeroOrder,
-    "0x7939f424": TransferFromFailed,
-}
 
 
 def convert_web3_error(error: ContractCustomError, cause: str) -> Exception:
@@ -119,7 +87,7 @@ def convert_web3_error(error: ContractCustomError, cause: str) -> Exception:
     if error_code in ERROR_EXCEPTIONS:
         exception_class = ERROR_EXCEPTIONS[error_code]
         return exception_class(cause)
-    return error  # Return original error if no mapping exists
+    return Exception(f"Web3 error: {error_code} in {cause}. ")
 
 
 T = TypeVar("T")
@@ -201,9 +169,16 @@ class TypedContractFunction(Generic[T]):
 
     async def send(self) -> HexBytes:
         """Synchronous write operation"""
-        self.tx_hash = await self.send_nowait()
-        logger.info("tx#%d sent: %s", self.tx_id, self.tx_hash.to_0x_hex())
-        return self.tx_hash
+        try:
+            self.tx_hash = await self.send_nowait()
+            await self.tx_send
+            self.tx_send = None
+            logger.info("tx#%d sent: %s", self.tx_id, self.tx_hash.to_0x_hex())
+            return self.tx_hash
+        except ContractCustomError as e:
+            if isinstance(self.tx_hash, Awaitable):
+                self.tx_hash = await self.tx_hash
+            raise convert_web3_error(e, format_contract_function(self.func_call, self.tx_hash)) from e
 
     async def build_transaction(self) -> TxParams:
         return await self.func_call.build_transaction(self.params)
@@ -237,7 +212,7 @@ class TypedContractFunction(Generic[T]):
             if self.event is None:
                 return None
             # Wait for the transaction to be mined
-            self.receipt = await self.web3.eth.wait_for_transaction_receipt(self.tx_hash)
+            self.receipt: TxReceipt = await self.web3.eth.wait_for_transaction_receipt(self.tx_hash)
             if self.receipt['status'] != 1:
                 raise Web3Exception("transaction failed: " +
                                     format_contract_function(self.func_call, self.tx_hash) +
@@ -254,6 +229,8 @@ class TypedContractFunction(Generic[T]):
                 return self.event_parser(logs[0])
             return logs[0]["args"]
         except ContractCustomError as e:
+            if isinstance(self.tx_hash, Awaitable):
+                self.tx_hash = None
             raise convert_web3_error(e, format_contract_function(self.func_call, self.tx_hash)) from e
 
     async def send_wait(self) -> T:
@@ -370,13 +347,16 @@ class Web3RequestManager:
         self.confirmation_task = None
         self.process_transactions_task = None
         self.logger = logging.getLogger(__name__)
+        self.chain_id = None
 
     async def start(self):
         """Initialize and start processing"""
+        self.chain_id = await self.web3.eth.chain_id
         await self.sync_nonce()
         self.is_running = True
         self.confirmation_task = asyncio.create_task(self._monitor_confirmations())
         self.process_transactions_task = asyncio.create_task(self._process_transactions())
+        self.logger.info("Web3RequestManager started for account %s. next nonce %s", self.account.address, self.next_nonce)
 
     async def stop(self):
         """Graceful shutdown"""
@@ -501,14 +481,14 @@ class Web3RequestManager:
             try:
                 await self.sync_nonce()
             except Exception as e:
-                self.logger.error(f"Error during nonce synchronization: {e}")
-                # Handle the error, e.g., log it or retry
+                self.logger.error(f"Error during nonce synchronization", exc_info=e)
                 continue
 
-    async def _send_transaction(self, tx: TxParams, nonce: Nonce, future: asyncio.Future[HexBytes] | None = None):
+    async def _send_transaction(self, tx: TxParams, nonce: Nonce, tx_hash_future: asyncio.Future[HexBytes] | None = None):
         """Transaction sending implementation"""
         try:
             tx["nonce"] = nonce
+            tx['chainId'] = self.chain_id
             if "from" not in tx:
                 tx["from"] = self.account.address
 
@@ -521,8 +501,9 @@ class Web3RequestManager:
                 effective_gas = int(gas * 1.5)
                 tx["gas"] = effective_gas
             signed_tx: SignedTransaction = self.web3.eth.account.sign_transaction(tx, self.account.key)
-            if future:
-                future.set_result(signed_tx.hash)
+            if tx_hash_future:
+                tx_hash_future.set_result(signed_tx.hash)
+            await self.web3.eth.call(tx)
             await self.web3.eth.send_raw_transaction(signed_tx.raw_transaction)
             return signed_tx.hash
         except Exception as e:

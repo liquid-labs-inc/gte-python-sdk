@@ -7,8 +7,9 @@ from web3.types import TxParams
 
 from gte_py.api.chain.clob_client import CLOBClient
 from gte_py.api.chain.clob_manager import ICLOBManager
+from gte_py.api.chain.structs import OperatorRole
 from gte_py.api.rest import RestApi
-from gte_py.clients.token import TokenClient
+from gte_py.api.chain.token_client import TokenClient
 from gte_py.configs import NetworkConfig
 from gte_py.models import Market, Order, Trade
 
@@ -127,6 +128,7 @@ class UserClient:
             return False
         logger.info("Not enough tokens %s in the exchange: asked for %d, got %d", token_address, amount,
                     exchange_balance)
+        amount -= exchange_balance
         await self.deposit(token_address, amount, **kwargs)
         return True
 
@@ -205,37 +207,60 @@ class UserClient:
 
         return exchange_balance_raw
 
-    async def approve_operator(self, operator_address: ChecksumAddress, **kwargs: Unpack[TxParams]):
+    def _encode_rules(self, roles: list[OperatorRole]) -> int:
+        roles_int = 0
+        for role in roles:
+            roles_int |= role.value
+        return roles_int
+
+    async def approve_operator(self, operator_address: ChecksumAddress,
+                               roles: list[OperatorRole] = None,
+                               unsafe_withdraw: bool = False,
+                               unsafe_launchpad_fill: bool = False,
+                               **kwargs: Unpack[TxParams]):
         """
         Approve an operator to act on behalf of the account.
 
         Args:
             operator_address: Address of the operator to approve
+            unsafe_withdraw: Whether to allow unsafe withdrawals
             **kwargs: Additional transaction parameters
 
         Returns:
             Transaction result from the approve_operator operation
         """
-        logger.info(f"Approving operator {operator_address} for account {self._account}")
+        if OperatorRole.WITHDRAW in roles and not unsafe_withdraw:
+            raise ValueError("Unsafe withdraw must be enabled to approve withdraw role")
+        if OperatorRole.LAUNCHPAD_FILL in roles and not unsafe_launchpad_fill:
+            raise ValueError("Unsafe launchpad fill must be enabled to approve launchpad fill role")
+        roles_int = self._encode_rules(roles)
+        logger.info(f"Approving operator {operator_address} for account {self._account} with roles {roles}")
+
         return await self._clob_manager.approve_operator(
             operator=operator_address,
+            roles=roles_int,
             **kwargs
         ).send_wait()
 
-    async def disapprove_operator(self, operator_address: ChecksumAddress, **kwargs: Unpack[TxParams]):
+    async def disapprove_operator(self, operator_address: ChecksumAddress,
+                                 roles: list[OperatorRole],
+                                  **kwargs: Unpack[TxParams]):
         """
         Disapprove an operator from acting on behalf of the account.
 
         Args:
             operator_address: Address of the operator to disapprove
+            roles: List of roles to disapprove
             **kwargs: Additional transaction parameters
 
         Returns:
             Transaction result from the disapprove_operator operation
         """
-        logger.info(f"Disapproving operator {operator_address} for account {self._account}")
+        roles_int = self._encode_rules(roles)
+        logger.info(f"Disapproving operator {operator_address} for account {self._account} with roles {roles}")
         return await self._clob_manager.disapprove_operator(
             operator=operator_address,
+            roles=roles_int,
             **kwargs
         ).send_wait()
 
@@ -254,7 +279,7 @@ class UserClient:
             operator=operator_address
         )
 
-    async def get_trades(self, market: Market, limit: int = 100, offset: int = 0) -> List[Order]:
+    async def get_trades(self, market: Market, limit: int = 100, offset: int = 0) -> List[Trade]:
         """
         Get trades for a specific market using the REST API.
 

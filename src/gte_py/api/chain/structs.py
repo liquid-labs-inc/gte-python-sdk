@@ -1,5 +1,5 @@
 """Structure definitions for GTE contracts."""
-
+import enum
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import TypedDict
@@ -32,9 +32,7 @@ class LimitOrderType(IntEnum):
     """Limit order type enum."""
 
     GOOD_TILL_CANCELLED = 0
-    IMMEDIATE_OR_CANCEL = 1
-    FILL_OR_KILL = 2
-    GOOD_TILL_TIME = 3
+    POST_ONLY = 1
 
 
 class FillOrderType(IntEnum):
@@ -179,33 +177,6 @@ class ICLOBSettingsParams(TypedDict):
     minLimitOrderAmountInBase: int
     tickSize: int
 
-
-"""
-"components": [
-  { "name": "side", "type": "uint8", "internalType": "enum Side" },
-  {
-    "name": "cancelTimestamp",
-    "type": "uint32",
-    "internalType": "uint32"
-  },
-  { "name": "id", "type": "uint256", "internalType": "OrderId" },
-  {
-    "name": "prevOrderId",
-    "type": "uint256",
-    "internalType": "OrderId"
-  },
-  {
-    "name": "nextOrderId",
-    "type": "uint256",
-    "internalType": "OrderId"
-  },
-  { "name": "owner", "type": "address", "internalType": "address" },
-  { "name": "price", "type": "uint256", "internalType": "uint256" },
-  { "name": "amount", "type": "uint256", "internalType": "uint256" }
-]
-        """
-
-
 @dataclass
 class CLOBOrder:
     """Order structure from contract."""
@@ -298,3 +269,11 @@ class LaunchDetails(TypedDict):
     quoteToken: str
     virtualBaseReserve: int
     virtualQuoteReserve: int
+
+
+class OperatorRole(enum.IntEnum):
+    # TODO: to be updated
+    ADMIN = 1 << 0
+    DEPOSIT = 1 << 1
+    WITHDRAW = 1 << 2
+    LAUNCHPAD_FILL = 1 << 3
