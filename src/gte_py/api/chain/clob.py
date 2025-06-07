@@ -111,8 +111,16 @@ class ICLOB:
         """Get the market configuration settings for the CLOB."""
         return await self.contract.functions.getMarketConfig().call()
 
-    async def get_market_settings(self) -> dict:
-        """Get the market settings for the CLOB."""
+    async def get_market_settings(self) -> tuple[bool, int, int, int]:
+        """
+        Get the market settings for the CLOB.
+        Returns:
+            A tuple containing:
+            - status (bool): Whether the market is active
+            - maxLimitsPerTx (int): Maximum number of limit orders allowed per transaction
+            - minLimitOrderAmountInBase (int): Minimum amount for limit orders in base tokens
+            - tickSize (int): Tick size for price increments
+        """
         return await self.contract.functions.getMarketSettings().call()
 
     async def get_open_interest(self) -> tuple[int, int]:
