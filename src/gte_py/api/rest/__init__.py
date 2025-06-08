@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import cast
 
 import aiohttp
 from eth_typing import ChecksumAddress
@@ -57,6 +58,8 @@ class RestApi:
         """
         if self.session is None or self.session.closed:
             await self.__aenter__()
+        
+        self.session = cast(aiohttp.ClientSession, self.session)
 
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
 
