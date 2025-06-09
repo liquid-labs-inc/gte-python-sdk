@@ -1,14 +1,15 @@
 """Example of watching CLOB events in real-time."""
-
+import sys
+sys.path.append(".")
 import asyncio
 import logging
 from datetime import datetime, timedelta
 
 from web3 import AsyncWeb3
-
 from examples.utils import WALLET_ADDRESS, MARKET_ADDRESS
 from gte_py.api.chain.clob import ICLOB
 from gte_py.api.chain.event_source import EventStream
+from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
 
@@ -102,7 +103,7 @@ async def watch_account_orders(clob: ICLOB, account, duration_seconds=60):
     print(f"Finished watching account orders after {duration_seconds} seconds")
 
 
-async def watch_all_market_activity(clob, duration_seconds=60):
+async def watch_all_market_activity(clob: ICLOB, duration_seconds=60):
     """Watch all market activity for a duration."""
     print_separator("Watching All Market Activity")
 
@@ -141,7 +142,7 @@ async def process_stream_async(stream: EventStream, handler, exit_condition):
     # Get initial events
     async for event in stream.stream():
         handler(event)
-        if exit_condition:
+        if exit_condition():
             break
 
 
@@ -175,10 +176,10 @@ async def main():
     network = TESTNET_CONFIG
 
     print("Initializing AsyncWeb3...")
-    web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(network.rpc_http))
+    web3 = await make_web3(network)
 
     print("Connected to blockchain:")
-    print(f"Chain ID: {web3.eth.chain_id}")
+    print(f"Chain ID: {await web3.eth.chain_id}")
     print(f"Latest block: {await web3.eth.get_block_number()}")
 
     # Initialize client with AsyncWeb3
@@ -191,9 +192,7 @@ async def main():
 
     # Initialize the event clob
     print("Creating event clob...")
-    # Start from current block to avoid fetching historical events
-    current_block = await web3.eth.get_block_number()
-
+    
     # Example 1: Watch for all market activity for 30 seconds
     await watch_all_market_activity(clob, duration_seconds=30)
 

@@ -1,7 +1,6 @@
 """Simple example demonstrating how to watch a market's orderbook using WebSocket ETH RPC."""
-from dotenv import load_dotenv
-load_dotenv()
-
+import sys
+sys.path.append(".")
 from gte_py.api.chain.clob import ICLOB
 from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client, MarketClient

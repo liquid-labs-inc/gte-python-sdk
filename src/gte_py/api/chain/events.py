@@ -697,6 +697,7 @@ def parse_withdraw(event_data: EventData) -> WithdrawEvent:
     )
 
 
+
 # Dictionary mapping event names to their parser functions
 EVENT_PARSERS = {
     "LimitOrderSubmitted": parse_limit_order_submitted,

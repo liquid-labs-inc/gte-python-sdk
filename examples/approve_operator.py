@@ -1,11 +1,13 @@
 """Example of approving an operator for trading on behalf of your account."""
+import sys
+sys.path.append(".")
 
 import asyncio
 import logging
 from os import getenv
 
 from eth_typing import ChecksumAddress
-from eth_utils import to_checksum_address
+from eth_utils.address import to_checksum_address
 
 from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client

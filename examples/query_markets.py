@@ -1,5 +1,6 @@
 """Example of querying a specific market from GTE."""
-
+import sys
+sys.path.append(".")
 import asyncio
 
 from eth_typing import ChecksumAddress
