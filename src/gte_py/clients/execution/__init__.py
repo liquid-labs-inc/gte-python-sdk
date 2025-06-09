@@ -10,13 +10,13 @@ from web3.types import TxParams
 
 from gte_py.api.chain.clob_client import CLOBClient
 from gte_py.api.chain.events import OrderCanceledEvent, FillOrderProcessedEvent, LimitOrderProcessedEvent
-from gte_py.api.chain.structs import Side, Settlement, LimitOrderType, FillOrderType
+from gte_py.api.chain.structs import OrderSide, Settlement, LimitOrderType, FillOrderType
 from gte_py.api.chain.utils import TypedContractFunction
 from gte_py.api.rest import RestApi
 from gte_py.clients import UserClient
 from gte_py.clients.market import MarketClient
 from gte_py.api.chain.token_client import TokenClient
-from gte_py.models import Market, Order, OrderStatus, Side, TimeInForce
+from gte_py.models import Market, Order, OrderStatus, OrderSide, TimeInForce
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ class ExecutionClient:
     def place_limit_order_tx(
             self,
             market: Market,
-            side: Side,
+            side: OrderSide,
             amount: int,
             price: int,
             time_in_force: TimeInForce = TimeInForce.GTC,
@@ -91,7 +91,7 @@ class ExecutionClient:
         clob = self._clob.get_clob(market.address)
 
         # Convert model types to contract types
-        contract_side = Side.BUY if side == Side.BUY else Side.SELL
+        contract_side = OrderSide.BUY if side == OrderSide.BUY else OrderSide.SELL
 
         # For IOC and FOK orders, we use the fill order API which has different behavior
         if time_in_force in [TimeInForce.IOC, TimeInForce.FOK]:
@@ -140,7 +140,7 @@ class ExecutionClient:
     def place_limit_order(
             self,
             market: Market,
-            side: Side,
+            side: OrderSide,
             amount: int,
             price: int,
             time_in_force: TimeInForce = TimeInForce.GTC,
@@ -177,7 +177,7 @@ class ExecutionClient:
     async def place_market_order_tx(
             self,
             market: Market,
-            side: Side,
+            side: OrderSide,
             amount: int,
             amount_is_base: bool = True,
             slippage: float = 0.01,
@@ -200,12 +200,12 @@ class ExecutionClient:
         clob = self._clob.get_clob(market.address)
 
         # Convert model types to contract types
-        contract_side = Side.BUY if side == Side.BUY else Side.SELL
+        contract_side = OrderSide.BUY if side == OrderSide.BUY else OrderSide.SELL
 
         # For market orders, use a very aggressive price limit to ensure execution
         # For buy orders: high price, for sell orders: low price
         highest_bid, lowest_ask = await clob.get_tob()
-        if contract_side == Side.BUY:
+        if contract_side == OrderSide.BUY:
             price_limit = int(lowest_ask * (1 + slippage))
         else:
             price_limit = int(highest_bid * (1 - slippage))
@@ -226,7 +226,7 @@ class ExecutionClient:
     async def place_market_order(
             self,
             market: Market,
-            side: Side,
+            side: OrderSide,
             amount: int,
             amount_is_base: bool = True,
             slippage: float = 0.01,

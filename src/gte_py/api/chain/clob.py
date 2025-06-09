@@ -26,7 +26,7 @@ from .structs import (
     LimitOrderType,
     Settlement,
     CLOBOrder,
-    Side,
+    OrderSide,
 )
 from .utils import TypedContractFunction, load_abi
 
@@ -154,7 +154,7 @@ class ICLOB:
         """
         return await self.contract.functions.getTOB().call()
 
-    async def get_limit(self, price: int, side: Side) -> tuple[int, int, int]:
+    async def get_limit(self, price: int, side: OrderSide) -> tuple[int, int, int]:
         """
         Get the limit level details at a specific price level for a given side.
         Args:
@@ -174,7 +174,7 @@ class ICLOB:
         """Get the total number of ask orders in the order book."""
         return await self.contract.functions.getNumAsks().call()
 
-    async def get_next_biggest_price(self, price: int, side: Side) -> int:
+    async def get_next_biggest_price(self, price: int, side: OrderSide) -> int:
         """
         Get the next biggest price for a given side.
 
@@ -187,7 +187,7 @@ class ICLOB:
         """
         return await self.contract.functions.getNextBiggestPrice(price, side).call()
 
-    async def get_next_smallest_price(self, price: int, side: Side) -> int:
+    async def get_next_smallest_price(self, price: int, side: OrderSide) -> int:
         """
         Get the next smallest price for a given side.
 
@@ -678,7 +678,7 @@ class ICLOB:
             self,
             amount_in_base: int,
             price: int,
-            side: Side,
+            side: OrderSide,
             cancel_timestamp: int = 0,
             client_order_id: int = 0,
             limit_order_type: int = LimitOrderType.GOOD_TILL_CANCELLED,
@@ -713,7 +713,7 @@ class ICLOB:
             self,
             amount: int,
             price_limit: int,
-            side: Side,
+            side: OrderSide,
             amount_is_base: bool = True,
             fill_order_type: int = FillOrderType.IMMEDIATE_OR_CANCEL,
             settlement: int = Settlement.INSTANT,
@@ -746,7 +746,7 @@ class ICLOB:
             order_id: int,
             amount_in_base: int,
             price: int,
-            side: Side,
+            side: OrderSide,
             cancel_timestamp: int = 0,
             limit_order_type: int = LimitOrderType.GOOD_TILL_CANCELLED,
             settlement: int = Settlement.INSTANT,

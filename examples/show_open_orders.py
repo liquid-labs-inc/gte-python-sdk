@@ -1,5 +1,6 @@
 """Example of on-chain trading with the GTE client."""
 import sys
+
 sys.path.append(".")
 import asyncio
 import logging
@@ -8,7 +9,6 @@ import logging
 from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
-from gte_py.models import OrderSide, TimeInForce
 
 from utils import (
     display_market_info,
@@ -32,27 +32,11 @@ async def main() -> None:
     await client.init()
     # Get a market to work with
     market = await display_market_info(client, MARKET_ADDRESS)
-
-    bid, ask = await client.market.get_tob(market)
-    quantity = 1.0
-
-    order = await client.execution.place_limit_order(
-        market=market,
-        side=OrderSide.BUY,
-        amount=market.base.convert_quantity_to_amount(quantity),
-        price=bid,
-        time_in_force=TimeInForce.POST_ONLY,
-        gas=50 * 10000000
-    )
-    print(f"Placed order: {order.order_id} at price {bid * 0.8} for {quantity} {market.base.symbol}")
-    amend_order = await client.execution.amend_order(
-        market=market,
-        order_id=order.order_id,
-        new_price=bid,
-        new_amount=market.base.convert_quantity_to_amount(quantity * 0.5),
-        gas=50 * 10000000
-    )
-    print(f"Amended order: {amend_order.order_id} to new price {bid * 0.9} and amount {quantity * 2} {market.base.symbol}")
+    open_orders = await client.user.get_open_orders(market)
+    print("Opening orders:")
+    for open_order in open_orders:
+        print(
+            f"Order ID: {open_order.order_id}, Price: {open_order.price}, Amount: {open_order.amount}, Side: {open_order.side}")
 
 
 if __name__ == "__main__":

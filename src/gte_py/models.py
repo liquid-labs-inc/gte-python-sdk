@@ -13,7 +13,7 @@ from hexbytes import HexBytes
 from web3 import AsyncWeb3
 
 from gte_py.api.chain.events import LimitOrderProcessedEvent, FillOrderProcessedEvent
-from gte_py.api.chain.structs import Side as ContractSide, CLOBOrder
+from gte_py.api.chain.structs import OrderSide as ContractOrderSide, CLOBOrder
 from gte_py.api.chain.utils import get_current_timestamp
 
 
@@ -26,7 +26,22 @@ class MarketType(Enum):
     CLOB_PERP = "clob-perp"
 
 
-Side = ContractSide
+OrderSide = ContractOrderSide
+
+
+class MarketSide(str, Enum):
+    BID = "bid"
+    ASK = "ask"
+
+    @classmethod
+    def from_string(cls, s: str) -> "MarketSide":
+        """Convert a string to a MarketSide enum."""
+        if s.lower() == "bid":
+            return cls.BID
+        elif s.lower() == "ask":
+            return cls.ASK
+        else:
+            raise ValueError(f"Invalid market side: {s}. Must be 'bid' or 'ask'.")
 
 
 class OrderType(Enum):
@@ -175,10 +190,10 @@ class Trade:
     """Trade model."""
 
     market_address: ChecksumAddress
-    timestamp: int # e.g. 1748406437000
+    timestamp: int  # e.g. 1748406437000
     price: float
     size: float
-    side: Side
+    side: OrderSide
     tx_hash: HexBytes | None = None  # Transaction hash is an Ethereum address
     maker: ChecksumAddress | None = None
     taker: ChecksumAddress | None = None
@@ -192,7 +207,7 @@ class Trade:
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Trade":
         """Create a Trade object from API response data."""
-        side = Side.from_str(data.get("side"))
+        side = OrderSide.from_str(data.get("side"))
         tx_hash = HexBytes(data["txnHash"])
         maker = data["maker"] and to_checksum_address(data["maker"]) or None
         taker = data["taker"] and to_checksum_address(data["taker"]) or None
@@ -291,13 +306,14 @@ class Order:
 
     order_id: int
     market_address: str
-    side: Side
+    side: MarketSide
     order_type: OrderType
-    amount: int
+    amount: int  # remaining amount in base units
     price: int | None
     time_in_force: TimeInForce
     status: OrderStatus
     created_at: int
+    original_amount: int | None = None  # Original amount before any fills
     owner: ChecksumAddress | None = None
 
     @property
@@ -307,22 +323,20 @@ class Order:
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Order":
-        """Create an Order object from API response data."""
-        side_str = data.get("side", "buy")
-        type_str = data.get("type", "limit")
-        tif_str = data.get("timeInForce", "GTC")
-        status_str = data.get("status", "open")
+        """Create an Order object from API response data
+        """
 
         return cls(
-            order_id=data.get("id", 0),
-            market_address=data.get("marketAddress", ""),
-            side=Side(side_str),
-            order_type=OrderType(type_str),
-            amount=data.get("amount", 0),
-            price=data.get("price"),
-            time_in_force=TimeInForce(tif_str),
-            status=OrderStatus(status_str),
-            created_at=data.get("createdAt", int(datetime.now().timestamp() * 1000)),
+            order_id=int(data['orderId']),
+            market_address=to_checksum_address(data["marketAddress"]),
+            side=OrderSide.from_str(data['side']),
+            order_type=OrderType.LIMIT,
+            amount=int(data['originalSize']) - int(data['sizeFilled']),
+            original_amount=int(data['originalSize']),
+            price=int(data['limitPrice']),
+            time_in_force=TimeInForce.GTC,
+            status=OrderStatus.OPEN,
+            created_at=int(data["placedAt"]),
         )
 
     @classmethod
@@ -351,7 +365,7 @@ class Order:
 
     @classmethod
     def from_clob_limit_order_processed(
-            cls, event: LimitOrderProcessedEvent, amount: int, side: Side, price: int
+            cls, event: LimitOrderProcessedEvent, amount: int, side: OrderSide, price: int
     ) -> "Order":
         """Create an Order object from a CLOB limit order."""
         status = OrderStatus.OPEN
@@ -374,7 +388,7 @@ class Order:
 
     @classmethod
     def from_clob_fill_order_processed(
-            cls, event: FillOrderProcessedEvent, amount: int, side: Side, price: int
+            cls, event: FillOrderProcessedEvent, amount: int, side: OrderSide, price: int
     ) -> "Order":
         """Create an Order object from a CLOB limit order."""
         status = OrderStatus.OPEN

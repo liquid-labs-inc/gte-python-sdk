@@ -8,7 +8,7 @@ from hexbytes import HexBytes
 from gte_py.api.rest import RestApi, logger
 from gte_py.api.ws import WebSocketApi, TradeData
 from gte_py.configs import NetworkConfig
-from gte_py.models import Market, Trade, Side
+from gte_py.models import Market, Trade, OrderSide
 
 
 class TradesClient:
@@ -57,7 +57,7 @@ class TradesClient:
         async def handle_trade_message(raw_data: TradeData):
             trade = Trade(
                 market_address=to_checksum_address(raw_data['m']),
-                side=Side.from_str(raw_data['sd']),
+                side=OrderSide.from_str(raw_data['sd']),
                 price=float(raw_data['px']),
                 size=float(raw_data['sz']),
                 timestamp= raw_data['t'],
