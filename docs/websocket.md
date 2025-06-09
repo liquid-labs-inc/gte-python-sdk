@@ -25,7 +25,7 @@ All subscription requests follow this format:
 
 ```json
 {
-  "id": "unique-request-id",
+  "id": 0,
   "method": "topic.subscribe",
   "params": {
     // Topic-specific parameters
@@ -39,7 +39,7 @@ The server responds to subscription requests with:
 
 ```json
 {
-  "id": "unique-request-id",
+  "id": 0,
   "status": 0
 }
 ```
