@@ -22,7 +22,6 @@ from gte_py.api.chain.errors import ERROR_EXCEPTIONS
 
 from gte_py.configs import NetworkConfig
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -68,8 +67,6 @@ def load_abi(abi_name: str) -> list[dict[str, Any]]:
     str_path = str(file_path)
     with open(str_path) as f:
         return json.load(f)
-
-
 
 
 def convert_web3_error(error: ContractCustomError, cause: str) -> Exception:
@@ -214,6 +211,27 @@ class TypedContractFunction(Generic[T]):
             # Wait for the transaction to be mined
             self.receipt: TxReceipt = await self.web3.eth.wait_for_transaction_receipt(self.tx_hash)
             if self.receipt['status'] != 1:
+                tx_params: TxParams = await self.web3.eth.get_transaction(self.tx_hash)
+                try:
+                    tx_params = {
+                        "from": tx_params['from'],
+                        "to": tx_params['to'],
+                        "value": tx_params['value'],
+                        "gas": tx_params['gas'],
+                        "maxFeePerGas": tx_params['maxFeePerGas'],
+                        "maxPriorityFeePerGas": tx_params['maxPriorityFeePerGas'],
+                        "nonce": tx_params['nonce'],
+                        "chainId": tx_params['chainId'],
+                        "type": tx_params['type'],
+                        "accessList": tx_params['accessList'],
+
+                    }
+                    await self.func_call.call(tx_params, block_identifier=self.receipt['blockNumber'])
+                except ContractCustomError:
+                    raise
+                except Exception as e:
+                    logger.warning('Simulatrion failed: ' + format_contract_function(self.func_call, self.tx_hash) +
+                                   " : " + str(self.receipt), exc_info=e)
                 raise Web3Exception("transaction failed: " +
                                     format_contract_function(self.func_call, self.tx_hash) +
                                     " : " + str(self.receipt)
@@ -356,7 +374,8 @@ class Web3RequestManager:
         self.is_running = True
         self.confirmation_task = asyncio.create_task(self._monitor_confirmations())
         self.process_transactions_task = asyncio.create_task(self._process_transactions())
-        self.logger.info("Web3RequestManager started for account %s. next nonce %s", self.account.address, self.next_nonce)
+        self.logger.info("Web3RequestManager started for account %s. next nonce %s", self.account.address,
+                         self.next_nonce)
 
     async def stop(self):
         """Graceful shutdown"""
@@ -484,7 +503,8 @@ class Web3RequestManager:
                 self.logger.error(f"Error during nonce synchronization", exc_info=e)
                 continue
 
-    async def _send_transaction(self, tx: TxParams, nonce: Nonce, tx_hash_future: asyncio.Future[HexBytes] | None = None):
+    async def _send_transaction(self, tx: TxParams, nonce: Nonce,
+                                tx_hash_future: asyncio.Future[HexBytes] | None = None):
         """Transaction sending implementation"""
         try:
             tx["nonce"] = nonce
@@ -503,7 +523,6 @@ class Web3RequestManager:
             signed_tx: SignedTransaction = self.web3.eth.account.sign_transaction(tx, self.account.key)
             if tx_hash_future:
                 tx_hash_future.set_result(signed_tx.hash)
-            await self.web3.eth.call(tx)
             await self.web3.eth.send_raw_transaction(signed_tx.raw_transaction)
             return signed_tx.hash
         except Exception as e:
