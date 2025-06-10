@@ -243,7 +243,7 @@ class UserClient:
         ).send_wait()
 
     async def disapprove_operator(self, operator_address: ChecksumAddress,
-                                 roles: list[OperatorRole],
+                                  roles: list[OperatorRole],
                                   **kwargs: Unpack[TxParams]):
         """
         Disapprove an operator from acting on behalf of the account.
@@ -291,11 +291,12 @@ class UserClient:
         Returns:
             List of Order objects representing trades
         """
-        response = await self._rest.get_trades(market.address, limit, offset)
+        response = await self._rest.get_trades(market.address, limit=limit, offset=offset)
         return [Trade.from_api(trade) for trade in response]
 
     async def get_open_orders(
-            self, market: Market | None = None
+            self, market: Market | None = None,
+            limit: int = 100, offset: int = 0
     ) -> List[Order]:
         """
         Get open orders for an address on a specific market using the REST API.
@@ -308,11 +309,12 @@ class UserClient:
             List of Order objects representing open orders
         """
 
-        response = await self._rest.get_user_open_orders(self._account, market and market.address)
+        response = await self._rest.get_user_open_orders(self._account, market and market.address, limit=limit,
+                                                         offset=offset)
         return [Order.from_api(order_data) for order_data in response]
 
     async def get_filled_orders(
-            self, market: Market | None = None
+            self, market: Market | None = None, limit: int = 100, offset: int = 0
     ) -> List[Order]:
         """
         Get filled orders for an address on a specific market using the REST API.
@@ -324,11 +326,12 @@ class UserClient:
             List of Order objects representing filled orders
         """
 
-        response = await self._rest.get_user_filled_orders(self._account, market and market.address)
+        response = await self._rest.get_user_filled_orders(self._account, market and market.address, limit=limit,
+                                                           offset=offset)
         return [Order.from_api(order_data) for order_data in response]
 
     async def get_order_history(
-            self, market: Market | None = None
+            self, market: Market | None = None, limit: int = 100, offset: int = 0
     ) -> List[Order]:
         """
         Get order history for an address on a specific market using the REST API.
@@ -340,5 +343,6 @@ class UserClient:
             List of Order objects representing order history
         """
 
-        response = await self._rest.get_user_order_history(self._account, market and market.address)
+        response = await self._rest.get_user_order_history(self._account, market and market.address, limit=limit,
+                                                           offset=offset)
         return [Order.from_api(order_data) for order_data in response]

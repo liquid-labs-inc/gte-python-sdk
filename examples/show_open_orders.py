@@ -9,6 +9,7 @@ import logging
 from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
+from gte_py.api.rest.utils import paged_request
 
 from utils import (
     display_market_info,
@@ -32,7 +33,8 @@ async def main() -> None:
     await client.init()
     # Get a market to work with
     market = await display_market_info(client, MARKET_ADDRESS)
-    open_orders = await client.user.get_open_orders(market)
+    open_orders = await paged_request(
+        lambda limit, offset: client.user.get_open_orders(market, limit=limit, offset=offset), 50, 1000)
     print("Opening orders:")
     for open_order in open_orders:
         print(
