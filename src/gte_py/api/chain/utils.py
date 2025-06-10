@@ -5,6 +5,7 @@ import logging
 import time
 import warnings
 from typing import Any, Generic, TypeVar, Callable, Tuple, Dict, Awaitable, Optional, List
+from typing import cast
 
 from async_timeout import timeout
 from eth_account import Account
@@ -12,11 +13,12 @@ from eth_account.datastructures import SignedTransaction
 from eth_account.signers.local import LocalAccount
 from eth_account.types import PrivateKeyType
 from eth_typing import ChecksumAddress
+from eth_utils.address import is_checksum_address
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
 from web3.contract.async_contract import AsyncContractFunction
 from web3.exceptions import ContractCustomError, Web3Exception
-from web3.middleware import SignAndSendRawMiddlewareBuilder, validation
+from web3.middleware import SignAndSendRawMiddlewareBuilder, Middleware, validation
 from web3.types import TxParams, EventData, Nonce, Wei, TxReceipt
 from gte_py.api.chain.errors import ERROR_EXCEPTIONS
 
@@ -127,7 +129,7 @@ class TypedContractFunction(Generic[T]):
         self.event = None
         self.event_parser: Callable[[EventData], T] | None = None
         self.result: T | None = None
-        self.receipt: dict[str, Any] | None = None
+        self.receipt: TxReceipt | None = None
         self.tx_hash: HexBytes | Awaitable[HexBytes] | None = None
         self.tx_send: Awaitable[None] | None = None
         self.tx_id = next_tx_id()
@@ -143,21 +145,25 @@ class TypedContractFunction(Generic[T]):
     async def call(self) -> T:
         """Synchronous read operation"""
         self.result = await self.func_call.call(self.params)
-        return self.result
+        return cast(T, self.result)
 
     def send_nowait(self) -> Awaitable[HexBytes]:
         """Asynchronous write operation"""
         try:
             tx = self.params
-            tx['nonce'] = 0  # to be updated later
+            tx['nonce'] = cast(Nonce, 0) # to be updated later
             logger.info(
                 "Sending tx#%d %s with %s", self.tx_id, format_contract_function(self.func_call), tx
             )
             tx = self.func_call.build_transaction(tx)
             # tx is auto signed
-            instance = Web3RequestManager.instances[
-                self.web3.eth.default_account
-            ]
+
+            account = self.web3.eth.default_account
+            if not isinstance(account, str) or not is_checksum_address(account):
+                raise ValueError("Default account must be a valid ChecksumAddress")
+
+            instance = Web3RequestManager.instances[account]
+
             self.tx_hash, self.tx_send = instance.submit_tx(tx)
 
             return self.tx_hash
@@ -180,7 +186,7 @@ class TypedContractFunction(Generic[T]):
     async def build_transaction(self) -> TxParams:
         return await self.func_call.build_transaction(self.params)
 
-    async def retrieve(self) -> T:
+    async def retrieve(self) -> T | None:
         """
         Retrieves the result of a transaction.
 
@@ -251,7 +257,7 @@ class TypedContractFunction(Generic[T]):
                 self.tx_hash = None
             raise convert_web3_error(e, format_contract_function(self.func_call, self.tx_hash)) from e
 
-    async def send_wait(self) -> T:
+    async def send_wait(self) -> T | None:
         await self.send()
         return await self.retrieve()
 
@@ -331,7 +337,8 @@ async def make_web3(
     if wallet_private_key:
         account: LocalAccount = Account.from_key(wallet_private_key)
         w3.eth.default_account = account.address
-        w3.middleware_onion.inject(SignAndSendRawMiddlewareBuilder.build(account), layer=0)
+        middleware = cast(Middleware, SignAndSendRawMiddlewareBuilder.build(account))
+        w3.middleware_onion.inject(middleware, layer=0)
         await Web3RequestManager.ensure_instance(w3, account)
     return w3
 
@@ -424,7 +431,7 @@ class Web3RequestManager:
             if len(self.free_nonces) == 0:
                 nonce = self.next_nonce
                 self.logger.debug(f"Get nonce {nonce}")
-                self.next_nonce += 1
+                self.next_nonce = cast(Nonce, self.next_nonce + 1)
             else:
                 nonce = self.free_nonces.pop(0)
                 self.logger.debug(f"Get nonce {nonce}")
@@ -459,13 +466,19 @@ class Web3RequestManager:
         block = await self.web3.eth.get_block(block_identifier="latest")
         gas_price_multiplier = 1.5
 
+        base_fee = block.get("baseFeePerGas")
+        if base_fee is None:
+            # baseFeePerGas is optional in BlockData for typing,
+            # but this should never occur on post–EIP-1559 networks.
+            raise ValueError("Missing baseFeePerGas in block data.")
+
         # Create a transaction sending 0 ETH to ourselves (cancellation)
         cancel_tx: TxParams = {
             "from": self.account.address,
             "to": self.account.address,
             "value": Wei(0),
             "nonce": Nonce(nonce),
-            "maxFeePerGas": Wei(int(block['baseFeePerGas'] * gas_price_multiplier)),
+            "maxFeePerGas": Wei(int(base_fee * gas_price_multiplier)),
             # we sometimes receive max_priority_fee=0, which is not helpful
             "maxPriorityFeePerGas": Wei(max(1, int(max_priority_fee * gas_price_multiplier))),
             "gas": 21000  # Minimum gas limit
@@ -477,6 +490,7 @@ class Web3RequestManager:
     async def _process_transactions(self):
         while self.is_running:
             tx, tx_hash, tx_send = await self._tx_queue.get()
+            tx_future = tx_hash
 
             try:
                 async with timeout(15):
@@ -489,8 +503,8 @@ class Web3RequestManager:
                 tx_send.set_result(None)
             except Exception as e:
                 logger.error(f"Failed to send transaction: {e}")
-                if not tx_hash.done():
-                    tx_hash.set_exception(e)
+                if not tx_future.done():
+                    tx_future.set_exception(e)
                 tx_send.set_exception(e)
 
     async def _monitor_confirmations(self):
