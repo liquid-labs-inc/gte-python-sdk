@@ -5,7 +5,7 @@ import json
 import logging
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Dict, List, Union, TypedDict, Tuple
+from typing import Any, Dict, List, Union, TypedDict, Tuple, cast
 
 import aiohttp
 from eth_typing import ChecksumAddress
@@ -137,6 +137,9 @@ class WebSocketApi:
 
     async def _listen(self):
         """Listen for messages from the WebSocket."""
+        if self.ws is None:
+            raise RuntimeError("WebSocket connection is not established")
+    
         try:
             async for msg in self.ws:
                 if msg.type == aiohttp.WSMsgType.TEXT:
@@ -189,6 +192,8 @@ class WebSocketApi:
         """
         if not self.running or not self.ws:
             await self.connect()
+        
+        self.ws = cast(aiohttp.client.ClientWebSocketResponse, self.ws)
 
         # Extract the stream type from the method
         stream_type = method.split(".")[0]

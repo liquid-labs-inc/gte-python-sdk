@@ -70,8 +70,8 @@ class RestApi:
                 response_data = await response.text()
                 response.raise_for_status()
 
-                data = json.loads(response_data)
-                return data
+                parsed_json = json.loads(response_data)
+                return parsed_json
         except aiohttp.ClientError as e:
             logger.error(f"Request error: {e} url={url} params={params} data={data}")
             raise

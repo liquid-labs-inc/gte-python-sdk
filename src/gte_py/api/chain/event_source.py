@@ -7,6 +7,7 @@ supporting both historical queries and real-time streaming.
 
 import asyncio
 from typing import Callable, Dict, Generic, AsyncIterator, List, Optional, TypeVar, Any, Union
+from typing import cast
 
 from web3 import AsyncWeb3
 from web3._utils.filters import AsyncLogFilter
@@ -154,6 +155,8 @@ class EventStream(Generic[T]):
         """
         if not self.filter:
             await self.create_filter()
+        
+        self.filter = cast(AsyncLogFilter, self.filter)
 
         entries = await self.filter.get_all_entries()
         return [self.parser(entry) for entry in entries]
@@ -167,6 +170,8 @@ class EventStream(Generic[T]):
         """
         if not self.filter:
             await self.create_filter()
+
+        self.filter = cast(AsyncLogFilter, self.filter)
 
         entries = await self.filter.get_new_entries()
         return [self.parser(entry) for entry in entries]

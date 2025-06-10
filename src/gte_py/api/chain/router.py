@@ -49,11 +49,11 @@ class Router:
 
     async def get_weth(self) -> ChecksumAddress:
         """Get the WETH contract address."""
-        return self.contract.functions.weth().call()
+        return await self.contract.functions.weth().call()
 
     async def get_launchpad(self) -> ChecksumAddress:
         """Get the Launchpad contract address."""
-        return self.contract.functions.launchpad().call()
+        return await self.contract.functions.launchpad().call()
 
     async def get_clob_factory(self) -> ChecksumAddress:
         """Get the CLOB factory contract address."""

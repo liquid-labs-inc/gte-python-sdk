@@ -1,7 +1,7 @@
 """Python wrapper for the GTE CLOB Factory contract."""
 
 import logging
-from typing import TypeVar, List
+from typing import Optional, TypeVar, List
 
 from eth_typing import ChecksumAddress
 from typing_extensions import Unpack
@@ -623,7 +623,7 @@ class CLOBFactory:
             settlement: int,
             taker_quote_amount: int,
             taker_base_amount: int,
-            maker_credits: List[dict] = None,
+            maker_credits: Optional[List[dict]] = None,
     ) -> dict:
         """
         Create parameters for settle_incoming_order.

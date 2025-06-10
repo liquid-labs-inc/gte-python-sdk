@@ -1,7 +1,7 @@
 """Order execution functionality for the GTE client."""
 
 import logging
-from typing import Optional, Tuple, Awaitable
+from typing import Optional, Tuple, Awaitable, Any
 
 from eth_typing import ChecksumAddress
 from typing_extensions import Unpack
@@ -71,7 +71,7 @@ class ExecutionClient:
             time_in_force: TimeInForce = TimeInForce.GTC,
             client_order_id: int = 0,
             **kwargs,
-    ) -> TypedContractFunction[FillOrderProcessedEvent | LimitOrderProcessedEvent]:
+    ) -> TypedContractFunction[Any]:
         """
         Place a limit order on the CLOB.
 
@@ -169,6 +169,8 @@ class ExecutionClient:
                     log, amount, side, price
                 )
             else:
+                if log is None:
+                    raise ValueError("Unexpected event: None")
                 raise ValueError(f"Unknown event type: {log.event_name}")
             return order
 
