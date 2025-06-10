@@ -12,7 +12,7 @@ readme = "README.md"
 license = "MIT"
 authors = [
     { name = "Jakku Sakura", email = "jakku.sakura@auros.global" },
-    { name= "moses", email = "moses@liquidlabs.com" }
+    { name = "moses", email = "moses@liquidlabs.com" }
 ]
 dependencies = [
     "typer>=0.9.0",
