@@ -2,11 +2,13 @@ import asyncio
 from typing import Callable, Any
 
 from eth_typing import ChecksumAddress
+from eth_utils import to_checksum_address
+from hexbytes import HexBytes
 
 from gte_py.api.rest import RestApi, logger
-from gte_py.api.ws import WebSocketApi
+from gte_py.api.ws import WebSocketApi, TradeData
 from gte_py.configs import NetworkConfig
-from gte_py.models import Market, Trade
+from gte_py.models import Market, Trade, Side
 
 
 class TradesClient:
@@ -18,6 +20,7 @@ class TradesClient:
         self._ws = WebSocketApi(config.ws_url)
         self._trade_callbacks = []
         self._rest = rest
+        self._last_trade = None  # Store the last received trade
 
     async def connect(self):
         """Connect to the WebSocket."""
@@ -50,19 +53,16 @@ class TradesClient:
             # If no callbacks, add a dummy one to store the last trade
             self._trade_callbacks.append(lambda trade: setattr(self, "_last_trade", trade))
 
-        # Define handler for raw trade messages
-        async def handle_trade_message(data):
-            if data.get("s") != "trades":
-                return
-
-            trade_data = data.get("d", {})
+        # Define handler for raw trade messages that handles both raw and parsed data
+        async def handle_trade_message(raw_data: TradeData):
             trade = Trade(
-                market_address=trade_data.get("m"),
-                side=trade_data.get("sd"),
-                price=float(trade_data.get("px")),
-                size=float(trade_data.get("sz")),
-                timestamp=trade_data.get("t"),
-                tx_hash=trade_data.get("h"),
+                market_address=to_checksum_address(raw_data['m']),
+                side=Side.from_str(raw_data['sd']),
+                price=float(raw_data['px']),
+                size=float(raw_data['sz']),
+                timestamp= raw_data['t'],
+                tx_hash=HexBytes(raw_data['h']),
+                trade_id=raw_data['id']
             )
 
             self._last_trade = trade
@@ -73,9 +73,9 @@ class TradesClient:
                 except Exception as e:
                     logger.error(f"Error in trade callback: {e}")
 
-        await self._ws.subscribe_trades([market.address], handle_trade_message)
+        await self._ws.subscribe_trades(market.address, handle_trade_message)
 
     async def unsubscribe_trades(self, market: Market):
         """Unsubscribe from real-time trades."""
-        await self._ws.unsubscribe_trades([market.address])
+        await self._ws.unsubscribe_trades(market.address)
         self._trade_callbacks = []

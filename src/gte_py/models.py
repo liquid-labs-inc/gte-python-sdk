@@ -7,7 +7,8 @@ from math import floor, log10
 from typing import Any, List, Optional, Tuple
 
 from eth_typing import ChecksumAddress
-from eth_utils import to_checksum_address
+from eth_utils.address import to_checksum_address
+from gte_py.api.rest.models import MarketDetail, TokenDetail
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
 
@@ -74,7 +75,6 @@ class Token:
     name: str
     symbol: str
     total_supply: float | None = None
-    media_uri: str | None = None
     balance: float | None = None
 
     def convert_amount_to_quantity(self, amount: int) -> float:
@@ -90,18 +90,17 @@ class Token:
         return rounded
 
     @classmethod
-    def from_api(cls, data: dict[str, Any], with_balance: bool = False) -> "Token":
+    def from_api(cls, data: TokenDetail) -> "Token":
         """Create an Asset object from API response data."""
         address = to_checksum_address(data["address"])
 
         return cls(
             address=address,
-            decimals=data.get("decimals", 18),
-            name=data.get("name", ""),
-            symbol=data.get("symbol", ""),
-            total_supply=data.get("totalSupply"),
-            media_uri=data.get("mediaUri"),
-            balance=data.get("balance") if with_balance else None,
+            decimals=data["decimals"],
+            name=data["name"],
+            symbol=data["symbol"],
+            total_supply=data["totalSupply"],
+            balance=data.get("balance")
         )
 
 
@@ -117,7 +116,7 @@ class Market:
     volume_24h: float | None = None
 
     @classmethod
-    def from_api(cls, data: dict[str, Any]) -> "Market":
+    def from_api(cls, data: MarketDetail) -> "Market":
         """Create a Market object from API response data."""
         contract_address = data["address"]
 
@@ -183,6 +182,7 @@ class Trade:
     tx_hash: HexBytes | None = None  # Transaction hash is an Ethereum address
     maker: ChecksumAddress | None = None
     taker: ChecksumAddress | None = None
+    trade_id: int | None = None
 
     @property
     def datetime(self) -> datetime:

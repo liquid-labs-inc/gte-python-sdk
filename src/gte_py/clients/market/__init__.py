@@ -239,3 +239,7 @@ class MarketClient:
 
     async def get_trades(self, market: ChecksumAddress, limit: int = 100, offset: int = 0) -> list[Trade]:
         return await self._trades.get_trades(market, limit, offset)
+
+    async def subscribe_trades(self, market: Market, callback: Callable[[Trade], Any] | None = None):
+        """Subscribe to real-time trades."""
+        await self._trades.subscribe_trades(market, callback)

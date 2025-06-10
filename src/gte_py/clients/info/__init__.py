@@ -18,7 +18,11 @@ class InfoClient:
     """Service for retrieving market information from the blockchain."""
 
     def __init__(
-            self, rest: RestApi, web3: AsyncWeb3, clob_client: CLOBClient, token_client: TokenClient
+        self,
+        rest: RestApi,
+        web3: AsyncWeb3,
+        clob_client: CLOBClient,
+        token_client: TokenClient,
     ):
         """
         Initialize the market info service.
@@ -40,7 +44,7 @@ class InfoClient:
         await self._clob_client.init()
 
     async def get_tokens(
-            self, creator: str | None = None, limit: int = 100, offset: int = 0
+        self, creator: str | None = None, limit: int = 100, offset: int = 0
     ) -> list[Token]:
         """
         Get list of assets.
@@ -53,15 +57,17 @@ class InfoClient:
         Returns:
             List of assets
         """
-        response = await self._rest.get_tokens(creator=creator, limit=limit, offset=offset)
+        response = await self._rest.get_tokens(
+            creator=creator, limit=limit, offset=offset
+        )
         return [Token.from_api(asset_data) for asset_data in response.get("assets", [])]
 
     async def get_markets(
-            self,
-            limit: int = 100,
-            offset: int = 0,
-            market_type: str | None = None,
-            token_address: str | None = None,
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        market_type: str | None = None,
+        token_address: str | None = None,
     ) -> list[Market]:
         """
         Get list of markets.
@@ -86,11 +92,37 @@ class InfoClient:
 
         return markets
 
-    async def get_market(self, address: ChecksumAddress | ICLOB) -> Market:
+    async def get_market(self, address: ChecksumAddress) -> Market:
+        """
+        Get market information by address.
+
+        Args:
+            address: Market address
+
+        Returns:
+            Market object with details
+        """
+        if address in self._markets:
+            return self._markets[address]
+
+        resp = await self._rest.get_market(address)
+        market = Market.from_api(resp)
+        self._markets[address] = market
+        return market
+
+    async def get_market_from_chain(
+        self, address_or_clob: ChecksumAddress | ICLOB
+    ) -> Market:
         # Get market config for additional details
-        if not isinstance(address, ICLOB):
-            address = self._clob_client.get_clob(address)
-        factory, mask, quote, base, quote_size, base_size= await address.get_market_config()
+        if not isinstance(address_or_clob, ICLOB):
+            clob = self._clob_client.get_clob(address_or_clob)
+        else:
+            clob = address_or_clob
+        if clob.address in self._markets:
+            return self._markets[clob.address]
+        factory, mask, quote, base, quote_size, base_size = (
+            await clob.get_market_config()
+        )
 
         base_contract = self._token_client.get_erc20(base)
         quote_contract = self._token_client.get_erc20(quote)
@@ -111,10 +143,11 @@ class InfoClient:
 
         # Create a market info object
         market_info = Market(
-            address=address.address,
+            address=clob.address,
             market_type=MarketType.CLOB_SPOT,
             base=base_asset,
             quote=quote_asset,
         )
+        self._markets[clob.address] = market_info
 
         return market_info
