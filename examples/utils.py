@@ -121,8 +121,8 @@ async def display_token_balances(client: Client, token_address: ChecksumAddress,
         allowance = await token.convert_amount_to_quantity(allowance)
         print(f"Token Name:    {await token.name()}")
         print(f"Token Balance:    {token_balance:.6f}")
-        print(f"Exchange Balance: {exchange_balance:.6f}")
         print(f"Allowance:       {allowance:.6f}")
+        print(f"Exchange Balance: {exchange_balance:.6f}")
 
     except Exception as e:
         print(f"Error retrieving token details: {e}")
