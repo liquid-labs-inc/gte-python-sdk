@@ -184,8 +184,9 @@ class Router:
         amount_in: int,
         amount_out_min: int,
         deadline: int,
-        hops: list[bytes],
+        is_unwrapping: bool,
         settlement: int,
+        hops: list[bytes],
         value: int = 0,
         **kwargs,
     ) -> TypedContractFunction[HexBytes]:
@@ -197,8 +198,9 @@ class Router:
             amount_in: Amount of input tokens
             amount_out_min: Minimum amount of output tokens expected
             deadline: Transaction deadline timestamp
-            hops: Array of encoded hop data
+            is_unwrapping: Whether to unwrap WETH to ETH at the end
             settlement: Settlement type (NONE=0, WRAP=1, UNWRAP=2)
+            hops: Array of encoded hop data
             value: ETH value to send with the transaction (for wrapping)
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
@@ -209,7 +211,7 @@ class Router:
         tx_params = {"value": value, **kwargs}
 
         func = self.contract.functions.executeRoute(
-            token_in, amount_in, amount_out_min, deadline, hops, settlement
+            token_in, amount_in, amount_out_min, deadline, is_unwrapping, settlement, hops
         )
         return TypedContractFunction(func, tx_params)
 

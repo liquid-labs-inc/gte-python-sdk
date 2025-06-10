@@ -14,7 +14,7 @@ from gte_py.api.ws import WebSocketApi
 from gte_py.clients.info import InfoClient
 from gte_py.clients.market.trades import TradesClient
 from gte_py.configs import NetworkConfig
-from gte_py.models import OrderbookUpdate, PriceLevel, OrderBookSnapshot, Market, Side, Order, Trade
+from gte_py.models import OrderbookUpdate, PriceLevel, OrderBookSnapshot, Market, OrderSide, Order, Trade
 
 logger = logging.getLogger(__name__)
 
@@ -175,28 +175,28 @@ class MarketClient:
             tasks.append(
                 asyncio.create_task(
                     self.get_orders_for_price_level(
-                        market=market, price=price_level, side=Side.BUY
+                        market=market, price=price_level, side=OrderSide.BUY
                     )
                 )
             )
             i += 1
             if level and i >= level:
                 break
-            price_level = await clob.get_next_smallest_price(price_level, Side.BUY)
+            price_level = await clob.get_next_smallest_price(price_level, OrderSide.BUY)
         i = 0
         price_level = best_ask
         while price_level > 0:
             tasks.append(
                 asyncio.create_task(
                     self.get_orders_for_price_level(
-                        market=market, price=price_level, side=Side.SELL
+                        market=market, price=price_level, side=OrderSide.SELL
                     )
                 )
             )
             i += 1
             if level and i >= level:
                 break
-            price_level = await clob.get_next_biggest_price(price_level, Side.SELL)
+            price_level = await clob.get_next_biggest_price(price_level, OrderSide.SELL)
 
         for task in tasks:
             try:
@@ -208,7 +208,7 @@ class MarketClient:
         return orders
 
     async def get_orders_for_price_level(
-            self, market: Market, price: int, side: Side
+            self, market: Market, price: int, side: OrderSide
     ) -> List[Order]:
         """
         Get all orders for a specific price level.

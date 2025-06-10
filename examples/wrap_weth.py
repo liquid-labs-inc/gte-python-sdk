@@ -81,7 +81,7 @@ async def main() -> None:
 
     # Initialize client with AsyncWeb3
     print("Initializing GTE client...")
-    client = Client(web3=web3, config=network, account=web3.eth.default_account)
+    client = Client(web3=web3, config=network, account=WALLET_ADDRESS)
     await client.init()
 
     # Show balances before operations

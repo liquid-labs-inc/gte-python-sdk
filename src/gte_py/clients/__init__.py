@@ -5,14 +5,14 @@ import logging
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 
+from gte_py.api.chain.clob_client import CLOBClient
+from gte_py.api.chain.token_client import TokenClient
+from gte_py.api.rest import RestApi
+from gte_py.configs import NetworkConfig
 from .user import UserClient
 from .execution import ExecutionClient
-from gte_py.api.chain.clob_client import CLOBClient
 from .info import InfoClient
 from .market import MarketClient
-from .token import TokenClient
-from ..api.rest import RestApi
-from ..configs import NetworkConfig
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ class Client:
         )
         self.market: MarketClient = MarketClient(config, self.rest, self.info, self.clob)
         if not account:
-            self.user = None
+            self.user: UserClient = None
         else:
             self.user = UserClient(
                 config=config,
@@ -57,7 +57,7 @@ class Client:
             )
 
         if not account:
-            self.execution = None
+            self.execution: ExecutionClient = None
         else:
             # Initialize execution client for trading operations
             self.execution = ExecutionClient(

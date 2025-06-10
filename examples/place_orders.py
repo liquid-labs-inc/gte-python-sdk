@@ -1,5 +1,6 @@
 """Example of on-chain trading with the GTE client."""
 import sys
+
 sys.path.append(".")
 import asyncio
 import logging
@@ -7,11 +8,10 @@ from typing import Optional
 
 from web3.types import TxReceipt
 
-# from examples.utils import show_all_orders
 from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
-from gte_py.models import Side, TimeInForce, Market
+from gte_py.models import OrderSide, TimeInForce, Market
 
 from utils import (
     print_separator,
@@ -52,7 +52,7 @@ async def limit_order_example(client: Client, market: Market, quantity: float, p
     for i in range(15):
         order = client.execution.place_limit_order(
             market=market,
-            side=Side.BUY,
+            side=OrderSide.BUY,
             amount=market.base.convert_quantity_to_amount(quantity),
             price=market.quote.convert_quantity_to_amount(price),
             time_in_force=TimeInForce.GTC,
@@ -67,7 +67,7 @@ async def limit_order_example(client: Client, market: Market, quantity: float, p
     print(f"Creating BUY limit order at price: {price}")
     order = await client.execution.place_limit_order(
         market=market,
-        side=Side.BUY,
+        side=OrderSide.BUY,
         amount=market.base.convert_quantity_to_amount(quantity),
         price=market.quote.convert_quantity_to_amount(price),
         time_in_force=TimeInForce.GTC,
@@ -81,7 +81,7 @@ async def limit_order_example(client: Client, market: Market, quantity: float, p
     print(f"Creating SELL limit order at price: {price}")
     order = await client.execution.place_limit_order(
         market=market,
-        side=Side.SELL,
+        side=OrderSide.SELL,
         amount=market.base.convert_quantity_to_amount(quantity),
         price=market.quote.convert_quantity_to_amount(price),
         time_in_force=TimeInForce.GTC,

@@ -1,5 +1,5 @@
 """Structure definitions for GTE contracts."""
-
+import enum
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import TypedDict
@@ -7,19 +7,21 @@ from typing import TypedDict
 from eth_typing import ChecksumAddress
 
 
-class Side(IntEnum):
+class OrderSide(IntEnum):
     """Order side enum."""
 
     BUY = 0
     SELL = 1
+
     @classmethod
-    def from_str(cls, side_str: str) -> "Side":
-        if side_str.lower() == "buy":
+    def from_str(cls, side_str: str) -> "OrderSide":
+        if side_str.lower() == "buy" or side_str.lower() == "bid":
             return cls.BUY
-        elif side_str.lower() == "sell":
+        elif side_str.lower() == "sell" or side_str.lower() == "ask":
             return cls.SELL
         else:
             raise ValueError(f"Invalid side: {side_str}. Must be 'buy' or 'sell'.")
+
 
 class Settlement(IntEnum):
     """Settlement type enum."""
@@ -32,9 +34,7 @@ class LimitOrderType(IntEnum):
     """Limit order type enum."""
 
     GOOD_TILL_CANCELLED = 0
-    IMMEDIATE_OR_CANCEL = 1
-    FILL_OR_KILL = 2
-    GOOD_TILL_TIME = 3
+    POST_ONLY = 1
 
 
 class FillOrderType(IntEnum):
@@ -162,7 +162,7 @@ class ICLOBCancelArgs(TypedDict):
 
 class ICLOBConfigParams(TypedDict):
     """Configuration parameters for CLOB initialization."""
-    
+
     factory: str
     maxNumOrders: int
     quoteToken: str
@@ -173,44 +173,18 @@ class ICLOBConfigParams(TypedDict):
 
 class ICLOBSettingsParams(TypedDict):
     """Settings parameters for CLOB initialization."""
-    
+
     status: bool
     maxLimitsPerTx: int
     minLimitOrderAmountInBase: int
     tickSize: int
 
 
-"""
-"components": [
-  { "name": "side", "type": "uint8", "internalType": "enum Side" },
-  {
-    "name": "cancelTimestamp",
-    "type": "uint32",
-    "internalType": "uint32"
-  },
-  { "name": "id", "type": "uint256", "internalType": "OrderId" },
-  {
-    "name": "prevOrderId",
-    "type": "uint256",
-    "internalType": "OrderId"
-  },
-  {
-    "name": "nextOrderId",
-    "type": "uint256",
-    "internalType": "OrderId"
-  },
-  { "name": "owner", "type": "address", "internalType": "address" },
-  { "name": "price", "type": "uint256", "internalType": "uint256" },
-  { "name": "amount", "type": "uint256", "internalType": "uint256" }
-]
-        """
-
-
 @dataclass
 class CLOBOrder:
     """Order structure from contract."""
 
-    side: Side
+    side: OrderSide
     cancelTimestamp: int
     id: int
     prevOrderId: int
@@ -221,21 +195,21 @@ class CLOBOrder:
 
     @classmethod
     def from_tuple(
-        cls,
-        order_tuple: tuple[
-            int,
-            int,
-            int,
-            int,
-            int,
-            ChecksumAddress,
-            int,
-            int,
-        ],
+            cls,
+            order_tuple: tuple[
+                int,
+                int,
+                int,
+                int,
+                int,
+                ChecksumAddress,
+                int,
+                int,
+            ],
     ) -> "CLOBOrder":
         """Convert from tuple to Order."""
         return cls(
-            side=Side(order_tuple[0]),
+            side=OrderSide(order_tuple[0]),
             cancelTimestamp=order_tuple[1],
             id=order_tuple[2],
             prevOrderId=order_tuple[3],
@@ -244,6 +218,7 @@ class CLOBOrder:
             price=order_tuple[6],
             amount=order_tuple[7],
         )
+
 
 class OrderStruct(TypedDict):
     """Order structure from contract."""
@@ -298,3 +273,11 @@ class LaunchDetails(TypedDict):
     quoteToken: str
     virtualBaseReserve: int
     virtualQuoteReserve: int
+
+
+class OperatorRole(enum.IntEnum):
+    # TODO: to be updated
+    ADMIN = 1 << 0
+    DEPOSIT = 1 << 1
+    WITHDRAW = 1 << 2
+    LAUNCHPAD_FILL = 1 << 3

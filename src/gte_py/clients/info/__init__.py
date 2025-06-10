@@ -7,7 +7,7 @@ from web3 import AsyncWeb3
 
 from gte_py.api.chain.clob import ICLOB
 from gte_py.api.rest import RestApi
-from gte_py.clients.token import TokenClient
+from gte_py.api.chain.token_client import TokenClient
 from gte_py.api.chain.clob_client import CLOBClient
 from gte_py.models import Token, Market, MarketType
 

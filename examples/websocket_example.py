@@ -1,16 +1,14 @@
 #!/usr/bin/env python
 """Example of automated WebSocket subscription with GTE client."""
 import sys
+
 sys.path.append(".")
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Dict
 
 from gte_py.api.ws import WebSocketApi, CandleData, TradeData, OrderBookData
-from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
-from gte_py.models import Market
 
 from utils import (
     print_separator,
@@ -24,17 +22,17 @@ async def handle_orderbook_data(raw_data: OrderBookData):
     print_separator("ORDER BOOK UPDATE")
     market = raw_data['m']
     timestamp = datetime.fromtimestamp(raw_data['t'] / 1000)  # Convert milliseconds to seconds
-    
+
     print(f"Market: {market}")
     print(f"Time: {timestamp.strftime('%Y-%m-%d %H:%M:%S.%f')}")
-    
+
     # Display top asks (ordered from lowest to highest)
     print("\nTop 5 Asks (Sell Orders):")
     print("-------------------------")
     print("Price\t\tSize\t\tCount")
     for ask in raw_data["a"][:5]:  # Display top 5 asks
         print(f"{ask['px']}\t\t{ask['sz']}\t\t{ask['n']}")
-    
+
     # Display top bids (ordered from highest to lowest)
     print("\nTop 5 Bids (Buy Orders):")
     print("------------------------")
@@ -54,10 +52,10 @@ async def handle_trade_data(raw_data: TradeData):
     timestamp = datetime.fromtimestamp(raw_data["t"] // 1000)
     trade_id = raw_data["id"]
     tx_hash = raw_data['h']
-    
+
     # Add color formatting based on trade side
     side_fmt = f"\033[32m{side}\033[0m" if side == "BUY" else f"\033[31m{side}\033[0m"
-    
+
     print(f"Market: {raw_data['m']}")
     print(f"Trade ID: {trade_id}")
     print(f"Side: {side_fmt}")
@@ -80,11 +78,11 @@ async def handle_candle_data(raw_data: CandleData):
     low_price = float(raw_data["l"])
     volume = float(raw_data["v"])
     trade_count = raw_data["n"]
-    
+
     # Calculate price change and determine if it's up or down
     price_change = close_price - open_price
     price_change_pct = (price_change / open_price) * 100 if open_price > 0 else 0
-    
+
     # Format with color based on price movement
     if price_change > 0:
         price_fmt = f"\033[32m+{price_change:.2f} (+{price_change_pct:.2f}%)\033[0m"
@@ -92,7 +90,7 @@ async def handle_candle_data(raw_data: CandleData):
         price_fmt = f"\033[31m{price_change:.2f} ({price_change_pct:.2f}%)\033[0m"
     else:
         price_fmt = f"{price_change:.2f} (0.00%)"
-    
+
     print(f"Interval: {interval}")
     print(f"Time: {timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Open: {open_price:.2f}")
@@ -109,19 +107,19 @@ async def main():
     """Connect to the WebSocket and automatically subscribe to all available data streams."""
     # Initialize configurations and web3 connection
     network = TESTNET_CONFIG
-    
+
     # Get market information
     market = MARKET_ADDRESS
-    
+
     # Initialize WebSocket connection
     print("\nConnecting to WebSocket API...")
     ws_api = WebSocketApi(ws_url=network.ws_url)
     await ws_api.connect()
-    
+
     try:
         # Subscribe to all available data streams
         print("\nSubscribing to market data streams:")
-        
+
         # 1. Subscribe to orderbook updates
         print("- Order book updates")
         await ws_api.subscribe_orderbook(
@@ -129,14 +127,14 @@ async def main():
             limit=10,
             callback=handle_orderbook_data
         )
-        
+
         # 2. Subscribe to trade updates
         print("- Trade execution updates")
         await ws_api.subscribe_trades(
             market=market,
             callback=handle_trade_data
         )
-        
+
         # 3. Subscribe to candle updates with multiple intervals
         intervals = ["1m", "5m", "15m"]
         for interval in intervals:
@@ -146,15 +144,15 @@ async def main():
                 interval=interval,
                 callback=handle_candle_data
             )
-            
+
         print("\nSuccessfully subscribed to all data streams!")
         print_separator("REAL-TIME MARKET DATA")
         print("Listening for market updates... Press Ctrl+C to exit.")
-        
+
         # Keep the script running to receive and display updates
         while True:
             await asyncio.sleep(1)
-            
+
     except KeyboardInterrupt:
         print("\nShutting down WebSocket connections...")
     except Exception as e:
@@ -172,5 +170,5 @@ if __name__ == "__main__":
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
-    
+
     asyncio.run(main())

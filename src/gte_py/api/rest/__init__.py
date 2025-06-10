@@ -55,7 +55,7 @@ class RestApi:
         Returns:
             Dict: API response
         """
-        if self.session is None:
+        if self.session is None or self.session.closed:
             await self.__aenter__()
 
         url = f"{self.base_url}/{endpoint.lstrip('/')}"

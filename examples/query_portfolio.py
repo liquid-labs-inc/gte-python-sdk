@@ -1,5 +1,6 @@
 """Example of querying portfolio and LP positions with the GTE client."""
 import sys
+
 sys.path.append(".")
 import asyncio
 
@@ -25,7 +26,7 @@ async def display_portfolio(client: Client) -> None:
 
     try:
         # Get the full portfolio information
-        portfolio = await client.user.get_portfolio()
+        # portfolio = await client.user.get_portfolio()
 
         # Display total USD value
         total_usd_balance = await client.user.get_total_usd_balance()
