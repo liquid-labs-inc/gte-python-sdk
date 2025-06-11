@@ -132,8 +132,7 @@ class MarketClient:
         Returns:
             OrderBookSnapshot containing bids and asks with prices and sizes
         """
-        async with self._rest as client:
-            return await client.get_order_book_snapshot(market.address, limit=depth)
+        return await self._rest.get_order_book_snapshot(market.address, limit=depth)
 
     async def get_tob(self, market: Market) -> Tuple[int, int]:
         """

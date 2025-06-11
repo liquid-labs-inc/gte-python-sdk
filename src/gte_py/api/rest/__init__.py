@@ -319,7 +319,8 @@ class RestApi:
         return await self._request("GET", f"/v1/users/{user_address}/trades", params=params)
 
     async def get_user_open_orders(
-            self, user_address: ChecksumAddress, market_address: ChecksumAddress | None = None
+            self, user_address: ChecksumAddress, market_address: ChecksumAddress | None = None,
+            limit: int = 100, offset: int = 0
     ) -> dict:
         """Get open orders for a user.
 
@@ -330,13 +331,17 @@ class RestApi:
         Returns:
             Dict: List of user's open orders
         """
-        params = {}
+        params = {
+            "limit": limit,
+            "offset": offset
+        }
         if market_address:
             params["market_address"] = market_address
         return await self._request("GET", f"/v1/users/{user_address}/open_orders", params=params)
 
     async def get_user_filled_orders(
-            self, user_address: ChecksumAddress, market_address: ChecksumAddress | None = None
+            self, user_address: ChecksumAddress, market_address: ChecksumAddress | None = None,
+            limit: int = 100, offset: int = 0
     ) -> dict:
         """Get filled orders for a user.
 
@@ -347,13 +352,17 @@ class RestApi:
         Returns:
             Dict: List of user's filled orders
         """
-        params = {}
+        params = {
+            "limit": limit,
+            "offset": offset
+        }
         if market_address:
             params["market_address"] = market_address
         return await self._request("GET", f"/v1/users/{user_address}/filled_orders", params=params)
 
     async def get_user_order_history(
-            self, user_address: ChecksumAddress, market_address: ChecksumAddress | None = None
+            self, user_address: ChecksumAddress, market_address: ChecksumAddress | None = None,
+            limit: int = 100, offset: int = 0
     ) -> dict:
         """Get order history for a user.
 
@@ -364,7 +373,10 @@ class RestApi:
         Returns:
             Dict: List of user's order history
         """
-        params = {}
+        params = {
+            "limit": limit,
+            "offset": offset
+        }
         if market_address:
             params["market_address"] = market_address
 
