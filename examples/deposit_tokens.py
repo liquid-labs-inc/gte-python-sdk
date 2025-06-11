@@ -1,14 +1,13 @@
-"""Example of ensuring token deposits for a market with the GTE client."""
+"""Example of depositing tokens to the exchange using the GTE client."""
 
 import asyncio
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 
 from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
 from gte_py.models import Market, Token
-
 from utils import (
     print_separator,
     display_market_info,
@@ -19,21 +18,7 @@ from utils import (
 )
 
 
-async def get_token_balances(client: Client, token: Token) -> float:
-    """
-    Get wallet and exchange balances for a token.
-    
-    Args:
-        client: Initialized GTE client
-        token: Token object
-        
-    Returns:
-        Tuple containing (wallet_balance, exchange_balance)
-    """
-    exchange_balance = await client.user.get_token_balance(token.address)
-    return exchange_balance
-
-async def ensure_token_deposit(
+async def deposit_tokens(
         client: Client,
         token: Token,
         quantity: float,
@@ -55,7 +40,7 @@ async def ensure_token_deposit(
     print(f"Creating transaction to approve and deposit {quantity} {token.symbol}...")
 
     # This will handle both approval and deposit as needed
-    await client.user.ensure_deposit(
+    await client.user.deposit(
         token_address=token.address,
         amount=token_amount,
     )
@@ -134,7 +119,7 @@ async def main() -> None:
             return
 
         # Perform the deposit
-        success = await ensure_token_deposit(client, token, quantity)
+        success = await deposit_tokens(client, token, quantity)
 
         await show_balances(client, market)
 
