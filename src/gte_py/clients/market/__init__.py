@@ -35,7 +35,7 @@ class MarketClient:
         self._orderbook_callbacks = []
         self._orderbook_state: dict[ChecksumAddress, OrderbookUpdate] = {}
         self._clob = clob
-        self._trades = TradesClient(config, rest)
+        self.trades = TradesClient(config, rest, self._ws_client)
 
     async def connect(self):
         """Connect to the WebSocket."""
@@ -237,8 +237,8 @@ class MarketClient:
         return Order.from_clob_order(order, market)
 
     async def get_trades(self, market: ChecksumAddress, limit: int = 100, offset: int = 0) -> list[Trade]:
-        return await self._trades.get_trades(market, limit, offset)
+        return await self.trades.get_trades(market, limit, offset)
 
     async def subscribe_trades(self, market: Market, callback: Callable[[Trade], Any] | None = None):
         """Subscribe to real-time trades."""
-        await self._trades.subscribe_trades(market, callback)
+        await self.trades.subscribe_trades(market, callback)
