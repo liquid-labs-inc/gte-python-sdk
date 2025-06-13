@@ -165,14 +165,15 @@ class WebSocketApi:
             # Parse data based on stream type
             inner = data['d']
             market = to_checksum_address(inner['m'])
-
-            if stream_type in self.callbacks:
-                for callback in self.callbacks.get((stream_type, market), []):
-                    try:
-                        # Pass both raw and parsed data to callback
-                        await callback(inner)
-                    except Exception as e:
-                        logger.error(f"Error in callback", exc_info=e)
+            callback = self.callbacks.get((stream_type, market))
+            if callback is None:
+                logger.warning(f"No callback registered for stream {stream_type} and market {market}")
+                return
+            try:
+                # Pass both raw and parsed data to callback
+                await callback(inner)
+            except Exception as e:
+                logger.error(f"Error in callback", exc_info=e)
         elif "id" in data:  # Response to a subscription request
             logger.debug(f"Received response: {data}")
             if "error" in data:

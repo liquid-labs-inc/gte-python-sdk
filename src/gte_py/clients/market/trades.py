@@ -16,8 +16,8 @@ class TradesClient:
     This class is used to interact with the trades endpoint of the GTE API.
     """
 
-    def __init__(self, config: NetworkConfig, rest: RestApi):
-        self._ws = WebSocketApi(config.ws_url)
+    def __init__(self, config: NetworkConfig, rest: RestApi, ws: WebSocketApi):
+        self._ws = ws
         self._trade_callbacks = []
         self._rest = rest
         self._last_trade = None  # Store the last received trade
