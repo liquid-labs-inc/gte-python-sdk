@@ -207,14 +207,19 @@ class Trade:
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Trade":
         """Create a Trade object from API response data."""
-        side = OrderSide.from_str(data.get("side"))
+        if "side" not in data or not isinstance(data["side"], str):
+            raise ValueError("Missing or invalid 'side' in trade data")
+        if "timestamp" not in data:
+            raise ValueError("Missing 'timestamp' in trade data")
+
+        side = OrderSide.from_str(data["side"])
         tx_hash = HexBytes(data["txnHash"])
         maker = data["maker"] and to_checksum_address(data["maker"]) or None
         taker = data["taker"] and to_checksum_address(data["taker"]) or None
 
         return cls(
             market_address=to_checksum_address(data['marketAddress']),
-            timestamp=data.get("timestamp"),
+            timestamp=data["timestamp"],
             price=float(data["price"]),
             size=float(data["size"]),
             side=side,
@@ -306,7 +311,7 @@ class Order:
 
     order_id: int
     market_address: str
-    side: MarketSide
+    side: OrderSide
     order_type: OrderType
     amount: int  # remaining amount in base units
     price: int | None

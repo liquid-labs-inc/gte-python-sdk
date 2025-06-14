@@ -75,6 +75,10 @@ class UserClient:
         Returns:
             List of TypedContractFunction objects (approve and deposit)
         """
+
+        if self._clob.clob_factory is None:
+            raise RuntimeError("CLOBFactory is not initialized. Did you forget to call await CLOBClient.init()?")
+
         token = self._token.get_erc20(token_address)
         if token_address == self._config.weth_address:
             weth_token = await token.balance_of(self._account)
@@ -118,6 +122,9 @@ class UserClient:
         Returns:
             TypedContractFunction for the withdrawal transaction
         """
+
+        if self._clob.clob_factory is None:
+            raise RuntimeError("CLOBFactory is not initialized. Did you forget to call await CLOBClient.init()?")
 
         # Withdraw the tokens
         return await self._clob.clob_factory.withdraw(
@@ -173,6 +180,9 @@ class UserClient:
             Tuple of (wallet_balance, exchange_balance) in human-readable format
         """
 
+        if self._clob.clob_factory is None:
+            raise RuntimeError("CLOBFactory is not initialized. Did you forget to call await CLOBClient.init()?")
+
         exchange_balance_raw = await self._clob.clob_factory.get_account_balance(
             self._account, token_address
         )
@@ -186,7 +196,7 @@ class UserClient:
         return roles_int
 
     async def approve_operator(self, operator_address: ChecksumAddress,
-                               roles: list[OperatorRole] = None,
+                               roles: list[OperatorRole] = [],
                                unsafe_withdraw: bool = False,
                                unsafe_launchpad_fill: bool = False,
                                **kwargs: Unpack[TxParams]):
@@ -195,7 +205,9 @@ class UserClient:
 
         Args:
             operator_address: Address of the operator to approve
+            roles: List of roles to assign to the operator
             unsafe_withdraw: Whether to allow unsafe withdrawals
+            unsafe_launchpad_fill: Whether to allow unsafe launchpad fills
             **kwargs: Additional transaction parameters
 
         Returns:

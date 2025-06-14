@@ -2,7 +2,7 @@ import asyncio
 from typing import Callable, Any
 
 from eth_typing import ChecksumAddress
-from eth_utils import to_checksum_address
+from eth_utils.address import to_checksum_address
 from hexbytes import HexBytes
 
 from gte_py.api.rest import RestApi, logger

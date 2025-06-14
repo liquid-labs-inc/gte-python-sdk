@@ -6,8 +6,7 @@ supporting both historical queries and real-time streaming.
 """
 
 import asyncio
-from typing import Callable, Dict, Generic, AsyncIterator, List, Optional, TypeVar, Any, Union
-from typing import cast
+from typing import Callable, Dict, Generic, AsyncIterator, List, Optional, TypeVar, Any, Union, cast
 
 from web3 import AsyncWeb3
 from web3._utils.filters import AsyncLogFilter

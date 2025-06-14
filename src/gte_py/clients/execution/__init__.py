@@ -323,7 +323,7 @@ class ExecutionClient:
 
     async def cancel_order_tx(
             self, market: Market, order_id: int, **kwargs
-    ) -> TypedContractFunction[OrderCanceledEvent | None]:
+    ) -> TypedContractFunction[OrderCanceledEvent]:
         """
         Cancel an existing order.
 
@@ -382,6 +382,9 @@ class ExecutionClient:
         # Get wallet balance
         wallet_balance_raw = await token.balance_of(account)
         wallet_balance = await token.convert_amount_to_quantity(wallet_balance_raw)
+
+        if self._clob is None or self._clob.clob_factory is None:
+            raise RuntimeError("CLOB factory is not initialized")
 
         # Get exchange balance
         exchange_balance_raw = await self._clob.clob_factory.get_account_balance(

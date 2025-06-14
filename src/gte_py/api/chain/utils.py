@@ -174,6 +174,7 @@ class TypedContractFunction(Generic[T]):
         """Synchronous write operation"""
         try:
             self.tx_hash = await self.send_nowait()
+            self.tx_send = cast(Awaitable[None], self.tx_send)
             await self.tx_send
             self.tx_send = None
             logger.info("tx#%d sent: %s", self.tx_id, self.tx_hash.to_0x_hex())
@@ -215,24 +216,23 @@ class TypedContractFunction(Generic[T]):
             if self.event is None:
                 return None
             # Wait for the transaction to be mined
-            self.receipt: TxReceipt = await self.web3.eth.wait_for_transaction_receipt(self.tx_hash)
+            self.receipt = await self.web3.eth.wait_for_transaction_receipt(self.tx_hash)
             if self.receipt['status'] != 1:
-                tx_params: TxParams = await self.web3.eth.get_transaction(self.tx_hash)
+                tx_params = await self.web3.eth.get_transaction(self.tx_hash)
                 try:
                     tx_params = {
-                        "from": tx_params['from'],
-                        "to": tx_params['to'],
-                        "value": tx_params['value'],
-                        "gas": tx_params['gas'],
-                        "maxFeePerGas": tx_params['maxFeePerGas'],
-                        "maxPriorityFeePerGas": tx_params['maxPriorityFeePerGas'],
-                        "nonce": tx_params['nonce'],
-                        "chainId": tx_params['chainId'],
-                        "type": tx_params['type'],
-                        "accessList": tx_params['accessList'],
-
+                        "from": tx_params.get("from"),
+                        "to": tx_params.get("to"),
+                        "value": tx_params.get("value"),
+                        "gas": tx_params.get("gas"),
+                        "maxFeePerGas": tx_params.get("maxFeePerGas"),
+                        "maxPriorityFeePerGas": tx_params.get("maxPriorityFeePerGas"),
+                        "nonce": tx_params.get("nonce"),
+                        "chainId": tx_params.get("chainId"),
+                        "type": tx_params.get("type"),
+                        "accessList": tx_params.get("accessList"),
                     }
-                    await self.func_call.call(tx_params, block_identifier=self.receipt['blockNumber'])
+                    await self.func_call.call(cast(TxParams, tx_params), block_identifier=self.receipt['blockNumber'])
                 except ContractCustomError:
                     raise
                 except Exception as e:
@@ -522,6 +522,8 @@ class Web3RequestManager:
         """Transaction sending implementation"""
         try:
             tx["nonce"] = nonce
+            if self.chain_id is None:
+                raise ValueError("chain_id must be set before sending a transaction")
             tx['chainId'] = self.chain_id
             if "from" not in tx:
                 tx["from"] = self.account.address
