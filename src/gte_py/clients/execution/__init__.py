@@ -1,7 +1,7 @@
 """Order execution functionality for the GTE client."""
 
 import logging
-from typing import Optional, Tuple, Awaitable
+from typing import Optional, Tuple, Awaitable, Any
 
 from eth_typing import ChecksumAddress
 from typing_extensions import Unpack
@@ -71,7 +71,7 @@ class ExecutionClient:
             time_in_force: TimeInForce = TimeInForce.GTC,
             client_order_id: int = 0,
             **kwargs,
-    ) -> TypedContractFunction[FillOrderProcessedEvent | LimitOrderProcessedEvent]:
+    ) -> TypedContractFunction[Any]:
         """
         Place a limit order on the CLOB.
 
@@ -169,6 +169,8 @@ class ExecutionClient:
                     log, amount, side, price
                 )
             else:
+                if log is None:
+                    raise ValueError("Unexpected event: None")
                 raise ValueError(f"Unknown event type: {log.event_name}")
             return order
 
@@ -321,7 +323,7 @@ class ExecutionClient:
 
     async def cancel_order_tx(
             self, market: Market, order_id: int, **kwargs
-    ) -> TypedContractFunction[OrderCanceledEvent | None]:
+    ) -> TypedContractFunction[OrderCanceledEvent]:
         """
         Cancel an existing order.
 
@@ -380,6 +382,9 @@ class ExecutionClient:
         # Get wallet balance
         wallet_balance_raw = await token.balance_of(account)
         wallet_balance = await token.convert_amount_to_quantity(wallet_balance_raw)
+
+        if self._clob is None or self._clob.clob_factory is None:
+            raise RuntimeError("CLOB factory is not initialized")
 
         # Get exchange balance
         exchange_balance_raw = await self._clob.clob_factory.get_account_balance(

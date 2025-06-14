@@ -5,11 +5,11 @@ import json
 import logging
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Dict, List, Union, TypedDict, Tuple
+from typing import Any, Dict, List, Union, TypedDict, Tuple, cast
 
 import aiohttp
 from eth_typing import ChecksumAddress
-from eth_utils import to_checksum_address
+from eth_utils.address import to_checksum_address
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ class WebSocketApi:
         """
         self.ws_url = ws_url
         self.ws: aiohttp.client.ClientWebSocketResponse | None = None
-        self.callbacks: Dict[Tuple[str, ChecksumAddress], Callable] = {}
+        self.callbacks: Dict[Tuple[str, ChecksumAddress], List[Callable]] = {}
         self.running = False
         self.task = None
         self.request_id = 0
@@ -137,6 +137,9 @@ class WebSocketApi:
 
     async def _listen(self):
         """Listen for messages from the WebSocket."""
+        if self.ws is None:
+            raise RuntimeError("WebSocket connection is not established")
+    
         try:
             async for msg in self.ws:
                 if msg.type == aiohttp.WSMsgType.TEXT:
@@ -166,19 +169,17 @@ class WebSocketApi:
             inner = data['d']
             market = to_checksum_address(inner['m'])
 
-            if stream_type in self.callbacks:
-                for callback in self.callbacks.get((stream_type, market), []):
-                    try:
-                        # Pass both raw and parsed data to callback
-                        await callback(inner)
-                    except Exception as e:
-                        logger.error(f"Error in callback", exc_info=e)
+            for callback in self.callbacks.get((stream_type, market), []):
+                try:
+                    await callback(inner)
+                except Exception as e:
+                    logger.error(f"Error in callback", exc_info=e)
         elif "id" in data:  # Response to a subscription request
             logger.debug(f"Received response: {data}")
             if "error" in data:
                 logger.error(f"WebSocket subscription error: {data['error']}")
 
-    async def subscribe(self, method: str, params: dict, market: ChecksumAddress, callback: Callable[[TypedDict], Any]):
+    async def subscribe(self, method: str, params: dict, market: ChecksumAddress, callback: Callable[[Any], Any]):
         """Subscribe to a topic.
 
         Args:
@@ -189,11 +190,13 @@ class WebSocketApi:
         """
         if not self.running or not self.ws:
             await self.connect()
+        
+        self.ws = cast(aiohttp.client.ClientWebSocketResponse, self.ws)
 
         # Extract the stream type from the method
         stream_type = method.split(".")[0]
 
-        self.callbacks[(stream_type, market)] = callback
+        self.callbacks.setdefault((stream_type, market), []).append(callback)
 
         # Send subscription request
         request_id = self._next_request_id()
@@ -252,7 +255,7 @@ class WebSocketApi:
             "candles.subscribe", {"market": market, "interval": interval}, market, callback
         )
 
-    async def unsubscribe_candles(self, market: str, interval: str):
+    async def unsubscribe_candles(self, market: ChecksumAddress, interval: str):
         """Unsubscribe from candles for a market.
 
         Args:
@@ -262,8 +265,7 @@ class WebSocketApi:
         await self.unsubscribe("candles.unsubscribe", {"market": market, "interval": interval}, market)
 
     async def subscribe_orderbook(
-            self, market: ChecksumAddress, limit: int = 10, callback: Callable[[OrderBookData], Any] | None = None
-    ):
+            self, market: ChecksumAddress, callback: Callable[[OrderBookData], Any], limit: int = 10):
         """Subscribe to orderbook for a market.
 
         Args:
