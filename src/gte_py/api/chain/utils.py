@@ -358,7 +358,7 @@ class Web3RequestManager:
             asyncio.Queue()
         )
         self.free_nonces: List[Nonce] = []
-        self._prev_latest_tx_cnt: Nonce = Nonce(0)
+        self._prev_latest_tx_cnt: int = 0
         self.next_nonce: Nonce = Nonce(0)
         self.lock = asyncio.Lock()
         self.is_running = False
@@ -388,19 +388,19 @@ class Web3RequestManager:
     async def sync_nonce(self):
         """Update nonce from blockchain state"""
         async with self.lock:
-            self.logger.info('Trying to sync nonce')
-            latest_tx_cnt: Nonce = await self.web3.eth.get_transaction_count(
+            self.logger.info('Trying to sync nonce for %s', self.account.address)
+            latest_tx_cnt = int(await self.web3.eth.get_transaction_count(
                 self.account.address, block_identifier="latest"
-            )
-            pending_tx_cnt: Nonce = await self.web3.eth.get_transaction_count(
+            ))
+            pending_tx_cnt = int(await self.web3.eth.get_transaction_count(
                 self.account.address, block_identifier="pending"
-            )
-            latest_nonce =  latest_tx_cnt - 1
-            pending_nonce = pending_tx_cnt - 1
+            ))
+            latest_nonce =  Nonce(latest_tx_cnt - 1)
+            pending_nonce = Nonce(pending_tx_cnt - 1)
             self.logger.info(f"Latest nonce: {latest_nonce}, pending nonce: {pending_nonce}, next nonce: {self.next_nonce}")
             # do not update from latest, as there could be blocked transactions already
-            self.next_nonce = max(latest_tx_cnt, self.next_nonce)
-            nonce = latest_tx_cnt
+            self.next_nonce = Nonce(max(latest_tx_cnt, self.next_nonce))
+            nonce = Nonce(latest_tx_cnt)
             to_cancel = None
             if latest_tx_cnt < pending_tx_cnt and (nonce in self.free_nonces or latest_tx_cnt == self._prev_latest_tx_cnt):
                 # nonce to be recycled
