@@ -53,7 +53,7 @@ def format_market_table(markets: List[Market], title: str) -> None:
                 market.address[:10] + "...",
                 market.market_type.value if hasattr(market, "market_type") else "N/A",
                 format_price(market.price),
-                f"{market.volume_24h:.2f}" if market.volume_24h else "N/A",
+                f"{market.volume_24hr_usd:.2f}" if market.volume_24hr_usd else "N/A",
                 "Yes" if market.address else "No",
             ]
         )
