@@ -403,10 +403,8 @@ class Web3RequestManager:
             if latest < pending and (nonce in self.free_nonces or latest == self._prev_latest_nonce):
                 # nonce to be recycled
                 # or
-                # transactions stuck for 5 seconds
-                self.logger.warning(
-                    f"Nonce gap exists from {nonce} up to {self.next_nonce}"
-                )
+                # transactions stuck for 5 seconds: nonce gap, too low fee price, chain stuck
+                self.logger.warning(f"Nonce stuck at {nonce} for {self.account.address}, trying to cancel")
                 try:
                     self.free_nonces.remove(nonce)
                 except ValueError:
