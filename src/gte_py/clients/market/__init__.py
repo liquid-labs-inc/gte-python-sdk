@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import time
+import warnings
 from collections.abc import Callable
 from typing import Any, Tuple, List
 
@@ -164,6 +165,7 @@ class MarketClient:
             List of Order objects
             :param level:
         """
+        warnings.warn("market.get_open_orders() is extremely slow. need to be replaced with REST API call",)
         clob = self._clob.get_clob(market.address)
         best_bid, best_ask = await clob.get_tob()
         orders = []

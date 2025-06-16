@@ -90,7 +90,6 @@ class Token:
     name: str
     symbol: str
     total_supply: float | None = None
-    balance: float | None = None
 
     def convert_amount_to_quantity(self, amount: int) -> float:
         """Convert amount in base units to float."""
@@ -115,7 +114,6 @@ class Token:
             name=data["name"],
             symbol=data["symbol"],
             total_supply=data["totalSupply"],
-            balance=data.get("balance")
         )
 
 
@@ -128,7 +126,7 @@ class Market:
     base: Token
     quote: Token
     price: float | None = None
-    volume_24h: float | None = None
+    volume_24hr_usd: float | None = None
 
     @classmethod
     def from_api(cls, data: MarketDetail) -> "Market":
@@ -141,7 +139,7 @@ class Market:
             base=Token.from_api(data["baseToken"]),
             quote=Token.from_api(data["quoteToken"]),
             price=data.get("price"),
-            volume_24h=data.get("volume24hr"),
+            volume_24hr_usd=data.get("volume24HrUsd"),
         )
 
     @property
@@ -306,7 +304,7 @@ class Order:
 
     order_id: int
     market_address: str
-    side: MarketSide
+    side: OrderSide
     order_type: OrderType
     amount: int  # remaining amount in base units
     price: int | None
