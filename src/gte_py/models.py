@@ -313,6 +313,7 @@ class Order:
     created_at: int
     original_amount: int | None = None  # Original amount before any fills
     owner: ChecksumAddress | None = None
+    txn_hash: HexBytes | None = None
 
     @property
     def datetime(self) -> datetime:
@@ -335,6 +336,7 @@ class Order:
             time_in_force=TimeInForce.GTC,
             status=OrderStatus.OPEN,
             created_at=int(data["placedAt"]),
+            txn_hash=HexBytes(data["txnHash"]),
         )
 
     @classmethod
