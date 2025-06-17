@@ -1,4 +1,5 @@
 """Example of querying portfolio and LP positions with the GTE client."""
+import logging
 import sys
 
 sys.path.append(".")
@@ -123,4 +124,5 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
     asyncio.run(main())

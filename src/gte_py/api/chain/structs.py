@@ -22,6 +22,14 @@ class OrderSide(IntEnum):
         else:
             raise ValueError(f"Invalid side: {side_str}. Must be 'buy' or 'sell'.")
 
+    def __str__(self) -> str:
+        if self == OrderSide.BUY:
+            return "BUY"
+        elif self == OrderSide.SELL:
+            return "SELL"
+        else:
+            raise ValueError(f"Invalid OrderSide: {self}. Must be BUY or SELL.")
+
 
 class Settlement(IntEnum):
     """Settlement type enum."""
