@@ -1,14 +1,13 @@
-"""Example of ensuring token deposits for a market with the GTE client."""
+"""Example of withdrawing tokens from the exchange using the GTE client."""
 
 import asyncio
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 
 from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
 from gte_py.models import Market, Token
-
 from utils import (
     print_separator,
     display_market_info,
@@ -19,48 +18,34 @@ from utils import (
 )
 
 
-async def get_token_balances(client: Client, token: Token) -> float:
-    """
-    Get wallet and exchange balances for a token.
-    
-    Args:
-        client: Initialized GTE client
-        token: Token object
-        
-    Returns:
-        Tuple containing (wallet_balance, exchange_balance)
-    """
-    exchange_balance = await client.user.get_token_balance(token.address)
-    return exchange_balance
-
-async def ensure_token_deposit(
+async def withdraw_tokens(
         client: Client,
         token: Token,
         quantity: float,
 ) -> bool:
     """
-    Ensure a token is approved and deposited to the exchange.
+    Withdraw tokens from the exchange.
     
     Args:
         client: Initialized GTE client
-        token: Token to deposit
-        quantity: Quantity to deposit in token units
+        token: Token to withdraw
+        quantity: Quantity to withdraw in token units
 
     Returns:
-        bool: True if deposit was successful, False otherwise
+        bool: True if withdrawal was successful, False otherwise
     """
-    print_separator(f"Deposit {token.symbol}")
+    print_separator(f"Withdraw {token.symbol}")
 
     token_amount = token.convert_quantity_to_amount(quantity)
-    print(f"Creating transaction to approve and deposit {quantity} {token.symbol}...")
+    print(f"Creating transaction to withdraw {quantity} {token.symbol}...")
 
-    # This will handle both approval and deposit as needed
-    await client.user.ensure_deposit(
+    # Execute the withdrawal
+    await client.user.withdraw(
         token_address=token.address,
         amount=token_amount,
     )
 
-    print(f"Successfully deposited {quantity} {token.symbol} to the exchange")
+    print(f"Successfully withdrew {quantity} {token.symbol} from the exchange")
     return True
 
 
@@ -93,7 +78,7 @@ async def select_token_from_market(market: Market) -> Optional[Token]:
 
 
 async def main() -> None:
-    """Run the token deposit example."""
+    """Run the token withdrawal example."""
     network = TESTNET_CONFIG
 
     print("Initializing AsyncWeb3...")
@@ -118,14 +103,14 @@ async def main() -> None:
         # Show initial balances
         await show_balances(client, market)
 
-        # Let user select which token to deposit
+        # Let user select which token to withdraw
         token = await select_token_from_market(market)
         if not token:
             return
 
-        # Get deposit amount
+        # Get withdrawal amount
         try:
-            quantity = float(input(f"\nEnter quantity(float) of {token.symbol} to deposit: "))
+            quantity = float(input(f"\nEnter quantity(float) of {token.symbol} to withdraw: "))
             if quantity <= 0:
                 print("Amount must be greater than zero. Exiting.")
                 return
@@ -133,9 +118,10 @@ async def main() -> None:
             print("Invalid amount entered. Exiting.")
             return
 
-        # Perform the deposit
-        success = await ensure_token_deposit(client, token, quantity)
+        # Perform the withdrawal
+        success = await withdraw_tokens(client, token, quantity)
 
+        # Show updated balances after withdrawal
         await show_balances(client, market)
 
 

@@ -103,34 +103,6 @@ class UserClient:
             **kwargs,
         ).send_wait()
 
-    async def ensure_deposit(
-            self,
-            token_address: ChecksumAddress,
-            amount: int,
-            **kwargs: Unpack[TxParams]
-    ) -> bool:
-        """
-        Ensure that the specified amount of tokens is deposited in the exchange.
-        Args:
-            token_address: Address of token to deposit
-            amount: Amount to deposit
-            **kwargs: Additional transaction parameters
-        Returns:
-            True if the deposit was executed
-            False if the deposit was not needed
-
-        """
-        # First approve the factory to spend tokens
-        exchange_balance = await self.get_token_balance(token_address)
-        if exchange_balance >= amount:
-            logger.info("Already enough tokens %s in the exchange: asked for %d, got %d", token_address, amount,
-                        exchange_balance)
-            return False
-        logger.info("Not enough tokens %s in the exchange: asked for %d, got %d", token_address, amount,
-                    exchange_balance)
-        amount -= exchange_balance
-        await self.deposit(token_address, amount, **kwargs)
-        return True
 
     async def withdraw(
             self, token_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
