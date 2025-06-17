@@ -263,7 +263,7 @@ class UserClient:
         Returns:
             List of Order objects representing trades
         """
-        response = await self._rest.get_trades(market.address, limit, offset)
+        response = await self._rest.get_user_trades(self._account, market.address, limit, offset)
         return [Trade.from_api(trade) for trade in response]
 
     async def get_open_orders(
