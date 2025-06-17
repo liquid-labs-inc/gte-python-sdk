@@ -142,10 +142,10 @@ async def show_live_orders(client: Client, market: Market):
             print(f"  Owner: {order.owner}")
             print(f"  Side: {order.side}")
             print(f"  Price: {order.price}")
-            print(f"  Amount: {order.amount}")
+            print(f"  Amount: {order.remaining_amount}")
             print(f"  Status: {order.status}")
             print(f"  Order Type: {order.order_type}")
-            print(f"  Timestamp: {order.created_at}")
+            print(f"  Timestamp: {order.placed_at}")
             print("-" * 20)
 
     except Exception as e:
