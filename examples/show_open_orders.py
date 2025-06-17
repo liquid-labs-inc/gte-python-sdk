@@ -36,7 +36,7 @@ async def main() -> None:
     print("Opening orders:")
     for open_order in open_orders:
         print(
-            f"Order ID: {open_order.order_id}, Price: {open_order.price}, Amount: {open_order.amount}, Side: {open_order.side}")
+            f"Order ID: {open_order.order_id}, Price: {open_order.price}, Amount: {open_order.remaining_amount}, Side: {open_order.side}")
 
 
 if __name__ == "__main__":

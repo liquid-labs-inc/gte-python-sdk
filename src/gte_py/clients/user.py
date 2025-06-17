@@ -2,6 +2,8 @@ import logging
 from typing import Dict, List, Any
 
 from eth_typing import ChecksumAddress
+from eth_utils import to_checksum_address
+from hexbytes import HexBytes
 from typing_extensions import Unpack
 from web3.types import TxParams
 
@@ -11,7 +13,7 @@ from gte_py.api.chain.structs import OperatorRole
 from gte_py.api.rest import RestApi
 from gte_py.api.chain.token_client import TokenClient
 from gte_py.configs import NetworkConfig
-from gte_py.models import Market, Order, Trade
+from gte_py.models import Market, Order, Trade, OrderSide, OrderType, OrderStatus, TimeInForce
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +104,6 @@ class UserClient:
             from_operator=False,
             **kwargs,
         ).send_wait()
-
 
     async def withdraw(
             self, token_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
@@ -215,7 +216,7 @@ class UserClient:
         ).send_wait()
 
     async def disapprove_operator(self, operator_address: ChecksumAddress,
-                                 roles: list[OperatorRole],
+                                  roles: list[OperatorRole],
                                   **kwargs: Unpack[TxParams]):
         """
         Disapprove an operator from acting on behalf of the account.
@@ -281,7 +282,23 @@ class UserClient:
         """
 
         response = await self._rest.get_user_open_orders(self._account, market and market.address)
-        return [Order.from_api(order_data) for order_data in response]
+        """Create an Order object from API response data"""
+
+        return [
+            Order(
+                order_id=int(data['orderId']),
+                market_address=to_checksum_address(data["marketAddress"]),
+                side=OrderSide.from_str(data['side']),
+                order_type=OrderType.LIMIT,
+                remaining_amount=int(data['originalSize']) - int(data['sizeFilled']),
+                original_amount=int(data['originalSize']),
+                filled_amount=int(data['sizeFilled']),
+                price=int(data['limitPrice']),
+                time_in_force=TimeInForce.GTC,
+                status=OrderStatus.OPEN,
+                placed_at=int(data["placedAt"]),
+            ) for data in response
+        ]
 
     async def get_filled_orders(
             self, market: Market | None = None
@@ -297,7 +314,20 @@ class UserClient:
         """
 
         response = await self._rest.get_user_filled_orders(self._account, market and market.address)
-        return [Order.from_api(order_data) for order_data in response]
+        return [
+            Order(
+                order_id=int(data['orderId']),
+                market_address=to_checksum_address(data["marketAddress"]),
+                side=OrderSide.from_str(data['side']),
+                order_type=OrderType.LIMIT,
+                filled_amount=int(data['sizeFilled']),
+                price=int(data['price']),
+                time_in_force=TimeInForce.GTC,
+                status=OrderStatus.FILLED,
+                filled_at=int(data["filledAt"]),
+                txn_hash=HexBytes(data['txnHash']),
+            ) for data in response
+        ]
 
     async def get_order_history(
             self, market: Market | None = None
@@ -313,4 +343,17 @@ class UserClient:
         """
 
         response = await self._rest.get_user_order_history(self._account, market and market.address)
-        return [Order.from_api(order_data) for order_data in response]
+        return [
+            Order(
+                order_id=int(data['orderId']),
+                market_address=to_checksum_address(data["marketAddress"]),
+                side=OrderSide.from_str(data['side']),
+                order_type=OrderType.LIMIT,
+                remaining_amount=int(data['originalSize']) - int(data['sizeFilled']),
+                original_amount=int(data['originalSize']),
+                price=int(data['limitPrice']),
+                time_in_force=TimeInForce.GTC,
+                status=OrderStatus.OPEN,
+                placed_at=int(data["placedAt"]),
+            ) for data in response
+        ]
