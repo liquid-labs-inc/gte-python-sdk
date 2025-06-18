@@ -1,5 +1,6 @@
 """Example of querying a specific market from GTE."""
 import sys
+
 sys.path.append(".")
 import asyncio
 
@@ -9,6 +10,24 @@ from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client
 from gte_py.configs import TESTNET_CONFIG
 from utils import print_separator, MARKET_ADDRESS, display_market_info
+
+
+async def query_market_list(client: Client) -> None:
+    """Query and display the list of markets."""
+    print_separator("Market List Query")
+
+    # Get all markets
+    markets = await client.info.get_markets()
+
+    # Display market information
+    print(f"Total Markets: {len(markets)}")
+    for market in markets:
+        print(f"  Market Address: {market.address}")
+        print(f"  Base Token: {market.base.symbol} ({market.base.address})")
+        print(f"  Quote Token: {market.quote.symbol} ({market.quote.address})")
+        print(f"  Market Type: {market.market_type.name}")
+        print(f"  Volume: {market.volume_24hr_usd}")
+        print("-" * 40)
 
 
 async def query_market_trades(client: Client, market_address: ChecksumAddress) -> None:
@@ -40,10 +59,10 @@ async def main() -> None:
         web3=web3,
         config=TESTNET_CONFIG
     )
-
+    await query_market_list(client)
     market_address = MARKET_ADDRESS
     market = await display_market_info(client, market_address)
-    await query_market_trades(client, market_address)
+    # await query_market_trades(client, market_address)
 
 
 if __name__ == "__main__":

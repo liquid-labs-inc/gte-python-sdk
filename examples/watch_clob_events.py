@@ -1,6 +1,8 @@
 """Example of watching CLOB events in real-time."""
 import sys
 sys.path.append(".")
+import dotenv
+dotenv.load_dotenv()
 import asyncio
 import logging
 from datetime import datetime, timedelta
@@ -176,5 +178,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     asyncio.run(main())
