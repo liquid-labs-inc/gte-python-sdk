@@ -102,7 +102,7 @@ class WebSocketApi:
         """
         self.ws_url = ws_url
         self.ws: aiohttp.client.ClientWebSocketResponse | None = None
-        self.callbacks: Dict[Tuple[str, ChecksumAddress], List[Callable]] = {}
+        self.callbacks: Dict[Tuple[str, ChecksumAddress], Callable] = {}
         self.running = False
         self.task = None
         self.request_id = 0
@@ -200,7 +200,7 @@ class WebSocketApi:
         # Extract the stream type from the method
         stream_type = method.split(".")[0]
 
-        self.callbacks.setdefault((stream_type, market), []).append(callback)
+        self.callbacks[(stream_type, market)] = callback
 
         # Send subscription request
         request_id = self._next_request_id()
