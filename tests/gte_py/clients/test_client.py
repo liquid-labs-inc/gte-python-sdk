@@ -109,3 +109,74 @@ async def test_close_calls_aexit(config, account, patched_clients):
     await client.close()
 
     mock_rest.__aexit__.assert_awaited_once()
+
+@pytest.mark.asyncio
+async def test_connect_without_account(config, patched_clients):
+    client = await Client.connect(config=config)
+
+    assert client._account is None
+    assert client.clob is not None
+    assert client.token is not None
+    assert client.info is not None
+    assert client.market is not None
+    assert client.user is None
+    assert client.execution is None
+
+
+def test_init_components_with_account(config, account, patched_clients):
+    mock_web3 = MagicMock()
+    client = Client(config=config, web3=mock_web3, account=account)
+
+    assert client.config == config
+    assert client._web3 == mock_web3
+    assert client._account == account
+    assert client.clob is not None
+    assert client.token is not None
+    assert client.info is not None
+    assert client.market is not None
+    assert client.user is not None
+    assert client.execution is not None
+
+
+def test_init_components_without_account(config, patched_clients):
+    mock_web3 = MagicMock()
+    client = Client(config=config, web3=mock_web3)
+
+    assert client.config == config
+    assert client._web3 == mock_web3
+    assert client._account is None
+    assert client.clob is not None
+    assert client.token is not None
+    assert client.info is not None
+    assert client.market is not None
+    assert client.user is None
+    assert client.execution is None
+
+
+@pytest.mark.asyncio
+async def test_init_clob_called(config, patched_clients):
+    mock_web3 = MagicMock()
+    client = Client(config=config, web3=mock_web3)
+    await client.init()
+    patched_clients["clob"].return_value.init.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_context_manager_propagates_exception(config, account, patched_clients):
+    mock_web3 = MagicMock()
+    mock_rest = MagicMock()
+    mock_rest.__aenter__ = AsyncMock()
+    mock_rest.__aexit__ = AsyncMock()
+    patched_clients["rest"].return_value = mock_rest
+
+    client = Client(config=config, web3=mock_web3, account=account)
+    client.rest = mock_rest
+
+    class TestException(Exception):
+        pass
+
+    with pytest.raises(TestException):
+        async with client:
+            raise TestException("trigger")
+
+    mock_rest.__aexit__.assert_awaited_once()
