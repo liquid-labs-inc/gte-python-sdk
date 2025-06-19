@@ -489,8 +489,7 @@ class Web3RequestManager:
 
     async def _process_transactions(self):
         while self.is_running:
-            tx, tx_hash, tx_send = await self._tx_queue.get()
-            tx_future = tx_hash
+            tx, tx_future, tx_send = await self._tx_queue.get()
 
             try:
                 async with timeout(15):
@@ -498,9 +497,10 @@ class Web3RequestManager:
                     if isinstance(tx, Awaitable):
                         tx = await tx
 
-                    tx_hash = await self._send_transaction(tx, nonce, tx_hash)
+                    tx_hash = await self._send_transaction(tx, nonce, tx_future)
                     logger.info(f"Transaction with nonce {nonce} sent: {tx_hash.to_0x_hex()}")
-                tx_send.set_result(None)
+                    tx_future.set_result(tx_hash)
+                    tx_send.set_result(None)
             except Exception as e:
                 logger.error(f"Failed to send transaction: {e}")
                 if not tx_future.done():
