@@ -32,15 +32,15 @@ class Client:
         cls,
         *,
         config: NetworkConfig,
-        account: ChecksumAddress,
-        wallet_private_key: PrivateKeyType,
+        account: ChecksumAddress | None = None,
+        wallet_private_key: PrivateKeyType | None = None,
     ) -> "Client":
         """Initializes a Web3 instance and returns a connected GTE client.
 
         Args:
             config (NetworkConfig): Network configuration settings.
-            account (ChecksumAddress): Ethereum address of the user.
-            wallet_private_key (PrivateKeyType): Private key for signing transactions.
+            account (ChecksumAddress | None): Optional Ethereum address of the user.
+            wallet_private_key (PrivateKeyType | None): Optional private key for signing transactions.
 
         Returns:
             Client: A fully initialized client instance.
