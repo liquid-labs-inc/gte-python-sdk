@@ -95,7 +95,7 @@ async def get_order_status(client: Client, market: Market, order_id: int) -> Non
         print(f"Market: {market.pair}")
         print(f"Side: {order.side.name}")
         print(f"Price: {order.price}")
-        print(f"Amount: {order.amount}")
+        print(f"Amount: {order.remaining_amount}")
         print(f"Status: {order.status}")
 
     except Exception as e:

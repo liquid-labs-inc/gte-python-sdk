@@ -90,7 +90,6 @@ class Token:
     name: str
     symbol: str
     total_supply: float | None = None
-    balance: float | None = None
 
     def convert_amount_to_quantity(self, amount: int) -> float:
         """Convert amount in base units to float."""
@@ -115,7 +114,6 @@ class Token:
             name=data["name"],
             symbol=data["symbol"],
             total_supply=data["totalSupply"],
-            balance=data.get("balance")
         )
 
 
@@ -128,7 +126,7 @@ class Market:
     base: Token
     quote: Token
     price: float | None = None
-    volume_24h: float | None = None
+    volume_24hr_usd: float | None = None
 
     @classmethod
     def from_api(cls, data: MarketDetail) -> "Market":
@@ -141,7 +139,7 @@ class Market:
             base=Token.from_api(data["baseToken"]),
             quote=Token.from_api(data["quoteToken"]),
             price=data.get("price"),
-            volume_24h=data.get("volume24hr"),
+            volume_24hr_usd=data.get("volume24HrUsd"),
         )
 
     @property
@@ -313,36 +311,21 @@ class Order:
     market_address: str
     side: OrderSide
     order_type: OrderType
-    amount: int  # remaining amount in base units
     price: int | None
     time_in_force: TimeInForce
     status: OrderStatus
-    created_at: int
+    remaining_amount: int | None = None  # remaining amount in base units
+    placed_at: int | None = None  # Timestamp when the order was created
+    filled_at: int | None = None  # Timestamp when the order was filled
     original_amount: int | None = None  # Original amount before any fills
+    filled_amount: int | None = None  # Amount filled so far
     owner: ChecksumAddress | None = None
+    txn_hash: HexBytes | None = None
 
     @property
     def datetime(self) -> datetime:
         """Get the datetime of the order."""
-        return datetime.fromtimestamp(self.created_at / 1000)
-
-    @classmethod
-    def from_api(cls, data: dict[str, Any]) -> "Order":
-        """Create an Order object from API response data
-        """
-
-        return cls(
-            order_id=int(data['orderId']),
-            market_address=to_checksum_address(data["marketAddress"]),
-            side=OrderSide.from_str(data['side']),
-            order_type=OrderType.LIMIT,
-            amount=int(data['originalSize']) - int(data['sizeFilled']),
-            original_amount=int(data['originalSize']),
-            price=int(data['limitPrice']),
-            time_in_force=TimeInForce.GTC,
-            status=OrderStatus.OPEN,
-            created_at=int(data["placedAt"]),
-        )
+        return datetime.fromtimestamp(self.placed_at / 1000)
 
     @classmethod
     def from_clob_order(cls, clob: CLOBOrder, market: Market) -> "Order":
@@ -360,12 +343,12 @@ class Order:
             market_address=market.address,
             side=clob.side,
             order_type=OrderType.LIMIT,
-            amount=clob.amount,
+            remaining_amount=clob.amount,
             price=clob.price,
             time_in_force=TimeInForce.GTC,  # Default
             status=status,
             owner=clob.owner,
-            created_at=0,  # Need to be retrieved from event timestamp
+            placed_at=0,  # Need to be retrieved from event timestamp
         )
 
     @classmethod
@@ -383,12 +366,12 @@ class Order:
             market_address=event.address,
             side=side,
             order_type=OrderType.LIMIT,
-            amount=amount,
+            remaining_amount=amount,
             price=price,
             time_in_force=TimeInForce.GTC,  # Default
             status=status,
             owner=event.account,
-            created_at=0,  # Need to be retrieved from event timestamp
+            placed_at=0,  # Need to be retrieved from event timestamp
         )
 
     @classmethod
@@ -406,12 +389,12 @@ class Order:
             market_address=event.address,
             side=side,
             order_type=OrderType.LIMIT,
-            amount=amount,
+            remaining_amount=amount,
             price=price,
             time_in_force=TimeInForce.GTC,  # Default
             status=status,
             owner=event.account,
-            created_at=0,  # Need to be retrieved from event timestamp
+            placed_at=0,  # Need to be retrieved from event timestamp
         )
 
 
