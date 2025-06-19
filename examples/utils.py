@@ -53,7 +53,7 @@ def format_market_table(markets: List[Market], title: str) -> None:
                 market.address[:10] + "...",
                 market.market_type.value if hasattr(market, "market_type") else "N/A",
                 format_price(market.price),
-                f"{market.volume_24h:.2f}" if market.volume_24h else "N/A",
+                f"{market.volume_24hr_usd:.2f}" if market.volume_24hr_usd else "N/A",
                 "Yes" if market.address else "No",
             ]
         )
@@ -142,10 +142,10 @@ async def show_live_orders(client: Client, market: Market):
             print(f"  Owner: {order.owner}")
             print(f"  Side: {order.side}")
             print(f"  Price: {order.price}")
-            print(f"  Amount: {order.amount}")
+            print(f"  Amount: {order.remaining_amount}")
             print(f"  Status: {order.status}")
             print(f"  Order Type: {order.order_type}")
-            print(f"  Timestamp: {order.created_at}")
+            print(f"  Timestamp: {order.placed_at}")
             print("-" * 20)
 
     except Exception as e:
