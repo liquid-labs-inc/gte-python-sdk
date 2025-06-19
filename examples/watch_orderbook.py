@@ -1,7 +1,7 @@
 """Simple example demonstrating how to watch a market's orderbook using WebSocket ETH RPC."""
 import sys
 
-from examples.utils import MARKET_ADDRESS
+from utils import MARKET_ADDRESS
 
 sys.path.append(".")
 from gte_py.api.chain.clob import ICLOB
