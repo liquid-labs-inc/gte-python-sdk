@@ -117,7 +117,7 @@ class MarketClient:
         """
         await self._ws_client.unsubscribe_orderbook(market=market.address, limit=limit)
         self._orderbook_callbacks = []
-        self._orderbook_state = None
+        self._orderbook_state.clear()
 
     def orderbook(self, market: Market) -> OrderbookUpdate | None:
         """Get the current orderbook state."""

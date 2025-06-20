@@ -21,7 +21,7 @@ import os
 from dataclasses import dataclass
 
 from eth_typing import ChecksumAddress
-from eth_utils import to_checksum_address
+from eth_utils.address import to_checksum_address
 
 
 @dataclass
@@ -47,7 +47,7 @@ class NetworkConfig:
     router_address: ChecksumAddress
     launchpad_address: ChecksumAddress
     clob_manager_address: ChecksumAddress
-    weth_address: ChecksumAddress = None
+    weth_address: ChecksumAddress | None = None
 
 
 TESTNET_CONFIG = NetworkConfig(

@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import cast
 
 import aiohttp
 from eth_typing import ChecksumAddress
@@ -57,6 +58,8 @@ class RestApi:
         """
         if self.session is None or self.session.closed:
             await self.__aenter__()
+        
+        self.session = cast(aiohttp.ClientSession, self.session)
 
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
 
@@ -67,8 +70,8 @@ class RestApi:
                 response_data = await response.text()
                 response.raise_for_status()
 
-                data = json.loads(response_data)
-                return data
+                parsed_json = json.loads(response_data)
+                return parsed_json
         except aiohttp.ClientError as e:
             logger.error(f"Request error: {e} url={url} params={params} data={data}")
             raise
@@ -175,7 +178,7 @@ class RestApi:
             params["newlyGraduated"] = newly_graduated
         return await self._request("GET", "/v1/markets", params=params)
 
-    async def get_market(self, market_address: str | ChecksumAddress) -> "MarketDetail":
+    async def get_market(self, market_address: str | ChecksumAddress) -> MarketDetail:
         """Get market by address.
 
         Args:
@@ -184,7 +187,7 @@ class RestApi:
         Returns:
             MarketDetail: Typed market information
         """
-        return await self._request("GET", f"/v1/markets/{market_address}")
+        return cast(MarketDetail, await self._request("GET", f"/v1/markets/{market_address}"))
 
     async def get_candles(
             self,

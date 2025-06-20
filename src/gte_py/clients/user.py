@@ -9,6 +9,7 @@ from web3.types import TxParams
 
 from gte_py.api.chain.clob_client import CLOBClient
 from gte_py.api.chain.clob_manager import ICLOBManager
+from gte_py.api.chain.clob_factory import CLOBFactory
 from gte_py.api.chain.structs import OperatorRole
 from gte_py.api.rest import RestApi
 from gte_py.api.chain.token_client import TokenClient
@@ -44,6 +45,11 @@ class UserClient:
         # Initialize CLOB Manager
         self._clob_manager = ICLOBManager(web3=self._web3, contract_address=config.clob_manager_address)
 
+    def get_clob_factory(self) -> CLOBFactory:
+        if self._clob.clob_factory is None:
+            raise RuntimeError("CLOBFactory is not initialized. Did you forget to call await CLOBClient.init()?")
+        return self._clob.clob_factory
+
     async def get_eth_balance(self) -> int:
         """
         Get the user's ETH balance.
@@ -77,6 +83,9 @@ class UserClient:
         Returns:
             List of TypedContractFunction objects (approve and deposit)
         """
+
+        clob_factory = self.get_clob_factory()
+
         token = self._token.get_erc20(token_address)
         if token_address == self._config.weth_address:
             weth_token = await token.balance_of(self._account)
@@ -97,7 +106,7 @@ class UserClient:
             ).send_wait()
 
         # Then deposit the tokens
-        await self._clob.clob_factory.deposit(
+        await clob_factory.deposit(
             account=self._account,
             token=token_address,
             amount=amount,
@@ -120,8 +129,10 @@ class UserClient:
             TypedContractFunction for the withdrawal transaction
         """
 
+        clob_factory = self.get_clob_factory()
+
         # Withdraw the tokens
-        return await self._clob.clob_factory.withdraw(
+        return await clob_factory.withdraw(
             account=self._account, token=token_address, amount=amount, to_operator=False, **kwargs
         ).send_wait()
 
@@ -174,7 +185,8 @@ class UserClient:
             Tuple of (wallet_balance, exchange_balance) in human-readable format
         """
 
-        exchange_balance_raw = await self._clob.clob_factory.get_account_balance(
+        clob_factory = self.get_clob_factory()
+        exchange_balance_raw = await clob_factory.get_account_balance(
             self._account, token_address
         )
 
@@ -187,7 +199,7 @@ class UserClient:
         return roles_int
 
     async def approve_operator(self, operator_address: ChecksumAddress,
-                               roles: list[OperatorRole] = None,
+                               roles: list[OperatorRole] = [],
                                unsafe_withdraw: bool = False,
                                unsafe_launchpad_fill: bool = False,
                                **kwargs: Unpack[TxParams]):
@@ -196,7 +208,9 @@ class UserClient:
 
         Args:
             operator_address: Address of the operator to approve
+            roles: List of roles to assign to the operator
             unsafe_withdraw: Whether to allow unsafe withdrawals
+            unsafe_launchpad_fill: Whether to allow unsafe launchpad fills
             **kwargs: Additional transaction parameters
 
         Returns:
