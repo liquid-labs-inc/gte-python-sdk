@@ -102,6 +102,7 @@ testpaths = [
     "tests",
 ]
 python_files = "test_*.py"
+addopts = "--asyncio-mode=auto"
 
 [tool.coverage.run]
 branch = true
@@ -132,6 +133,7 @@ dev = [
     "python-dotenv>=1.0.0,<2",
     "tabulate",
     "pytest>=7.0",
+    "pytest-asyncio>=0.21",
     "coverage>=7.5",
     "pyright>=1.1",
     "ruff>=0.9",

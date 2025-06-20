@@ -13,7 +13,7 @@ from gte_py.api.chain.events import OrderCanceledEvent, FillOrderProcessedEvent,
 from gte_py.api.chain.structs import OrderSide, Settlement, LimitOrderType, FillOrderType
 from gte_py.api.chain.utils import TypedContractFunction
 from gte_py.api.rest import RestApi
-from gte_py.clients import UserClient
+from gte_py.clients.user import UserClient
 from gte_py.clients.market import MarketClient
 from gte_py.api.chain.token_client import TokenClient
 from gte_py.models import Market, Order, OrderStatus, OrderSide, TimeInForce
