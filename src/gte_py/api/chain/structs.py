@@ -25,9 +25,8 @@ class OrderSide(IntEnum):
 
 class Settlement(IntEnum):
     """Settlement type enum."""
-
-    NONE = 0
-    INSTANT = 1
+    INSTANT = 0
+    ACCOUNT = 1
 
 
 class LimitOrderType(IntEnum):
