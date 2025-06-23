@@ -2,6 +2,7 @@
 
 import logging
 
+from typing import Optional, cast
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 
@@ -21,10 +22,10 @@ class Client:
     """User-friendly client for interacting with GTE."""
 
     def __init__(
-            self,
-            web3: AsyncWeb3,
-            config: NetworkConfig,
-            account: ChecksumAddress | None = None,
+        self,
+        web3: AsyncWeb3,
+        config: NetworkConfig,
+        account: Optional[ChecksumAddress] = None,
     ):
         """
         Initialize the client.
@@ -34,7 +35,9 @@ class Client:
             config: Network configuration
             account: Address of main account
         """
-        account = account or web3.eth.default_account
+        default = web3.eth.default_account
+        if account is None and isinstance(default, str):
+            account = cast(ChecksumAddress, default)
 
         self.rest = RestApi(base_url=config.api_url)
         self._ws_url = config.ws_url
@@ -48,18 +51,18 @@ class Client:
             web3=self._web3, rest=self.rest, clob_client=self.clob, token_client=self.token
         )
         self.market: MarketClient = MarketClient(config, self.rest, self.info, self.clob)
-        if not account:
-            self.user: UserClient = None
+        
+        if account is None:
+            self.user: Optional[UserClient] = None
+            self.execution: Optional[ExecutionClient] = None
         else:
             self.user = UserClient(
                 config=config,
-                account=account, clob=self.clob, token=self.token, rest=self.rest
+                account=account,
+                clob=self.clob,
+                token=self.token,
+                rest=self.rest
             )
-
-        if not account:
-            self.execution: ExecutionClient = None
-        else:
-            # Initialize execution client for trading operations
             self.execution = ExecutionClient(
                 web3=self._web3,
                 main_account=account,

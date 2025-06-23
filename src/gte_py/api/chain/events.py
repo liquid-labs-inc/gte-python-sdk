@@ -1,7 +1,7 @@
 """Event type classes for CLOB contract events."""
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 from eth_typing import ChecksumAddress
 from hexbytes import HexBytes
@@ -151,7 +151,7 @@ class OwnershipTransferStartedEvent(CLOBEvent):
 
 
 @dataclass
-class OwnershipTransferredEvent(CLOBEvent):
+class ClobOwnershipTransferredEvent(CLOBEvent):
     """Event emitted when ownership is transferred."""
 
     previous_owner: ChecksumAddress
@@ -278,7 +278,7 @@ class OwnershipHandoverRequestedEvent(CLOBManagerEvent):
 
 
 @dataclass
-class OwnershipTransferredEvent(CLOBManagerEvent):
+class ClobManagerOwnershipTransferredEvent(CLOBManagerEvent):
     """Event emitted when ownership is transferred."""
     
     old_owner: ChecksumAddress
@@ -337,8 +337,15 @@ def parse_limit_order_submitted(event_data: EventData) -> LimitOrderSubmittedEve
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    owner = cast(ChecksumAddress, args.get("owner"))
+    order_id = cast(int, args.get("orderId"))
+    order_args = cast(ICLOBPostLimitOrderArgs, args.get("args"))
+
     return LimitOrderSubmittedEvent(
-        **base_info, owner=args.get("owner"), order_id=args.get("orderId"), args=args.get("args")
+        **base_info,
+        owner=owner,
+        order_id=order_id,
+        args=order_args,
     )
 
 
@@ -355,15 +362,23 @@ def parse_limit_order_processed(event_data: EventData) -> LimitOrderProcessedEve
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    account = cast(ChecksumAddress, args.get("account"))
+    order_id = cast(int, args.get("orderId"))
+    amount_posted_in_base = cast(int, args.get("amountPostedInBase"))
+    quote_token_amount_traded = cast(int, args.get("quoteTokenAmountTraded"))
+    base_token_amount_traded = cast(int, args.get("baseTokenAmountTraded"))
+    taker_fee = cast(int, args.get("takerFee"))
+    nonce = cast(int, args.get("nonce"))
+
     return LimitOrderProcessedEvent(
         **base_info,
-        account=args.get("account"),
-        order_id=args.get("orderId"),
-        amount_posted_in_base=args.get("amountPostedInBase"),
-        quote_token_amount_traded=args.get("quoteTokenAmountTraded"),
-        base_token_amount_traded=args.get("baseTokenAmountTraded"),
-        taker_fee=args.get("takerFee"),
-        nonce=args.get("nonce"),
+        account=account,
+        order_id=order_id,
+        amount_posted_in_base=amount_posted_in_base,
+        quote_token_amount_traded=quote_token_amount_traded,
+        base_token_amount_traded=base_token_amount_traded,
+        taker_fee=taker_fee,
+        nonce=nonce,
     )
 
 
@@ -379,9 +394,16 @@ def parse_fill_order_submitted(event_data: EventData) -> FillOrderSubmittedEvent
     """
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
+    
+    owner = cast(ChecksumAddress, args.get("owner"))
+    order_id = cast(int, args.get("orderId"))
+    order_args = cast(ICLOBPostFillOrderArgs, args.get("args"))
 
     return FillOrderSubmittedEvent(
-        **base_info, owner=args.get("owner"), order_id=args.get("orderId"), args=args.get("args")
+        **base_info,
+        owner=owner,
+        order_id=order_id,
+        args=order_args,
     )
 
 
@@ -398,14 +420,21 @@ def parse_fill_order_processed(event_data: EventData) -> FillOrderProcessedEvent
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    account = cast(ChecksumAddress, args.get("account"))
+    order_id = cast(int, args.get("orderId"))
+    quote_token_amount_traded = cast(int, args.get("quoteTokenAmountTraded"))
+    base_token_amount_traded = cast(int, args.get("baseTokenAmountTraded"))
+    taker_fee = cast(int, args.get("takerFee"))
+    nonce = cast(int, args.get("nonce"))
+
     return FillOrderProcessedEvent(
         **base_info,
-        account=args.get("account"),
-        order_id=args.get("orderId"),
-        quote_token_amount_traded=args.get("quoteTokenAmountTraded"),
-        base_token_amount_traded=args.get("baseTokenAmountTraded"),
-        taker_fee=args.get("takerFee"),
-        nonce=args.get("nonce"),  # Added nonce field extraction
+        account=account,
+        order_id=order_id,
+        quote_token_amount_traded=quote_token_amount_traded,
+        base_token_amount_traded=base_token_amount_traded,
+        taker_fee=taker_fee,
+        nonce=nonce,
     )
 
 
@@ -422,14 +451,21 @@ def parse_order_matched(event_data: EventData) -> OrderMatchedEvent:
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    taker_order_id = cast(int, args.get("takerOrderId"))
+    maker_order_id = cast(int, args.get("makerOrderId"))
+    taker_order = cast(OrderStruct, args.get("takerOrder"))
+    maker_order = cast(OrderStruct, args.get("makerOrder"))
+    traded_base = cast(int, args.get("tradedBase"))
+    nonce = cast(int, args.get("nonce"))
+
     return OrderMatchedEvent(
         **base_info,
-        taker_order_id=args.get("takerOrderId"),
-        maker_order_id=args.get("makerOrderId"),
-        taker_order=args.get("takerOrder"),
-        maker_order=args.get("makerOrder"),
-        traded_base=args.get("tradedBase"),
-        nonce=args.get('nonce')
+        taker_order_id=taker_order_id,
+        maker_order_id=maker_order_id,
+        taker_order=taker_order,
+        maker_order=maker_order,
+        traded_base=traded_base,
+        nonce=nonce,
     )
 
 
@@ -446,12 +482,19 @@ def parse_order_amended(event_data: EventData) -> OrderAmendedEvent:
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    pre_amend = cast(OrderStruct, args.get("preAmend"))
+    amend_args = cast(ICLOBAmendArgs, args.get("args"))
+    quote_token_delta = cast(int, args.get("quoteTokenDelta"))
+    base_token_delta = cast(int, args.get("baseTokenDelta"))
+    nonce = cast(int, args.get("nonce"))
+
     return OrderAmendedEvent(
         **base_info,
-        pre_amend=args.get("preAmend"),
-        args=args.get("args"),
-        quote_token_delta=args.get("quoteTokenDelta"),
-        base_token_delta=args.get("baseTokenDelta"),
+        pre_amend=pre_amend,
+        args=amend_args,
+        quote_token_delta=quote_token_delta,
+        base_token_delta=base_token_delta,
+        nonce=nonce,
     )
 
 
@@ -468,14 +511,21 @@ def parse_order_canceled(event_data: EventData) -> OrderCanceledEvent:
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    order_id = cast(int, args.get("orderId"))
+    owner = cast(ChecksumAddress, args.get("owner"))
+    quote_token_refunded = cast(int, args.get("quoteTokenRefunded"))
+    base_token_refunded = cast(int, args.get("baseTokenRefunded"))
+    settlement = cast(int, args.get("settlement"))
+    nonce = cast(int, args.get("nonce"))
+
     return OrderCanceledEvent(
         **base_info,
-        order_id=args.get("orderId"),
-        owner=args.get("owner"),
-        quote_token_refunded=args.get("quoteTokenRefunded"),
-        base_token_refunded=args.get("baseTokenRefunded"),
-        settlement=args.get("settlement"),
-        nonce=args.get('nonce')
+        order_id=order_id,
+        owner=owner,
+        quote_token_refunded=quote_token_refunded,
+        base_token_refunded=base_token_refunded,            
+        settlement=settlement,
+        nonce=nonce,
     )
 
 
@@ -492,9 +542,11 @@ def parse_tick_size_updated(event_data: EventData) -> TickSizeUpdatedEvent:
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    new_tick_size = cast(int, args.get("newTickSize"))
+
     return TickSizeUpdatedEvent(
         **base_info,
-        new_tick_size=args.get("newTickSize"),
+        new_tick_size=new_tick_size,
     )
 
 
@@ -511,9 +563,11 @@ def parse_min_limit_order_amount_in_base_updated(event_data: EventData) -> MinLi
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    new_min = cast(int, args.get("newMinLimitOrderAmountInBase"))
+
     return MinLimitOrderAmountInBaseUpdatedEvent(
         **base_info,
-        new_min_limit_order_amount_in_base=args.get("newMinLimitOrderAmountInBase"),
+        new_min_limit_order_amount_in_base=new_min,
     )
 
 
@@ -530,10 +584,13 @@ def parse_max_limit_orders_per_tx_updated(event_data: EventData) -> MaxLimitOrde
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    new_max_limits = cast(int, args.get("newMaxLimits"))
+
     return MaxLimitOrdersPerTxUpdatedEvent(
         **base_info,
-        new_max_limits=args.get("newMaxLimits"),
+        new_max_limits=new_max_limits,
     )
+
 
 
 def parse_max_limit_orders_allowlisted(event_data: EventData) -> MaxLimitOrdersAllowlistedEvent:
@@ -549,10 +606,13 @@ def parse_max_limit_orders_allowlisted(event_data: EventData) -> MaxLimitOrdersA
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    account = cast(ChecksumAddress, args.get("account"))
+    toggle = cast(bool, args.get("toggle"))
+
     return MaxLimitOrdersAllowlistedEvent(
         **base_info,
-        account=args.get("account"),
-        toggle=args.get("toggle"),
+        account=account,
+        toggle=toggle,
     )
 
 
@@ -569,11 +629,13 @@ def parse_cancel_failed(event_data: EventData) -> CancelFailedEvent:
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    order_id = cast(int, args.get("orderId"))
+    owner = cast(ChecksumAddress, args.get("owner"))
+
     return CancelFailedEvent(
         **base_info,
-        order_id=args.get("orderId"),
-        owner=args.get("owner"),
-        nonce=args.get("nonce"),
+        order_id=order_id,
+        owner=owner,
     )
 
 
@@ -590,10 +652,12 @@ def parse_initialized(event_data: EventData) -> InitializedEvent:
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    version = cast(int, args.get("version"))
+
     # Initialized events typically don't have a nonce field, so we set it to 0
     return InitializedEvent(
         **base_info,
-        version=args.get("version"),
+        version=version,
         nonce=0,
     )
 
@@ -611,11 +675,14 @@ def parse_ownership_transfer_started(event_data: EventData) -> OwnershipTransfer
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    previous_owner = cast(ChecksumAddress, args.get("previousOwner"))
+    new_owner = cast(ChecksumAddress, args.get("newOwner"))
+
     # Ownership events typically don't have a nonce field, so we set it to 0
     return OwnershipTransferStartedEvent(
         **base_info,
-        previous_owner=args.get("previousOwner"),
-        new_owner=args.get("newOwner"),
+        previous_owner=previous_owner,
+        new_owner=new_owner,
         nonce=0,
     )
 
@@ -633,12 +700,15 @@ def parse_ownership_handover_canceled(event_data: EventData) -> OwnershipHandove
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
     
+    pending_owner = cast(ChecksumAddress, args.get("pendingOwner"))
+
     # This event doesn't have a nonce in the standard Ownable contract
     return OwnershipHandoverCanceledEvent(
         **base_info,
-        pending_owner=args.get("pendingOwner"),
+        pending_owner=pending_owner,
         nonce=0,
     )
+
 
 
 def parse_ownership_handover_requested(event_data: EventData) -> OwnershipHandoverRequestedEvent:
@@ -654,15 +724,17 @@ def parse_ownership_handover_requested(event_data: EventData) -> OwnershipHandov
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
     
+    pending_owner = cast(ChecksumAddress, args.get("pendingOwner"))
+
     # This event doesn't have a nonce in the standard Ownable contract
     return OwnershipHandoverRequestedEvent(
         **base_info,
-        pending_owner=args.get("pendingOwner"),
+        pending_owner=pending_owner,
         nonce=0,
     )
 
 
-def parse_ownership_transferred(event_data: EventData) -> OwnershipTransferredEvent:
+def parse_ownership_transferred(event_data: EventData) -> ClobManagerOwnershipTransferredEvent:
     """
     Parse OwnershipTransferred event.
 
@@ -670,16 +742,19 @@ def parse_ownership_transferred(event_data: EventData) -> OwnershipTransferredEv
         event_data: Raw event data from web3
 
     Returns:
-        Typed OwnershipTransferredEvent
+        Typed ClobManagerOwnershipTransferredEvent
     """
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
     
+    old_owner = cast(ChecksumAddress, args.get("oldOwner"))
+    new_owner = cast(ChecksumAddress, args.get("newOwner"))
+
     # This event doesn't have a nonce in the standard Ownable contract
-    return OwnershipTransferredEvent(
+    return ClobManagerOwnershipTransferredEvent(
         **base_info,
-        old_owner=args.get("oldOwner"),
-        new_owner=args.get("newOwner"),
+        old_owner=old_owner,
+        new_owner=new_owner,
         nonce=0,
     )
 
@@ -698,11 +773,15 @@ def parse_account_credited(event_data: EventData) -> AccountCreditedEvent:
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    account = cast(ChecksumAddress, args.get("account"))
+    token = cast(ChecksumAddress, args.get("token"))
+    amount = cast(int, args.get("amount"))
+
     return AccountCreditedEvent(
         **base_info,
-        account=args.get("account"),
-        token=args.get("token"),
-        amount=args.get("amount"),
+        account=account,
+        token=token,
+        amount=amount,
     )
 
 
@@ -719,11 +798,15 @@ def parse_account_debited(event_data: EventData) -> AccountDebitedEvent:
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    account = cast(ChecksumAddress, args.get("account"))
+    token = cast(ChecksumAddress, args.get("token"))
+    amount = cast(int, args.get("amount"))
+
     return AccountDebitedEvent(
         **base_info,
-        account=args.get("account"),
-        token=args.get("token"),
-        amount=args.get("amount"),
+        account=account,
+        token=token,
+        amount=amount,
     )
 
 
@@ -740,10 +823,13 @@ def parse_account_fee_tier_updated(event_data: EventData) -> AccountFeeTierUpdat
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    account = cast(ChecksumAddress, args.get("account"))
+    fee_tier = cast(int, args.get("feeTier"))
+
     return AccountFeeTierUpdatedEvent(
         **base_info,
-        account=args.get("account"),
-        fee_tier=args.get("feeTier"),
+        account=account,
+        fee_tier=fee_tier,
     )
 
 
@@ -760,12 +846,17 @@ def parse_deposit(event_data: EventData) -> DepositEvent:
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    account = cast(ChecksumAddress, args.get("account"))
+    funder = cast(ChecksumAddress, args.get("funder"))
+    token = cast(ChecksumAddress, args.get("token"))
+    amount = cast(int, args.get("amount"))
+
     return DepositEvent(
         **base_info,
-        account=args.get("account"),
-        funder=args.get("funder"),
-        token=args.get("token"),
-        amount=args.get("amount"),
+        account=account,
+        funder=funder,
+        token=token,
+        amount=amount,
     )
 
 
@@ -782,10 +873,13 @@ def parse_fee_collected(event_data: EventData) -> FeeCollectedEvent:
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    token = cast(ChecksumAddress, args.get("token"))
+    fee = cast(int, args.get("fee"))
+
     return FeeCollectedEvent(
         **base_info,
-        token=args.get("token"),
-        fee=args.get("fee"),
+        token=token,
+        fee=fee,
     )
 
 
@@ -802,10 +896,13 @@ def parse_fee_recipient_set(event_data: EventData) -> FeeRecipientSetEvent:
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    fee_recipient = cast(ChecksumAddress, args.get("feeRecipient"))
+
     return FeeRecipientSetEvent(
         **base_info,
-        fee_recipient=args.get("feeRecipient"),
+        fee_recipient=fee_recipient,
     )
+
 
 
 def parse_market_created(event_data: EventData) -> MarketCreatedEvent:
@@ -821,17 +918,27 @@ def parse_market_created(event_data: EventData) -> MarketCreatedEvent:
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    creator = cast(ChecksumAddress, args.get("creator"))
+    base_token = cast(ChecksumAddress, args.get("baseToken"))
+    quote_token = cast(ChecksumAddress, args.get("quoteToken"))
+    market = cast(ChecksumAddress, args.get("market"))
+    quote_decimals = cast(int, args.get("quoteDecimals"))
+    base_decimals = cast(int, args.get("baseDecimals"))
+    config = cast(dict, args.get("config"))
+    settings = cast(dict, args.get("settings"))
+    nonce = cast(int, args.get("eventNonce", 0))
+
     return MarketCreatedEvent(
         **base_info,
-        creator=args.get("creator"),
-        base_token=args.get("baseToken"),
-        quote_token=args.get("quoteToken"),
-        market=args.get("market"),
-        quote_decimals=args.get("quoteDecimals"),
-        base_decimals=args.get("baseDecimals"),
-        config=args.get("config"),
-        settings=args.get("settings"),
-        nonce=args.get("eventNonce", 0),
+        creator=creator,
+        base_token=base_token,
+        quote_token=quote_token,
+        market=market,
+        quote_decimals=quote_decimals,
+        base_decimals=base_decimals,
+        config=config,
+        settings=settings,
+        nonce=nonce,
     )
 
 
@@ -848,11 +955,15 @@ def parse_operator_approved(event_data: EventData) -> OperatorApprovedEvent:
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    account = cast(ChecksumAddress, args.get("account"))
+    operator = cast(ChecksumAddress, args.get("operator"))
+    nonce = cast(int, args.get("eventNonce", 0))
+
     return OperatorApprovedEvent(
         **base_info,
-        account=args.get("account"),
-        operator=args.get("operator"),
-        nonce=args.get("eventNonce", 0),
+        account=account,
+        operator=operator,
+        nonce=nonce,
     )
 
 
@@ -869,11 +980,15 @@ def parse_operator_disapproved(event_data: EventData) -> OperatorDisapprovedEven
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    account = cast(ChecksumAddress, args.get("account"))
+    operator = cast(ChecksumAddress, args.get("operator"))
+    nonce = cast(int, args.get("eventNonce", 0))
+
     return OperatorDisapprovedEvent(
         **base_info,
-        account=args.get("account"),
-        operator=args.get("operator"),
-        nonce=args.get("eventNonce", 0),
+        account=account,
+        operator=operator,
+        nonce=nonce,
     )
 
 
@@ -890,12 +1005,17 @@ def parse_roles_approved(event_data: EventData) -> RolesApprovedEvent:
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    account = cast(ChecksumAddress, args.get("account"))
+    operator = cast(ChecksumAddress, args.get("operator"))
+    roles = cast(int, args.get("roles"))
+    nonce = cast(int, args.get("eventNonce", 0))
+
     return RolesApprovedEvent(
         **base_info,
-        account=args.get("account"),
-        operator=args.get("operator"),
-        roles=args.get("roles"),
-        nonce=args.get("eventNonce", 0),
+        account=account,
+        operator=operator,
+        roles=roles,
+        nonce=nonce,
     )
 
 
@@ -912,14 +1032,18 @@ def parse_roles_disapproved(event_data: EventData) -> RolesDisapprovedEvent:
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    account = cast(ChecksumAddress, args.get("account"))
+    operator = cast(ChecksumAddress, args.get("operator"))
+    roles = cast(int, args.get("roles"))
+    nonce = cast(int, args.get("eventNonce", 0))
+
     return RolesDisapprovedEvent(
         **base_info,
-        account=args.get("account"),
-        operator=args.get("operator"),
-        roles=args.get("roles"),
-        nonce=args.get("eventNonce", 0),
+        account=account,
+        operator=operator,
+        roles=roles,
+        nonce=nonce,
     )
-
 
 
 def parse_withdraw(event_data: EventData) -> WithdrawEvent:
@@ -935,13 +1059,19 @@ def parse_withdraw(event_data: EventData) -> WithdrawEvent:
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
 
+    account = cast(ChecksumAddress, args.get("account"))
+    recipient = cast(ChecksumAddress, args.get("recipient"))
+    token = cast(ChecksumAddress, args.get("token"))
+    amount = cast(int, args.get("amount"))
+    nonce = cast(int, args.get("eventNonce", 0))
+
     return WithdrawEvent(
         **base_info,
-        account=args.get("account"),
-        recipient=args.get("recipient"),
-        token=args.get("token"),
-        amount=args.get("amount"),
-        nonce=args.get("eventNonce", 0),
+        account=account,
+        recipient=recipient,
+        token=token,
+        amount=amount,
+        nonce=nonce,
     )
 
 
@@ -1005,8 +1135,9 @@ def convert_event_data_to_typed_event(event_data: EventData) -> CLOBEvent:
 
     # Return base event for unknown event types
     args = event_data.get("args", {})
-    
     nonce = args.get("nonce", args.get("eventNonce", 0))
+
+    raw_data = cast(Dict[str, Any], event_data)
 
     return CLOBEvent(
         tx_hash=event_data.get("transactionHash"),
@@ -1014,6 +1145,6 @@ def convert_event_data_to_typed_event(event_data: EventData) -> CLOBEvent:
         block_number=event_data.get("blockNumber"),
         address=event_data.get("address"),
         event_name=event_name,
-        raw_data=event_data,
+        raw_data=raw_data,
         nonce=nonce,
     )
