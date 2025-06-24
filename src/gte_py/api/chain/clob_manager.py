@@ -24,7 +24,7 @@ from .events import (
     InitializedEvent,
     OwnershipHandoverCanceledEvent,
     OwnershipHandoverRequestedEvent,
-    OwnershipTransferredEvent,
+    ClobManagerOwnershipTransferredEvent,
     parse_account_credited,
     parse_account_debited,
     parse_account_fee_tier_updated,
@@ -1010,7 +1010,7 @@ class ICLOBManager:
         
     async def get_ownership_transferred_events(
             self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
-    ) -> List[OwnershipTransferredEvent]:
+    ) -> List[ClobManagerOwnershipTransferredEvent]:
         """
         Get historical OwnershipTransferred events.
         
@@ -1020,7 +1020,7 @@ class ICLOBManager:
             **filter_params: Additional filter parameters
             
         Returns:
-            List of OwnershipTransferred events
+            List of ClobManagerOwnershipTransferred events
         """
         return await self._ownership_transferred_event_source.get_historical(
             from_block=from_block, to_block=to_block, **filter_params
@@ -1028,7 +1028,7 @@ class ICLOBManager:
 
     def stream_ownership_transferred_events(
             self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
-    ) -> EventStream[OwnershipTransferredEvent]:
+    ) -> EventStream[ClobManagerOwnershipTransferredEvent]:
         """
         Stream OwnershipTransferred events asynchronously.
         
@@ -1038,7 +1038,7 @@ class ICLOBManager:
             **filter_params: Additional filter parameters
             
         Returns:
-            EventStream of OwnershipTransferred events
+            EventStream of ClobManagerOwnershipTransferred events
         """
         return self._ownership_transferred_event_source.get_streaming(
             from_block=from_block, poll_interval=poll_interval, **filter_params
