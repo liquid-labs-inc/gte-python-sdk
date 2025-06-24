@@ -94,7 +94,6 @@ class RestApi:
     # Token endpoints
     async def get_tokens(
             self,
-            metadata: bool = False,
             creator: str | None = None,
             market_type: str | None = None,
             limit: int = 100,
@@ -103,7 +102,6 @@ class RestApi:
         """Get list of tokens supported on GTE.
 
         Args:
-            metadata: Returns tokens with metadata
             creator: Returns assets created by the given user address
             market_type: Filters assets by the given market type (amm, launchpad)
             limit: Range 1-1000
@@ -112,7 +110,7 @@ class RestApi:
         Returns:
             Dict: List of tokens
         """
-        params: dict = {"limit": limit, "offset": offset, "metadata": metadata}
+        params: dict = {"limit": limit, "offset": offset}
         if creator:
             params["creator"] = creator
         if market_type:
