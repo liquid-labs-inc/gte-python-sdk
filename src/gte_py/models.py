@@ -21,9 +21,9 @@ class MarketType(Enum):
     """Market types supported by GTE."""
 
     AMM = "amm"
-    LAUNCHPAD = "launchpad"
+    LAUNCHPAD = "bonding-curve"
     CLOB_SPOT = "clob-spot"
-    CLOB_PERP = "clob-perp"
+    CLOB_PERP = "perps"
 
 
 OrderSide = ContractOrderSide

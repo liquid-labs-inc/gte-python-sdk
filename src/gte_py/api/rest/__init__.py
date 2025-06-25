@@ -7,8 +7,8 @@ from typing import cast
 import aiohttp
 from eth_typing import ChecksumAddress
 
-from gte_py.models import OrderBookSnapshot
 from gte_py.api.rest.models import MarketDetail
+from gte_py.models import OrderBookSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -27,16 +27,26 @@ class RestApi:
             "Content-Type": "application/json",
         }
         self.session: aiohttp.ClientSession | None = None
+    
+    async def connect(self):
+        """Connect to the API."""
+        if self.session is None:
+            self.session = aiohttp.ClientSession()
+    
+    async def disconnect(self):
+        """Disconnect from the API."""
+        if self.session:
+            await self.session.close()
+            self.session = None
 
     async def __aenter__(self):
         """Enter the async context."""
-        self.session = aiohttp.ClientSession()
+        await self.connect()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Exit the async context."""
-        if self.session:
-            await self.session.close()
+        await self.disconnect()
 
     async def _request(
             self,
@@ -44,7 +54,7 @@ class RestApi:
             endpoint: str,
             params: dict | None = None,
             data: dict | None = None,
-    ) -> dict:
+    ):
         """Make a request to the API.
 
         Args:
@@ -58,7 +68,7 @@ class RestApi:
         """
         if self.session is None or self.session.closed:
             await self.__aenter__()
-        
+
         self.session = cast(aiohttp.ClientSession, self.session)
 
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
@@ -101,7 +111,7 @@ class RestApi:
             market_type: str | None = None,
             limit: int = 100,
             offset: int = 0,
-    ) -> dict:
+    ) -> list[dict]:
         """Get list of tokens supported on GTE.
 
         Args:
