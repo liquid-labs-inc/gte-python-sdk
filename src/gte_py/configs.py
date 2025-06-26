@@ -52,7 +52,7 @@ class NetworkConfig:
 
 TESTNET_CONFIG = NetworkConfig(
     name="MegaETH Testnet",
-    api_url="https://api-testnet.gte.xyz",
+    api_url="https://api-testnet.gte.xyz/v1",
     ws_url="wss://api-testnet.gte.xyz/ws",
     chain_id=6342,
     native_token="MegaETH Testnet Ether (ETH)",

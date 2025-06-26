@@ -120,7 +120,7 @@ class WebSocketApi:
         self.task = asyncio.create_task(self._listen())
         logger.info("Connected to GTE WebSocket")
 
-    async def close(self):
+    async def disconnect(self):
         """Close the WebSocket connection."""
         self.running = False
         if self.task:
@@ -134,6 +134,15 @@ class WebSocketApi:
             await self.ws.close()
             self.ws = None
         logger.info("Disconnected from GTE WebSocket")
+    
+    async def __aenter__(self):
+        """Enter the async context."""
+        await self.connect()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Exit the async context."""
+        await self.disconnect()
 
     async def _listen(self):
         """Listen for messages from the WebSocket."""
@@ -208,7 +217,7 @@ class WebSocketApi:
         await self.ws.send_json(request)
         logger.debug(f"Sent subscription request: {request}")
 
-    async def unsubscribe(self, method: str, params: dict, market: ChecksumAddress):
+    async def unsubscribe(self, method: str, params: dict):
         """Unsubscribe from a topic.
 
         Args:
@@ -222,6 +231,8 @@ class WebSocketApi:
         request = {"method": method, "params": params}
         await self.ws.send_json(request)
 
+        market = to_checksum_address(params["market"])
+        
         # Clean up callbacks for this stream type
         stream_type = method.split(".")[0]
         if (stream_type, market) in self.callbacks:
