@@ -5,7 +5,6 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
-from web3 import AsyncWeb3
 from examples.utils import WALLET_ADDRESS, MARKET_ADDRESS
 from gte_py.api.chain.clob import ICLOB
 from gte_py.api.chain.event_source import EventStream
@@ -164,7 +163,7 @@ async def main():
 
     # Initialize CLOB contract wrapper
     print(f"Initializing CLOB contract at {MARKET_ADDRESS}...")
-    clob = client.clob.get_clob(AsyncWeb3.to_checksum_address(MARKET_ADDRESS))
+    clob = client.clob.get_clob(MARKET_ADDRESS)
     
     # Example 1: Watch for all market activity for 30 seconds
     await watch_all_market_activity(clob, duration_seconds=30)

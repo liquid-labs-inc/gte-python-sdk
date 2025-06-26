@@ -6,6 +6,7 @@ from eth_utils.address import to_checksum_address
 from hexbytes import HexBytes
 
 from gte_py.api.rest import RestApi, logger
+from gte_py.api.rest.models import trade_to_model
 from gte_py.api.ws import WebSocketApi, TradeData
 from gte_py.configs import NetworkConfig
 from gte_py.models import Market, Trade, OrderSide
@@ -35,7 +36,7 @@ class TradesClient:
         :return: The response from the API.
         """
         trades = await self._rest.get_trades(market, limit, offset)
-        return [Trade.from_api(trade) for trade in trades]
+        return [trade_to_model(trade) for trade in trades]
 
     # Trade methods
     async def subscribe_trades(
