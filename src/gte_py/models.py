@@ -8,7 +8,6 @@ from typing import Any, List, Optional, Tuple
 
 from eth_typing import ChecksumAddress
 from eth_utils.address import to_checksum_address
-from gte_py.api.rest.models import MarketDetail, TokenDetail
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
 
@@ -103,19 +102,6 @@ class Token:
         rounded = round_decimals_int(scaled, sig=8)
         return rounded
 
-    @classmethod
-    def from_api(cls, data: TokenDetail) -> "Token":
-        """Create an Asset object from API response data."""
-        address = to_checksum_address(data["address"])
-
-        return cls(
-            address=address,
-            decimals=data["decimals"],
-            name=data["name"],
-            symbol=data["symbol"],
-            total_supply=data["totalSupply"],
-        )
-
 
 @dataclass
 class Market:
@@ -127,20 +113,6 @@ class Market:
     quote: Token
     price: float | None = None
     volume_24hr_usd: float | None = None
-
-    @classmethod
-    def from_api(cls, data: MarketDetail) -> "Market":
-        """Create a Market object from API response data."""
-        contract_address = data["address"]
-
-        return cls(
-            address=to_checksum_address(contract_address),
-            market_type=MarketType(data["marketType"]),
-            base=Token.from_api(data["baseToken"]),
-            quote=Token.from_api(data["quoteToken"]),
-            price=data.get("price"),
-            volume_24hr_usd=data.get("volume24HrUsd"),
-        )
 
     @property
     def pair(self) -> str:
@@ -167,30 +139,15 @@ class Candle:
         """Get the datetime of the candle."""
         return datetime.fromtimestamp(self.timestamp / 1000)
 
-    @classmethod
-    def from_api(cls, data: dict[str, Any]) -> "Candle":
-        """Create a Candle object from API response data."""
-        return cls(
-            timestamp=data.get("timestamp") or data.get("t", 0),
-            open=float(data.get("open") or data.get("o", 0)),
-            high=float(data.get("high") or data.get("h", 0)),
-            low=float(data.get("low") or data.get("l", 0)),
-            close=float(data.get("close") or data.get("c", 0)),
-            volume=float(data.get("volume") or data.get("v", 0)),
-            market_address=data.get("m"),
-            interval=data.get("i"),
-            num_trades=data.get("n"),
-        )
-
 
 @dataclass
 class Trade:
     """Trade model."""
 
     market_address: ChecksumAddress
-    timestamp: int  # e.g. 1748406437000
-    price: float
-    size: float
+    timestamp: int
+    price: int
+    size: int
     side: OrderSide
     tx_hash: HexBytes | None = None  # Transaction hash is an Ethereum address
     maker: ChecksumAddress | None = None
@@ -202,30 +159,6 @@ class Trade:
         """Get the datetime of the trade."""
         return datetime.fromtimestamp(self.timestamp / 1000)
 
-    @classmethod
-    def from_api(cls, data: dict[str, Any]) -> "Trade":
-        """Create a Trade object from API response data."""
-        if "side" not in data or not isinstance(data["side"], str):
-            raise ValueError("Missing or invalid 'side' in trade data")
-        if "timestamp" not in data:
-            raise ValueError("Missing 'timestamp' in trade data")
-
-        side = OrderSide.from_str(data["side"])
-        tx_hash = HexBytes(data["txnHash"])
-        maker = data["maker"] and to_checksum_address(data["maker"]) or None
-        taker = data["taker"] and to_checksum_address(data["taker"]) or None
-
-        return cls(
-            market_address=to_checksum_address(data['marketAddress']),
-            timestamp=data["timestamp"],
-            price=float(data["price"]),
-            size=float(data["size"]),
-            side=side,
-            tx_hash=tx_hash,
-            maker=maker,
-            taker=taker,
-        )
-
 
 @dataclass
 class Position:
@@ -235,20 +168,6 @@ class Position:
     user: ChecksumAddress
     token0_amount: float
     token1_amount: float
-
-    @classmethod
-    def from_api(cls, data: dict[str, Any]) -> "Position":
-        """Create a Position object from API response data."""
-        user = data.get("user", "")
-        if user and isinstance(user, str):
-            user = AsyncWeb3.to_checksum_address(user)
-
-        return cls(
-            market=Market.from_api(data.get("market", {})),
-            user=user,
-            token0_amount=data.get("token0Amount", 0.0),
-            token1_amount=data.get("token1Amount", 0.0),
-        )
 
 
 @dataclass

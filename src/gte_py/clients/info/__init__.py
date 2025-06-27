@@ -9,6 +9,7 @@ from gte_py.api.chain.clob import ICLOB
 from gte_py.api.rest import RestApi
 from gte_py.api.chain.token_client import TokenClient
 from gte_py.api.chain.clob_client import CLOBClient
+from gte_py.api.rest.models import market_detail_to_model, token_detail_to_model
 from gte_py.models import Token, Market, MarketType
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,7 @@ class InfoClient:
         response = await self._rest.get_tokens(
             creator=creator, limit=limit, offset=offset
         )
-        return [Token.from_api(asset_data) for asset_data in response.get("assets", [])]
+        return [token_detail_to_model(asset_data) for asset_data in response.get("assets", [])]
 
     async def get_markets(
         self,
@@ -88,7 +89,7 @@ class InfoClient:
             token_address=token_address,
         )
 
-        markets = [Market.from_api(market_data) for market_data in response]
+        markets = [market_detail_to_model(market_data) for market_data in response]
 
         return markets
 
@@ -106,7 +107,7 @@ class InfoClient:
             return self._markets[address]
 
         resp = await self._rest.get_market(address)
-        market = Market.from_api(resp)
+        market = market_detail_to_model(resp)
         self._markets[address] = market
         return market
 
