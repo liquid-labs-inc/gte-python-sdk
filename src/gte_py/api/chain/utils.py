@@ -493,6 +493,7 @@ class Web3RequestManager:
 
             try:
                 async with timeout(15):
+                    nonce = await self.get_nonce()
                     if isinstance(tx, Awaitable):
                         tx = await tx
 
