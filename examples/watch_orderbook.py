@@ -1,9 +1,8 @@
 """Simple example demonstrating how to watch a market's orderbook using WebSocket ETH RPC."""
 import sys
 
-from examples.utils import MARKET_ADDRESS
-
 sys.path.append(".")
+from utils import MARKET_ADDRESS
 from gte_py.api.chain.clob import ICLOB
 from gte_py.api.chain.utils import make_web3
 from gte_py.clients import Client, MarketClient
@@ -12,7 +11,6 @@ from gte_py.configs import TESTNET_CONFIG
 import argparse
 import asyncio
 import logging
-import os
 
 from rich.console import Console
 from rich.table import Table
@@ -126,6 +124,7 @@ class OrderbookWatcher:
         self.running = True
         market = await client.info.get_market(self.market_address)
         self.orderbook_client = client.market
+
         # Initialize MarketClient if we have a client
         async def refresh_snapshot():
             while self.running:

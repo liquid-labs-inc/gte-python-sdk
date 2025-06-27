@@ -13,6 +13,7 @@ from gte_py.api.chain.clob_factory import CLOBFactory
 from gte_py.api.chain.structs import OperatorRole
 from gte_py.api.rest import RestApi
 from gte_py.api.chain.token_client import TokenClient
+from gte_py.api.rest.models import trade_to_model
 from gte_py.configs import NetworkConfig
 from gte_py.models import Market, Order, Trade, OrderSide, OrderType, OrderStatus, TimeInForce
 
@@ -279,7 +280,7 @@ class UserClient:
             List of Order objects representing trades
         """
         response = await self._rest.get_user_trades(self._account, market.address, limit=limit, offset=offset)
-        return [Trade.from_api(trade) for trade in response]
+        return [trade_to_model(trade) for trade in response]
 
     async def get_open_orders(
             self, market: Market | None = None,
