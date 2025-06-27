@@ -499,7 +499,6 @@ class Web3RequestManager:
 
                     tx_hash = await self._send_transaction(tx, nonce, tx_future)
                     logger.info(f"Transaction with nonce {nonce} sent: {tx_hash.to_0x_hex()}")
-                    tx_future.set_result(tx_hash)
                     tx_send.set_result(None)
             except Exception as e:
                 logger.error(f"Failed to send transaction: {e}")
