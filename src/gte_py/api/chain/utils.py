@@ -415,7 +415,7 @@ class Web3RequestManager:
                     self.logger.info(f"Removing free nonce {free_nonce} as it is less than or equal to latest nonce {latest_nonce}")
                     self.free_nonces.remove(free_nonce)
 
-            if latest_tx_cnt < pending_tx_cnt and (nonce in self.free_nonces or latest_tx_cnt == self._prev_latest_tx_cnt):
+            if nonce in self.free_nonces or latest_tx_cnt == self._prev_latest_tx_cnt:
                 # nonce to be recycled
                 # or
                 # transactions stuck for 5 seconds: nonce gap, too low fee price, chain stuck
@@ -425,10 +425,6 @@ class Web3RequestManager:
                 except ValueError:
                     pass
                 to_cancel = nonce
-            elif latest_tx_cnt == self._prev_latest_tx_cnt and len(self.free_nonces) > 0 and pending_nonce < self.free_nonces[0]:
-                self.logger.warning(f'Clearing them free nonces {self.free_nonces} as they are leading pending tx nonce {pending_tx_cnt}')
-                self.free_nonces.clear()
-
 
             self._prev_latest_tx_cnt = latest_tx_cnt
 
@@ -551,7 +547,7 @@ class Web3RequestManager:
             await self.web3.eth.send_raw_transaction(signed_tx.raw_transaction)
             return signed_tx.hash
         except Exception as e:
-            self.logger.error(f"Error sending transaction: {e}")
+            self.logger.error(f"Error sending transaction: {e} {tx}")
             error = str(e)
             nonce_already_known = (
                     "replacement transaction underpriced" in error
