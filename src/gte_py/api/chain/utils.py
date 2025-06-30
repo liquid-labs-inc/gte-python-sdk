@@ -409,6 +409,12 @@ class Web3RequestManager:
             self.next_nonce = Nonce(max(latest_tx_cnt, self.next_nonce))
             nonce = Nonce(latest_tx_cnt)
             to_cancel = None
+
+            for free_nonce in self.free_nonces:
+                if free_nonce <= latest_nonce:
+                    self.logger.info(f"Removing free nonce {free_nonce} as it is less than or equal to latest nonce {latest_nonce}")
+                    self.free_nonces.remove(free_nonce)
+
             if latest_tx_cnt < pending_tx_cnt and (nonce in self.free_nonces or latest_tx_cnt == self._prev_latest_tx_cnt):
                 # nonce to be recycled
                 # or
@@ -419,6 +425,10 @@ class Web3RequestManager:
                 except ValueError:
                     pass
                 to_cancel = nonce
+            elif latest_tx_cnt == self._prev_latest_tx_cnt and len(self.free_nonces) > 0 and pending_nonce < self.free_nonces[0]:
+                self.logger.warning(f'Clearing them free nonces {self.free_nonces} as they are leading pending tx nonce {pending_tx_cnt}')
+                self.free_nonces.clear()
+
 
             self._prev_latest_tx_cnt = latest_tx_cnt
 
