@@ -5,10 +5,10 @@ import logging
 from eth_typing import ChecksumAddress
 from eth_account.types import PrivateKeyType
 
-from gte_py.api.chain.utils import make_web3, Web3RequestManager
-from gte_py.api.rest import RestApi
-from gte_py.api.ws import WebSocketApi
-from gte_py.configs import NetworkConfig
+from ..api.chain.utils import make_web3, Web3RequestManager
+from ..api.rest import RestApi
+from ..api.ws import WebSocketApi
+from ..configs import NetworkConfig
 
 from .execution import ExecutionClient
 from .info import InfoClient
@@ -32,31 +32,36 @@ class GTEClient:
         """Initializes the GTE client and subcomponents.
 
         Args:
-            web3 (AsyncWeb3): Web3 instance for blockchain interaction.
-            config (NetworkConfig): Configuration for connecting to the network.
-            wallet_address (ChecksumAddress | None): Optional user wallet address.
+            config: Network configuration for connecting to the network.
+            wallet_address: Optional user wallet address.
+            wallet_private_key: Optional wallet private key for signing transactions.
         """
         self.config = config
         self._wallet_address = wallet_address
         
+        # Initialize Web3 and account
         self._web3, self._account = make_web3(
             config.rpc_http,
             wallet_address=wallet_address,
             wallet_private_key=wallet_private_key,
         )
 
+        # Initialize API clients
         self.rest = RestApi(base_url=config.api_url)
         self.websocket = WebSocketApi(ws_url=config.ws_url)
+        
+        # Initialize core clients
         self.info = InfoClient(self.rest, self.websocket)
 
         self.execution = None
         
         if self._wallet_address:
-            # self.execution = ExecutionClient(
-            #     web3=self._web3,
-            #     main_account=self._wallet_address,
-            # )
-            pass
+            self.execution = ExecutionClient(
+                web3=self._web3,
+                main_account=self._wallet_address,
+                gte_router_address=config.router_address,
+                weth_address=config.weth_address,
+            )
         
         self.connected = False
     
@@ -69,13 +74,17 @@ class GTEClient:
         
         await self.rest.connect()
         await self.websocket.connect()
+        
+        if self.execution:
+            await self.execution.init()
+        
         self.connected = True
     
     async def disconnect(self):
         if not self.connected:
             return
         
-        await self.info.clear_subscriptions()
+        await self.info.unsubscribe_all()
         await self.rest.disconnect()
         await self.websocket.disconnect()
         
