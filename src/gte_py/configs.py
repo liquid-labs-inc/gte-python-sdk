@@ -47,7 +47,7 @@ class NetworkConfig:
     router_address: ChecksumAddress
     launchpad_address: ChecksumAddress
     clob_manager_address: ChecksumAddress
-    weth_address: ChecksumAddress | None = None
+    weth_address: ChecksumAddress
 
 
 TESTNET_CONFIG = NetworkConfig(
