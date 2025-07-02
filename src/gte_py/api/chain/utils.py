@@ -489,7 +489,6 @@ class Web3RequestManager:
 
                     tx_hash = await self._send_transaction(tx, nonce, tx_future)
                     logger.info(f"Transaction with nonce {nonce} sent: {tx_hash.to_0x_hex()}")
-                    tx_future.set_result(tx_hash)
                     tx_send.set_result(None)
             except Exception as e:
                 logger.error(f"Failed to send transaction: {e}")
@@ -527,6 +526,8 @@ class Web3RequestManager:
                 effective_gas = int(gas * 1.5)
                 tx["gas"] = effective_gas
             signed_tx: SignedTransaction = self.web3.eth.account.sign_transaction(tx, self.account.key)
+            if tx_hash_future:
+                tx_hash_future.set_result(signed_tx.hash)
             await self.web3.eth.send_raw_transaction(signed_tx.raw_transaction)
             return signed_tx.hash
         except Exception as e:
