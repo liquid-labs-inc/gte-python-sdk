@@ -1,300 +1,283 @@
-"""WebSocket client for GTE."""
-
 import asyncio
 import json
 import logging
-from collections.abc import Callable
-from datetime import datetime
-from typing import Any, Dict, List, Union, TypedDict, Tuple, cast
+import random
+from collections.abc import Callable, Awaitable
+from typing import Any
+from enum import Enum
 
 import aiohttp
-from eth_typing import ChecksumAddress
 from eth_utils.address import to_checksum_address
 
 logger = logging.getLogger(__name__)
 
 
-class OrderBookLevel(TypedDict):
-    """Order book level data structure."""
-    px: str  # Price
-    sz: str  # Size
-    n: int  # Number of orders at this price level
-
-
-class OrderBookData(TypedDict):
-    """Order book data structure."""
-    a: List[OrderBookLevel]  # Asks sorted from lowest to highest price
-    b: List[OrderBookLevel]  # Bids sorted from highest to lowest price
-    t: int  # Timestamp in milliseconds
-    m: str  # Market address
-
-
-class TradeData(TypedDict):
-    """Trade data structure."""
-    sd: str  # Side ('buy' or 'sell')
-    m: str  # Market address
-    px: str  # Price
-    sz: str  # Size
-    h: str  # Transaction hash
-    id: int  # Trade ID
-    t: int  # Timestamp in milliseconds
-
-
-class CandleData(TypedDict):
-    """Candle data structure."""
-    m: str  # Market address
-    t: int  # Timestamp in milliseconds
-    i: str  # Interval
-    o: str  # Open price
-    h: str  # High price
-    l: str  # Low price
-    c: str  # Close price
-    v: str  # Volume
-    n: int  # Number of trades
-
-
-class WebSocketMessage(TypedDict):
-    """WebSocket message structure."""
-    s: str  # Stream type
-    d: Union[OrderBookData, TradeData, CandleData]  # Data
-
-
-class ParsedOrderBookData(TypedDict):
-    """Parsed order book data."""
-    market: str
-    timestamp: datetime
-    asks: List[Dict[str, float]]
-    bids: List[Dict[str, float]]
-
-
-class ParsedTradeData(TypedDict):
-    """Parsed trade data."""
-    market: str
-    side: str
-    price: float
-    size: float
-    timestamp: datetime
-    trade_id: int
-    tx_hash: str
-
-
-class ParsedCandleData(TypedDict):
-    """Parsed candle data."""
-    market: str
-    interval: str
-    timestamp: datetime
-    open: float
-    high: float
-    low: float
-    close: float
-    volume: float
-    trade_count: int
+class ConnectionState(Enum):
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    RECONNECTING = "reconnecting"
 
 
 class WebSocketApi:
-    """WebSocket client for GTE."""
-
-    def __init__(self, ws_url: str = "wss://ws.gte.io/v1"):
-        """Initialize the client.
-
-        Args:
-            ws_url: WebSocket URL
-        """
+    def __init__(
+        self,
+        ws_url: str = "wss://api-testnet.gte.xyz/ws",
+        heartbeat_interval: float = 30.0,
+        reconnect_attempts: int = 5,
+        reconnect_delay: float = 1.0,
+        max_reconnect_delay: float = 60.0,
+        enable_logging: bool = True
+    ):
         self.ws_url = ws_url
-        self.ws: aiohttp.client.ClientWebSocketResponse | None = None
-        self.callbacks: Dict[Tuple[str, ChecksumAddress], Callable] = {}
-        self.running = False
-        self.task = None
-        self.request_id = 0
+        self.heartbeat_interval = heartbeat_interval
+        self.reconnect_attempts = reconnect_attempts
+        self.reconnect_delay = reconnect_delay
+        self.max_reconnect_delay = max_reconnect_delay
+        self.enable_logging = enable_logging
 
-    def _next_request_id(self) -> int:
-        """Generate a new request ID."""
-        self.request_id += 1
-        return self.request_id
+        self.state = ConnectionState.DISCONNECTED
+        self.ws: aiohttp.ClientWebSocketResponse | None = None
+        self.session: aiohttp.ClientSession | None = None
+
+        self.callbacks: dict[tuple[str, str], Callable[[dict[str, Any]], Any] | Callable[[dict[str, Any]], Awaitable[Any]]] = {}
+
+        self.listen_task: asyncio.Task[Any] | None = None
+        self.reconnect_task: asyncio.Task[Any] | None = None
+
+        self.request_id = 0
+        self.reconnect_count = 0
+        self._shutting_down = False
 
     async def connect(self):
-        """Connect to the WebSocket."""
-        session = aiohttp.ClientSession()
-        self.ws = await session.ws_connect(self.ws_url)
-        self.running = True
-        self.task = asyncio.create_task(self._listen())
-        logger.info("Connected to GTE WebSocket")
+        if self.state in (ConnectionState.CONNECTED, ConnectionState.CONNECTING):
+            return
+        await self._connect_internal()
+
+    async def _connect_internal(self):
+        try:
+            if self.ws:
+                await self.ws.close()
+                self.ws = None
+            if self.session and not self.session.closed:
+                await self.session.close()
+
+            self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
+            self.ws = await self.session.ws_connect(self.ws_url, heartbeat=self.heartbeat_interval)
+
+            self.state = ConnectionState.CONNECTED
+            self.reconnect_count = 0
+
+            self.listen_task = asyncio.create_task(self._listen())
+            if self.enable_logging:
+                logger.info(f"Connected to GTE WebSocket at {self.ws_url}")
+        except Exception as e:
+            self.state = ConnectionState.DISCONNECTED
+            logger.error(f"Failed to connect to WebSocket: {e}")
+            raise
+
 
     async def disconnect(self):
-        """Close the WebSocket connection."""
-        self.running = False
-        if self.task:
-            self.task.cancel()
-            try:
-                await self.task
-            except asyncio.CancelledError:
-                pass
+        self._shutting_down = True
+        self.state = ConnectionState.DISCONNECTED
+
+        for task in [self.listen_task, self.reconnect_task]:
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+        self.listen_task = None
+        self.reconnect_task = None
 
         if self.ws:
-            await self.ws.close()
+            try:
+                await self.ws.close()
+            except Exception as e:
+                logger.warning(f"Error closing WebSocket: {e}")
             self.ws = None
-        logger.info("Disconnected from GTE WebSocket")
-    
+
+        if self.session and not self.session.closed:
+            try:
+                await self.session.close()
+            except Exception as e:
+                logger.warning(f"Error closing session: {e}")
+            self.session = None
+
+        if self.enable_logging:
+            logger.info("Disconnected from GTE WebSocket")
+
     async def __aenter__(self):
-        """Enter the async context."""
         await self.connect()
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Exit the async context."""
         await self.disconnect()
 
     async def _listen(self):
-        """Listen for messages from the WebSocket."""
-        if self.ws is None:
+        if not self.ws:
             raise RuntimeError("WebSocket connection is not established")
-    
+
         try:
             async for msg in self.ws:
+                if self.state != ConnectionState.CONNECTED or self._shutting_down:
+                    break
+
                 if msg.type == aiohttp.WSMsgType.TEXT:
-                    data = json.loads(msg.data)
-                    await self._handle_message(data)
-                elif msg.type == aiohttp.WSMsgType.CLOSED:
-                    logger.info("WebSocket connection closed")
+                    try:
+                        data = json.loads(msg.data)
+                        await self._handle_message(data)
+                    except json.JSONDecodeError:
+                        logger.error(f"Invalid JSON message: {msg.data[:200]}...")
+                elif msg.type == aiohttp.WSMsgType.BINARY:
+                    logger.warning("Received binary message (not supported)")
+                elif msg.type == aiohttp.WSMsgType.PONG:
+                    if self.enable_logging:
+                        logger.debug("Received pong")
+                elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.ERROR):
                     break
-                elif msg.type == aiohttp.WSMsgType.ERROR:
-                    logger.error(f"WebSocket error: {msg.data}")
-                    break
+        except asyncio.CancelledError:
+            logger.debug("Listen task cancelled")
         except Exception as e:
-            logger.error(f"WebSocket error: {e}")
+            logger.error(f"WebSocket listen error: {e}")
         finally:
-            self.running = False
+            if not self._shutting_down:
+                await self._handle_disconnection()
 
-    async def _handle_message(self, data: dict):
-        """Handle a message from the WebSocket.
+    async def _handle_disconnection(self):
+        if self.reconnect_task and not self.reconnect_task.done():
+            return
 
-        Args:
-            data: Message data
-        """
-        if "s" in data:  # Stream data
+        self.state = ConnectionState.DISCONNECTED
+        if self.reconnect_count < self.reconnect_attempts:
+            self.state = ConnectionState.RECONNECTING
+            self.reconnect_task = asyncio.create_task(self._reconnect())
+        else:
+            self.listen_task = None
+            logger.error(f"Max reconnection attempts ({self.reconnect_attempts}) reached")
+
+    async def _reconnect(self):
+        self.state = ConnectionState.RECONNECTING
+
+        while self.reconnect_count < self.reconnect_attempts:
+            self.reconnect_count += 1
+            base_delay = self.reconnect_delay * (2 ** (self.reconnect_count - 1))
+            delay = min(base_delay * random.uniform(0.8, 1.2), self.max_reconnect_delay)
+
+            logger.info(f"Reconnecting in {delay:.1f}s (attempt {self.reconnect_count}/{self.reconnect_attempts})")
+            await asyncio.sleep(delay)
+
+            try:
+                await self._connect_internal()
+                logger.info("Reconnection successful")
+                return
+            except Exception as e:
+                logger.error(f"Reconnection attempt {self.reconnect_count} failed: {e}")
+
+        self.state = ConnectionState.DISCONNECTED
+        self.listen_task = None
+        logger.error("Failed to reconnect after all attempts")
+
+    async def _handle_message(self, data: dict[str, Any]):
+        if "s" in data:
             stream_type = data["s"]
+            payload = data.get("d", {})
 
-            # Parse data based on stream type
-            inner = data['d']
-            market = to_checksum_address(inner['m'])
+            try:
+                market = to_checksum_address(payload.get("m", ""))
+            except (KeyError, ValueError) as e:
+                logger.error(f"Invalid market address in payload: {e}")
+                return
 
             callback = self.callbacks.get((stream_type, market))
-            if callback is None:
-                logger.warning(f"No callback registered for stream {stream_type} and market {market}")
+            if not callback:
+                if self.enable_logging:
+                    logger.warning(f"No callback for stream {stream_type} and market {market}")
                 return
+
             try:
-                # Pass both raw and parsed data to callback
-                await callback(inner)
-            except Exception as e:
-                logger.error(f"Error in callback", exc_info=e)
-        elif "id" in data:  # Response to a subscription request
-            logger.debug(f"Received response: {data}")
-            if "error" in data:
-                logger.error(f"WebSocket subscription error: {data['error']}")
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(payload)
+                else:
+                    callback(payload)
+            except Exception:
+                logger.error(f"Error in callback for {stream_type}:{market}", exc_info=True)
 
-    async def subscribe(self, method: str, params: dict, market: ChecksumAddress, callback: Callable[[Any], Any]):
-        """Subscribe to a topic.
+    async def subscribe(self, method: str, params: dict[str, Any], callback: Callable[[dict[str, Any]], Any] | Callable[[dict[str, Any]], Awaitable[Any]]):
+        if "." not in method:
+            raise ValueError(f"Invalid method format: {method}. Expected format: 'stream.subscribe'")
 
-        Args:
-            method: Topic to subscribe to (e.g., "trades.subscribe")
-            params: Parameters for the subscription
-            market: Market address to subscribe to
-            callback: Function to call when a message is received with (raw_data)
-        """
-        if not self.running or not self.ws:
-            await self.connect()
-        
-        self.ws = cast(aiohttp.client.ClientWebSocketResponse, self.ws)
-
-        # Extract the stream type from the method
         stream_type = method.split(".")[0]
+
+        try:
+            market = to_checksum_address(params["market"])
+        except KeyError:
+            raise ValueError("params must include 'market' key")
+        except ValueError as e:
+            raise ValueError(f"Invalid market address: {e}")
 
         self.callbacks[(stream_type, market)] = callback
 
-        # Send subscription request
+        if not self.ws or self.ws.closed:
+            await self.connect()
+
         request_id = self._next_request_id()
         request = {"id": request_id, "method": method, "params": params}
-        await self.ws.send_json(request)
-        logger.debug(f"Sent subscription request: {request}")
 
-    async def unsubscribe(self, method: str, params: dict):
-        """Unsubscribe from a topic.
+        try:
+            if self.ws is None:
+                raise RuntimeError("WebSocket connection is not established")
+            await self.ws.send_json(request)
+            if self.enable_logging:
+                logger.debug(f"Subscribed to {method} for market {market}")
+        except Exception:
+            self.callbacks.pop((stream_type, market), None)
+            raise
 
-        Args:
-            method: Topic to unsubscribe from (e.g., "trades.unsubscribe")
-            params: Parameters for the unsubscription
-        """
-        if not self.running or not self.ws:
+    async def unsubscribe(self, method: str, params: dict[str, Any]):
+        if self.state != ConnectionState.CONNECTED:
             return
 
-        # Send unsubscription request
+        if "." not in method:
+            raise ValueError(f"Invalid method format: {method}. Expected format: 'stream.unsubscribe'")
+
+        try:
+            market = to_checksum_address(params["market"])
+        except KeyError:
+            raise ValueError("params must include 'market' key")
+        except ValueError as e:
+            raise ValueError(f"Invalid market address: {e}")
+
         request = {"method": method, "params": params}
-        await self.ws.send_json(request)
-
-        market = to_checksum_address(params["market"])
-        
-        # Clean up callbacks for this stream type
         stream_type = method.split(".")[0]
-        if (stream_type, market) in self.callbacks:
-            self.callbacks.pop((stream_type, market))
 
-        logger.debug(f"Sent unsubscription request: {request}")
+        try:
+            if self.ws is None:
+                logger.warning("WebSocket connection is not established")
+                return
+            await self.ws.send_json(request)
+        except Exception as e:
+            logger.warning(f"Failed to send unsubscribe request: {e}")
 
-    # WebSocket API methods
-    async def subscribe_trades(self, market: ChecksumAddress, callback: Callable[[TradeData], Any]):
-        """Subscribe to trades for a market.
+        self.callbacks.pop((stream_type, market), None)
 
-        Args:
-            market: Market address
-            callback: Function to call when a trade is received with (raw_data)
-        """
-        await self.subscribe("trades.subscribe", {"market": market}, market, callback)
+        if self.enable_logging:
+            logger.debug(f"Unsubscribed from {method} for market {market}")
 
-    async def unsubscribe_trades(self, market: ChecksumAddress):
-        """Unsubscribe from trades for a market.
+    def _next_request_id(self) -> int:
+        self.request_id += 1
+        return self.request_id
 
-        Args:
-            market: Market address
-        """
-        await self.unsubscribe("trades.unsubscribe", {"market": market}, market)
+    def get_subscriptions(self) -> list[dict[str, Any]]:
+        return [
+            {"stream_type": stream_type, "market": market}
+            for (stream_type, market) in self.callbacks.keys()
+        ]
 
-    async def subscribe_candles(self, market: ChecksumAddress, interval: str, callback: Callable[[CandleData], Any]):
-        """Subscribe to candles for a market.
+    def is_connected(self) -> bool:
+        return self.state == ConnectionState.CONNECTED and self.ws is not None and not self.ws.closed
 
-        Args:
-            market: Market address
-            interval: Candle interval (1s, 30s, 1m, 3m, 5m, 15m, 30m, 1h, 4h, 6h, 8h, 12h, 1d, 1w)
-            callback: Function to call when a candle is received with (raw_data)
-        """
-        await self.subscribe(
-            "candles.subscribe", {"market": market, "interval": interval}, market, callback
-        )
-
-    async def unsubscribe_candles(self, market: ChecksumAddress, interval: str):
-        """Unsubscribe from candles for a market.
-
-        Args:
-            market: Market address
-            interval: Candle interval
-        """
-        await self.unsubscribe("candles.unsubscribe", {"market": market, "interval": interval}, market)
-
-    async def subscribe_orderbook(
-            self, market: ChecksumAddress, callback: Callable[[OrderBookData], Any], limit: int = 10):
-        """Subscribe to orderbook for a market.
-
-        Args:
-            market: Market address
-            limit: Number of levels to include (defaults to 10)
-            callback: Function to call when an orderbook update is received with (raw_data)
-        """
-        await self.subscribe('book.subscribe', {"market": market, "limit": limit}, market, callback)
-
-    async def unsubscribe_orderbook(self, market: ChecksumAddress, limit: int = 10):
-        """Unsubscribe from orderbook for a market.
-
-        Args:
-            market: Market address
-            limit: Number of levels that was used for subscription
-        """
-        await self.unsubscribe('book.unsubscribe', {"market": market, "limit": limit}, market)
+    def get_connection_state(self) -> ConnectionState:
+        return self.state
