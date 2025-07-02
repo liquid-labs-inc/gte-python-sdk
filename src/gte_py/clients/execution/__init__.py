@@ -70,6 +70,7 @@ class ExecutionClient:
             price: int,
             time_in_force: TimeInForce = TimeInForce.GTC,
             client_order_id: int = 0,
+            settlement: Settlement = Settlement.INSTANT,
             **kwargs,
     ) -> TypedContractFunction[Any]:
         """
@@ -82,6 +83,7 @@ class ExecutionClient:
             price: Order price
             time_in_force: Time in force (GTC, IOC, FOK)
             client_order_id: Optional client order ID for tracking
+            settlement: Settlement type (default is INSTANT)
             **kwargs: Additional transaction parameters
 
         Returns:
@@ -90,8 +92,7 @@ class ExecutionClient:
         # Get the CLOB contract
         clob = self._clob.get_clob(market.address)
 
-        # Convert model types to contract types
-        contract_side = OrderSide.BUY if side == OrderSide.BUY else OrderSide.SELL
+        contract_side = side
 
         # For IOC and FOK orders, we use the fill order API which has different behavior
         if time_in_force in [TimeInForce.IOC, TimeInForce.FOK]:
@@ -111,7 +112,7 @@ class ExecutionClient:
                 side=contract_side,
                 amount_is_base=True,  # Since amount is in base tokens
                 fill_order_type=fill_order_type,
-                settlement=Settlement.INSTANT,
+                settlement=settlement,
             )
 
             # Return the transaction
@@ -131,7 +132,7 @@ class ExecutionClient:
                 cancel_timestamp=0,  # No expiration
                 client_order_id=client_order_id,
                 limit_order_type=tif,
-                settlement=Settlement.INSTANT,
+                settlement=settlement,
             )
 
             # Return the transaction
@@ -145,6 +146,7 @@ class ExecutionClient:
             price: int,
             time_in_force: TimeInForce = TimeInForce.GTC,
             client_order_id: int = 0,
+            settlement: Settlement = Settlement.INSTANT,
             **kwargs: Unpack[TxParams],
     ) -> Awaitable[Order]:
         tx = self.place_limit_order_tx(
@@ -154,6 +156,7 @@ class ExecutionClient:
             price=price,
             time_in_force=time_in_force,
             client_order_id=client_order_id,
+            settlement=settlement,
             **kwargs,
         )
         tx.send_nowait()
