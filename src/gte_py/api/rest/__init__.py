@@ -73,11 +73,12 @@ class RestApi:
 
     async def _rate_limit(self):
         """Ensure minimum delay between requests."""
-        now = time.time()
+        now = time.monotonic()
         time_since_last = now - self._last_request_time
-        if time_since_last < self.rate_limit_delay:
-            await asyncio.sleep(self.rate_limit_delay - time_since_last)
-        self._last_request_time = time.time()
+        delay = self.rate_limit_delay - time_since_last
+        if delay > 0:
+            await asyncio.sleep(delay)
+        self._last_request_time = time.monotonic()
 
     async def _request(
             self,
@@ -169,8 +170,7 @@ class RestApi:
         # If we get here, all retries failed
         if last_exception:
             raise last_exception
-        else:
-            raise Exception("Request failed for unknown reason")
+        assert False, "Unreachable retry fall-through"
 
     async def get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any] | list[dict[str, Any]]:
         """Make a GET request.
