@@ -6,6 +6,9 @@ from eth_typing import ChecksumAddress
 
 from gte_py.api.rest import RestApi
 from gte_py.api.ws import WebSocketApi
+from gte_py.models import (
+    Token, Market, Candle, Trade, Position, OrderBookSnapshot
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,24 +20,6 @@ class InfoClient:
     This client provides methods to fetch token and market information,
     with intelligent caching to minimize redundant requests.
     """
-
-    # Interval mapping for candles WebSocket API
-    _INTERVAL_MAP = {
-        "1s": 1,
-        "30s": 30,
-        "1m": 60,
-        "3m": 180,
-        "5m": 300,
-        "15m": 900,
-        "30m": 1800,
-        "1h": 3600,
-        "4h": 14400,
-        "6h": 21600,
-        "8h": 28800,
-        "12h": 43200,
-        "1d": 86400,
-        "1w": 604800,
-    }
 
     def __init__(
         self,
@@ -51,24 +36,6 @@ class InfoClient:
         self._rest: RestApi = rest
         self._websocket: WebSocketApi = websocket
         self._subscriptions: dict[str, dict[str, Any]] = {}
-
-    def _get_interval_code(self, interval: str) -> int:
-        """
-        Convert string interval to numeric code for WebSocket API.
-        
-        Args:
-            interval: String interval (e.g., "1m", "5m", "1h")
-            
-        Returns:
-            Numeric interval code
-            
-        Raises:
-            ValueError: If interval is not supported
-        """
-        if interval not in self._INTERVAL_MAP:
-            supported = ", ".join(self._INTERVAL_MAP.keys())
-            raise ValueError(f"Unsupported interval: {interval}. Supported intervals: {supported}")
-        return self._INTERVAL_MAP[interval]
 
     def __getattr__(self, name: str) -> Any:
         """
@@ -111,7 +78,7 @@ class InfoClient:
         market_type: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[dict[str, Any]]:
+    ) -> list[Token]:
         """Get list of tokens supported on GTE.
 
         Args:
@@ -121,16 +88,17 @@ class InfoClient:
             offset: Min value 0
 
         Returns:
-            List of tokens
+            List of Token objects
         """
         params = {"limit": limit, "offset": offset}
         if creator:
             params["creator"] = creator
         if market_type:
             params["marketType"] = market_type
-        return await self._rest._request("GET", "/tokens", params=params)
+        response = await self._rest._request("GET", "/tokens", params=params)
+        return [Token.from_api(token_data) for token_data in response]
 
-    async def search_tokens(self, query: str, market_type: str | None = None) -> list[dict[str, Any]]:
+    async def search_tokens(self, query: str, market_type: str | None = None) -> list[Token]:
         """Search tokens based on name or symbol.
 
         Args:
@@ -138,23 +106,25 @@ class InfoClient:
             market_type: Filters assets by the given market type (amm, bonding-curve, clob-spot)
 
         Returns:
-            List of matching tokens
+            List of matching Token objects
         """
         params = {"q": query}
         if market_type:
             params["marketType"] = market_type
-        return await self._rest._request("GET", "/tokens/search", params=params)
+        response = await self._rest._request("GET", "/tokens/search", params=params)
+        return [Token.from_api(token_data) for token_data in response]
 
-    async def get_token(self, token_address: str | ChecksumAddress) -> dict[str, Any]:
+    async def get_token(self, token_address: str | ChecksumAddress) -> Token:
         """Get token metadata by address.
 
         Args:
             token_address: EVM address of the token
 
         Returns:
-            Token metadata information
+            Token object with metadata information
         """
-        return await self._rest._request("GET", f"/tokens/{token_address}")
+        response = await self._rest._request("GET", f"/tokens/{token_address}")
+        return Token.from_api(response)
 
     # Market methods
     async def get_markets(
@@ -164,7 +134,7 @@ class InfoClient:
         market_type: str | None = None,
         sort_by: str = "marketCap",
         token_address: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> list[Market]:
         """Get list of markets.
 
         Args:
@@ -176,52 +146,56 @@ class InfoClient:
             newly_graduated: Returns newly graduated markets
 
         Returns:
-            List of markets
+            List of Market objects
         """
         params = {"limit": limit, "offset": offset, "sortBy": sort_by}
         if market_type:
             params["marketType"] = market_type
         if token_address:
             params["tokenAddress"] = token_address
-        return await self._rest._request("GET", "/markets", params=params)
+        response = await self._rest._request("GET", "/markets", params=params)
+        return [Market.from_api(market_data) for market_data in response]
     
-    async def search_tokens(self, query: str, market_type: str | None = None) -> dict[str, Any]:
-        """Search tokens based on name or symbol.
+    async def search_markets(self, query: str, market_type: str | None = None) -> list[Market]:
+        """Search markets based on name or symbol.
 
         Args:
             query: Search query
             market_type: Filters assets by the given market type (amm, bonding-curve, clob-spot)
 
         Returns:
-            List of matching tokens
+            List of matching Market objects
         """
         params = {"q": query}
         if market_type:
             params["marketType"] = market_type
-        return await self._rest._request("GET", "/markets/search", params=params)
+        response = await self._rest._request("GET", "/markets/search", params=params)
+        return [Market.from_api(market_data) for market_data in response]
 
-    async def get_market(self, market_address: str | ChecksumAddress) -> dict[str, Any]:
+    async def get_market(self, market_address: str | ChecksumAddress) -> Market:
         """Get market by address.
 
         Args:
             market_address: EVM address of the market
 
         Returns:
-            MarketDetail: Typed market information
+            Market object with market information
         """
-        return await self._rest._request("GET", f"/markets/{market_address}")
+        response = await self._rest._request("GET", f"/markets/{market_address}")
+        return Market.from_api(response)
     
-    async def get_dash_markets(self, dash_type: str, limit: int = 100) -> list[dict[str, Any]]:
+    async def get_dash_markets(self, dash_type: str, limit: int = 100) -> list[Market]:
         """Get dash markets.
         
         Args:
             limit: Range 1-1000
             dash_type: Filters assets by the given dash type (new, about-to-graduate, graduated)
         Returns:
-            List of dash markets
+            List of Market objects
         """
         params = {"limit": limit, "dashType": dash_type}
-        return await self._rest._request("GET", "/markets/dash", params)
+        response = await self._rest._request("GET", "/markets/dash", params=params)
+        return [Market.from_api(market_data) for market_data in response]
 
     async def get_candles(
         self,
@@ -230,7 +204,7 @@ class InfoClient:
         start_time: int,
         end_time: int | None = None,
         limit: int = 500,
-    ) -> list[dict[str, Any]]:
+    ) -> list[Candle]:
         """Get candles for a market.
 
         Args:
@@ -241,16 +215,17 @@ class InfoClient:
             limit: Range 1-1000 (default 500)
 
         Returns:
-            List of candles
+            List of Candle objects
         """
         params = {"interval": interval, "startTime": start_time, "limit": limit}
         if end_time:
             params["endTime"] = end_time
-        return await self._rest._request("GET", f"/markets/{market_address}/candles", params=params)
+        response = await self._rest._request("GET", f"/markets/{market_address}/candles", params=params)
+        return [Candle.from_api(candle_data) for candle_data in response]
 
     async def get_trades(
         self, market_address: str | ChecksumAddress, limit: int = 100, offset: int = 0
-    ) -> list[dict[str, Any]]:
+    ) -> list[Trade]:
         """Get trades for a market.
 
         Args:
@@ -259,12 +234,13 @@ class InfoClient:
             offset: Min value 0
 
         Returns:
-            List of trades
+            List of Trade objects
         """
         params = {"limit": limit, "offset": offset}
-        return await self._rest._request("GET", f"/markets/{market_address}/trades", params=params)
+        response = await self._rest._request("GET", f"/markets/{market_address}/trades", params=params)
+        return [Trade.from_api(trade_data) for trade_data in response]
 
-    async def get_order_book(self, market_address: str | ChecksumAddress, limit: int = 20) -> dict[str, Any]:
+    async def get_order_book(self, market_address: str | ChecksumAddress, limit: int = 20) -> OrderBookSnapshot:
         """Get order book snapshot for a market.
 
         Args:
@@ -272,22 +248,24 @@ class InfoClient:
             limit: Number of price levels to include on each side, range 1-20 (default 20)
 
         Returns:
-            Order book data with bids and asks
+            OrderBookSnapshot object with bids and asks
         """
         params = {"limit": limit}
-        return await self._rest._request("GET", f"/markets/{market_address}/book", params=params)
+        response = await self._rest._request("GET", f"/markets/{market_address}/book", params=params)
+        return OrderBookSnapshot.from_api(response)
 
     # User methods
-    async def get_user_lp_positions(self, user_address: str | ChecksumAddress) -> list[dict[str, Any]]:
+    async def get_user_lp_positions(self, user_address: str | ChecksumAddress) -> list[Position]:
         """Get LP positions for a user.
 
         Args:
             user_address: EVM address of the user
 
         Returns:
-            List of LP positions
+            List of Position objects
         """
-        return await self._rest._request("GET", f"/users/{user_address}/lppositions")
+        response = await self._rest._request("GET", f"/users/{user_address}/lppositions")
+        return [Position.from_api(position_data) for position_data in response]
 
     async def get_user_portfolio(self, user_address: str | ChecksumAddress) -> dict[str, Any]:
         """Get user's portfolio.
@@ -306,7 +284,7 @@ class InfoClient:
         market_address: str | ChecksumAddress | None = None,
         limit: int = 100,
         offset: int = 0
-    ) -> list[dict[str, Any]]:
+    ) -> list[Trade]:
         """Get trades for a user.
 
         Args:
@@ -316,12 +294,13 @@ class InfoClient:
             offset: Min value 0
 
         Returns:
-            List of user trades
+            List of Trade objects
         """
         params = {"limit": limit, "offset": offset}
         if market_address:
             params["market_address"] = str(market_address)
-        return await self._rest._request("GET", f"/users/{user_address}/trades", params=params)
+        response = await self._rest._request("GET", f"/users/{user_address}/trades", params=params)
+        return [Trade.from_api(trade_data) for trade_data in response]
 
     async def get_user_open_orders(
         self, user_address: ChecksumAddress, market_address: ChecksumAddress,
@@ -336,10 +315,11 @@ class InfoClient:
             offset: Min value 0
 
         Returns:
-            List of user's open orders
+            List of Orders
         """
         params = {"limit": limit, "offset": offset, "market_address": str(market_address)}
-        return await self._rest._request("GET", f"/users/{user_address}/open_orders", params=params)
+        response = await self._rest._request("GET", f"/users/{user_address}/open_orders", params=params)
+        return response
 
     async def get_user_filled_orders(
         self, user_address: ChecksumAddress, market_address: ChecksumAddress,
@@ -354,10 +334,11 @@ class InfoClient:
             offset: Min value 0
 
         Returns:
-            List of user's filled orders
+            List of Orders
         """
         params = {"limit": limit, "offset": offset, "market_address": str(market_address)}
-        return await self._rest._request("GET", f"/users/{user_address}/filled_orders", params=params)
+        response = await self._rest._request("GET", f"/users/{user_address}/filled_orders", params=params)
+        return response
 
     async def get_user_order_history(
         self, user_address: ChecksumAddress, market_address: ChecksumAddress,
@@ -369,10 +350,11 @@ class InfoClient:
             market_address: EVM address of the market
 
         Returns:
-            List of user's order history
+            List of Orders
         """
         params = {"market_address": str(market_address)}
-        return await self._rest._request("GET", f"/users/{user_address}/order_history", params=params)
+        response = await self._rest._request("GET", f"/users/{user_address}/order_history", params=params)
+        return response
 
     # ================= WEBSOCKET API METHODS =================
 
@@ -410,17 +392,16 @@ class InfoClient:
             interval: Candle interval (1s, 30s, 1m, 3m, 5m, 15m, 30m, 1h, 4h, 6h, 8h, 12h, 1d, 1w)
             callback: Function to call when a candle is received
         """
-        interval_code = self._get_interval_code(interval)
         subscription_key = f"candles_{market}_{interval}"
         await self._websocket.subscribe(
-            "candles.subscribe", {"market": market, "interval": interval_code}, callback
+            "candles.subscribe", {"market": market, "interval": interval}, callback
         )
         self._subscriptions[subscription_key] = {
             "type": "candles",
             "market": market,
             "interval": interval,
-            "interval_code": interval_code,
-            "params": {"market": market, "interval": interval_code}
+            "interval": interval,
+            "params": {"market": market, "interval": interval}
         }
 
     async def unsubscribe_candles(self, market: ChecksumAddress, interval: str):
@@ -432,8 +413,7 @@ class InfoClient:
         """
         subscription_key = f"candles_{market}_{interval}"
         if subscription_key in self._subscriptions:
-            interval_code = self._get_interval_code(interval)
-            await self._websocket.unsubscribe("candles.unsubscribe", {"market": market, "interval": interval_code})
+            await self._websocket.unsubscribe("candles.unsubscribe", {"market": market, "interval": interval})
             del self._subscriptions[subscription_key]
 
     async def subscribe_orderbook(
@@ -512,7 +492,7 @@ class InfoClient:
             
         return subscription_key in self._subscriptions
 
-    async def clear_subscriptions(self) -> None:
+    async def unsubscribe_all(self) -> None:
         """
         Unsubscribe from all active subscriptions and clear the cache.
         """
@@ -524,7 +504,6 @@ class InfoClient:
                     await self.unsubscribe_candles(subscription_data["market"], subscription_data["interval"])
                 elif subscription_data["type"] == "orderbook":
                     await self.unsubscribe_orderbook(subscription_data["market"], subscription_data["limit"])
-                print(f"unsubscribed from {subscription_key}")
             except Exception as e:
                 logger.error(f"Error unsubscribing from {subscription_key}: {e}")
         
