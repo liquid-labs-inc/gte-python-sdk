@@ -41,8 +41,7 @@ async def main():
         open_orders = await client.info.get_user_open_orders(WALLET_ADDRESS, MARKET_ADDRESS)
         print_separator(f"Open orders: {open_orders}")
         
-        raw_market = await client.info.get_market(MARKET_ADDRESS)
-        market = Market.from_api(raw_market)
+        market = await client.info.get_market(MARKET_ADDRESS)
         
         # convert to order model
         for order in open_orders:

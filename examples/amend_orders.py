@@ -21,8 +21,7 @@ async def main() -> None:
 
     async with GTEClient(config=config, wallet_address=WALLET_ADDRESS, wallet_private_key=WALLET_PRIVATE_KEY) as client:
 
-        raw_market = await client.info.get_market(MARKET_ADDRESS)
-        market = Market.from_api(raw_market)       
+        market = await client.info.get_market(MARKET_ADDRESS)
         
         # place a low limit order
         order = await client.execution.place_limit_order(

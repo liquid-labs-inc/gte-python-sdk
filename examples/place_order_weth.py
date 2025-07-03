@@ -43,7 +43,7 @@ async def main():
         
     async with GTEClient(config=config, wallet_address=WALLET_ADDRESS, wallet_private_key=WALLET_PRIVATE_KEY) as client:
 
-        market = Market.from_api(await client.info.get_market(MARKET_ADDRESS)) # type: ignore
+        market = await client.info.get_market(MARKET_ADDRESS)
         print(market)
         
         # if using an eth clob market you have to wrap before selling eth and unwrap after buying eth

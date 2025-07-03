@@ -37,7 +37,7 @@ async def main():
         # 0.01 BTC
         size = 10 ** 16
         
-        market = Market.from_api(await client.info.get_market(MARKET_ADDRESS))
+        market = await client.info.get_market(MARKET_ADDRESS)
         
         # Place a market order
         order = await client.execution.place_market_order(market, side, size, slippage=0.05, gas=50 * 10 ** 6)
