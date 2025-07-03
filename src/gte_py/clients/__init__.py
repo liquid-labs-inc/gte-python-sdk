@@ -52,11 +52,11 @@ class GTEClient:
         
         # Initialize core clients
         self.info = InfoClient(self.rest, self.websocket)
-
-        self.execution = None
+        
+        self._execution: ExecutionClient | None = None
         
         if self._wallet_address:
-            self.execution = ExecutionClient(
+            self._execution = ExecutionClient(
                 web3=self._web3,
                 main_account=self._wallet_address,
                 gte_router_address=config.router_address,
@@ -75,8 +75,8 @@ class GTEClient:
         await self.rest.connect()
         await self.websocket.connect()
         
-        if self.execution:
-            await self.execution.init()
+        if self._execution:
+            await self._execution.init()
         
         self.connected = True
     
@@ -96,4 +96,9 @@ class GTEClient:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.disconnect()
+
+    @property
+    def execution(self) -> ExecutionClient:
+        assert self._execution is not None, "Execution client not initialized"
+        return self._execution
 
