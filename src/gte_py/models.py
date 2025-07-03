@@ -1,14 +1,13 @@
 """Data models for GTE API."""
 
-from dataclasses import dataclass
 from datetime import datetime
+from pydantic import BaseModel
 from enum import Enum
 from math import floor, log10
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 from eth_typing import ChecksumAddress
 from eth_utils.address import to_checksum_address
-from gte_py.api.rest.models import MarketDetail, TokenDetail
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
 
@@ -17,7 +16,7 @@ from gte_py.api.chain.structs import OrderSide as ContractOrderSide, CLOBOrder
 from gte_py.api.chain.utils import get_current_timestamp
 
 
-class MarketType(Enum):
+class MarketType(str, Enum):
     """Market types supported by GTE."""
 
     AMM = "amm"
@@ -44,14 +43,14 @@ class MarketSide(str, Enum):
             raise ValueError(f"Invalid market side: {s}. Must be 'bid' or 'ask'.")
 
 
-class OrderType(Enum):
+class OrderType(str, Enum):
     """Order type - limit or market."""
 
     LIMIT = "limit"
     MARKET = "market"
 
 
-class TimeInForce(Enum):
+class TimeInForce(str, Enum):
     """Time in force for orders."""
 
     GTC = "GTC"  # Good till cancelled
@@ -61,7 +60,7 @@ class TimeInForce(Enum):
     FOK = "FOK"  # Fill or kill
 
 
-class OrderStatus(Enum):
+class OrderStatus(str, Enum):
     """Order status."""
 
     OPEN = "open"
@@ -81,8 +80,7 @@ def round_decimals_int(n: float, sig: int) -> int:
         return round(n_int, d)
 
 
-@dataclass
-class Token:
+class Token(BaseModel):
     """Asset model."""
 
     address: ChecksumAddress
@@ -90,6 +88,9 @@ class Token:
     name: str
     symbol: str
     total_supply: float | None = None
+    
+    def __getitem__(self, key: str):
+        return getattr(self, key)
 
     def convert_amount_to_quantity(self, amount: int) -> float:
         """Convert amount in base units to float."""
@@ -104,8 +105,8 @@ class Token:
         return rounded
 
     @classmethod
-    def from_api(cls, data: TokenDetail) -> "Token":
-        """Create an Asset object from API response data."""
+    def from_api(cls, data: dict[str, Any]) -> "Token":
+        """Create a Token object from API response data."""
         address = to_checksum_address(data["address"])
 
         return cls(
@@ -113,12 +114,11 @@ class Token:
             decimals=data["decimals"],
             name=data["name"],
             symbol=data["symbol"],
-            total_supply=data["totalSupply"],
+            total_supply=data.get("totalSupply"),
         )
 
 
-@dataclass
-class Market:
+class Market(BaseModel):
     """Market model."""
 
     address: ChecksumAddress
@@ -127,9 +127,17 @@ class Market:
     quote: Token
     price: float | None = None
     volume_24hr_usd: float | None = None
+    
+    def __getitem__(self, key: str):
+        return getattr(self, key)
+
+    @property
+    def pair(self) -> str:
+        """Get the trading pair symbol."""
+        return f"{self.base.symbol}/{self.quote.symbol}"
 
     @classmethod
-    def from_api(cls, data: MarketDetail) -> "Market":
+    def from_api(cls, data: dict[str, Any]) -> "Market":
         """Create a Market object from API response data."""
         contract_address = data["address"]
 
@@ -142,14 +150,8 @@ class Market:
             volume_24hr_usd=data.get("volume24HrUsd"),
         )
 
-    @property
-    def pair(self) -> str:
-        """Get the trading pair symbol."""
-        return f"{self.base.symbol}/{self.quote.symbol}"
 
-
-@dataclass
-class Candle:
+class Candle(BaseModel):
     """Candlestick model."""
 
     timestamp: int
@@ -161,6 +163,9 @@ class Candle:
     market_address: str | None = None
     interval: str | None = None
     num_trades: int | None = None
+
+    def __getitem__(self, key: str):
+        return getattr(self, key)
 
     @property
     def datetime(self) -> datetime:
@@ -183,8 +188,7 @@ class Candle:
         )
 
 
-@dataclass
-class Trade:
+class Trade(BaseModel):
     """Trade model."""
 
     market_address: ChecksumAddress
@@ -196,6 +200,9 @@ class Trade:
     maker: ChecksumAddress | None = None
     taker: ChecksumAddress | None = None
     trade_id: int | None = None
+
+    def __getitem__(self, key: str):
+        return getattr(self, key)
 
     @property
     def datetime(self) -> datetime:
@@ -211,9 +218,9 @@ class Trade:
             raise ValueError("Missing 'timestamp' in trade data")
 
         side = OrderSide.from_str(data["side"])
-        tx_hash = HexBytes(data["txnHash"])
-        maker = data["maker"] and to_checksum_address(data["maker"]) or None
-        taker = data["taker"] and to_checksum_address(data["taker"]) or None
+        tx_hash = HexBytes(data["txnHash"]) if data.get("txnHash") else None
+        maker = to_checksum_address(data["maker"]) if data.get("maker") else None
+        taker = to_checksum_address(data["taker"]) if data.get("taker") else None
 
         return cls(
             market_address=to_checksum_address(data['marketAddress']),
@@ -224,17 +231,20 @@ class Trade:
             tx_hash=tx_hash,
             maker=maker,
             taker=taker,
+            trade_id=data.get("tradeId"),
         )
 
 
-@dataclass
-class Position:
+class Position(BaseModel):
     """LP position model."""
 
     market: Market
     user: ChecksumAddress
     token0_amount: float
     token1_amount: float
+
+    def __getitem__(self, key: str):
+        return getattr(self, key)
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Position":
@@ -251,23 +261,27 @@ class Position:
         )
 
 
-@dataclass
-class PriceLevel:
+class PriceLevel(BaseModel):
     """Price level in orderbook."""
 
     price: int
     size: int
     count: int
 
+    def __getitem__(self, key: str):
+        return getattr(self, key)
 
-@dataclass
-class OrderbookUpdate:
+
+class OrderbookUpdate(BaseModel):
     """Orderbook update model."""
 
     market_address: str
     timestamp: int
     bids: list[PriceLevel]
     asks: list[PriceLevel]
+
+    def __getitem__(self, key: str):
+        return getattr(self, key)
 
     @property
     def best_bid(self) -> PriceLevel | None:
@@ -303,8 +317,7 @@ class OrderbookUpdate:
         return datetime.fromtimestamp(self.timestamp / 1000)
 
 
-@dataclass
-class Order:
+class Order(BaseModel):
     """Order model."""
 
     order_id: int
@@ -322,9 +335,14 @@ class Order:
     owner: ChecksumAddress | None = None
     txn_hash: HexBytes | None = None
 
+    def __getitem__(self, key: str):
+        return getattr(self, key)
+
     @property
-    def datetime(self) -> datetime:
+    def datetime(self) -> datetime | None:
         """Get the datetime of the order."""
+        if self.placed_at is None:
+            return None
         return datetime.fromtimestamp(self.placed_at / 1000)
 
     @classmethod
@@ -338,7 +356,7 @@ class Order:
             status = OrderStatus.EXPIRED
 
         # Create Order model
-        return Order(
+        return cls(
             order_id=clob.id,
             market_address=market.address,
             side=clob.side,
@@ -398,11 +416,23 @@ class Order:
         )
 
 
-@dataclass
-class OrderBookSnapshot:
+class OrderBookSnapshot(BaseModel):
     """Snapshot of the orderbook at a point in time."""
 
-    bids: List[Tuple[float, float, int]]  # (price, size, count)
-    asks: List[Tuple[float, float, int]]  # (price, size, count)
+    bids: list[tuple[float, float, int]]  # (price, size, count)
+    asks: list[tuple[float, float, int]]  # (price, size, count)
     timestamp: int
-    market_address: Optional[str] = None
+    market_address: str | None = None
+
+    def __getitem__(self, key: str):
+        return getattr(self, key)
+
+    @classmethod
+    def from_api(cls, data: dict[str, Any]) -> "OrderBookSnapshot":
+        """Create an OrderBookSnapshot object from API response data."""
+        return cls(
+            bids=data.get("bids", []),
+            asks=data.get("asks", []),
+            timestamp=data["timestamp"],
+            market_address=data.get("marketAddress"),
+        )
