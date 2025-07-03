@@ -415,7 +415,7 @@ class Web3RequestManager:
                     self.logger.info(f"Removing free nonce {free_nonce} as it is less than or equal to latest nonce {latest_nonce}")
                     self.free_nonces.remove(free_nonce)
 
-            if nonce in self.free_nonces or latest_tx_cnt == self._prev_latest_tx_cnt:
+            if latest_tx_cnt == self._prev_latest_tx_cnt:
                 # nonce to be recycled
                 # or
                 # transactions stuck for 5 seconds: nonce gap, too low fee price, chain stuck
