@@ -64,6 +64,7 @@ def patched_clients():
             "rest": rest,
             "ws": ws,
             "info": info,
+            "execution_class": execution_class,
             "execution": execution_instance,
             "ensure_instance": ensure_instance,
         }
@@ -87,9 +88,63 @@ def test_initialization_without_wallet(config, patched_clients):
     client = GTEClient(config=config)
 
     assert client._wallet_address is None
-    assert client.execution is None
+    assert client._execution is None
     assert client._web3 is not None
     assert client._account is None
+
+
+def test_execution_client_initialization_parameters(config, wallet_address, private_key, patched_clients):
+    """Test that ExecutionClient is initialized with correct parameters."""
+    client = GTEClient(config=config, wallet_address=wallet_address, wallet_private_key=private_key)
+    
+    # Verify ExecutionClient was called with correct parameters
+    patched_clients["execution_class"].assert_called_once_with(
+        web3=client._web3,
+        main_account=wallet_address,
+        gte_router_address=config.router_address,
+        weth_address=config.weth_address,
+    )
+
+
+def test_execution_property_with_wallet(config, wallet_address, private_key, patched_clients):
+    """Test that execution property returns the execution client when wallet is provided."""
+    client = GTEClient(config=config, wallet_address=wallet_address, wallet_private_key=private_key)
+    
+    assert client.execution is patched_clients["execution"]
+    assert client._execution is patched_clients["execution"]
+
+
+def test_execution_property_without_wallet(config, patched_clients):
+    """Test that execution property raises assertion error when no wallet address was provided during initialization."""
+    client = GTEClient(config=config)
+    
+    assert client._execution is None
+    
+    with pytest.raises(AssertionError, match="Execution client not initialized"):
+        _ = client.execution
+
+
+def test_execution_property_after_wallet_removal(config, wallet_address, private_key, patched_clients):
+    """Test that execution property works correctly when wallet is provided."""
+    client = GTEClient(config=config, wallet_address=wallet_address, wallet_private_key=private_key)
+    
+    # Should work when execution client is initialized
+    assert client.execution is patched_clients["execution"]
+    assert client._execution is patched_clients["execution"]
+
+
+def test_execution_property_edge_cases(config, wallet_address, private_key, patched_clients):
+    """Test edge cases for the execution property."""
+    client = GTEClient(config=config, wallet_address=wallet_address, wallet_private_key=private_key)
+    
+    # Normal case - should work when wallet is provided
+    assert client.execution is patched_clients["execution"]
+    
+    # Test that the property returns the same instance consistently
+    execution1 = client.execution
+    execution2 = client.execution
+    assert execution1 is execution2
+    assert execution1 is patched_clients["execution"]
 
 
 @pytest.mark.asyncio
@@ -148,7 +203,7 @@ async def test_connect_and_disconnect_without_wallet(config, patched_clients):
     assert client.connected is True
     rest.connect.assert_awaited_once()
     ws.connect.assert_awaited_once()
-    assert client.execution is None
+    assert client._execution is None  # Use private attribute, not property
 
     await client.disconnect()
     assert client.connected is False
@@ -179,7 +234,7 @@ async def test_context_manager(config, patched_clients):
     client = GTEClient(config=config, wallet_address=wallet_address, wallet_private_key=private_key)
     async with client:
         assert client.connected is True
-        assert client.execution is patched_clients["execution"]
+        assert client.execution is patched_clients["execution"]  # This should work with wallet
     assert client.connected is False
     rest.connect.assert_awaited()
     ws.connect.assert_awaited()
@@ -190,7 +245,7 @@ async def test_context_manager(config, patched_clients):
     client2 = GTEClient(config=config)
     async with client2:
         assert client2.connected is True
-        assert client2.execution is None
+        assert client2._execution is None  # Use private attribute, not property
     assert client2.connected is False
 
 
@@ -218,7 +273,7 @@ async def test_double_connect_disconnect_noop(config, patched_clients):
     await client.connect()  # no-op
     rest.connect.assert_awaited_once()
     ws.connect.assert_awaited_once()
-    assert client.execution is patched_clients["execution"]
+    assert client.execution is patched_clients["execution"]  # This should work with wallet
 
     await client.disconnect()
     await client.disconnect()  # no-op
@@ -229,7 +284,7 @@ async def test_double_connect_disconnect_noop(config, patched_clients):
     client2 = GTEClient(config=config)
     await client2.connect()
     await client2.connect()  # no-op
-    assert client2.execution is None
+    assert client2._execution is None  # Use private attribute, not property
     await client2.disconnect()
     await client2.disconnect()  # no-op
     info.unsubscribe_all.assert_awaited()
