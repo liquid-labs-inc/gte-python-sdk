@@ -4,57 +4,49 @@ sys.path.append(".")
 import asyncio
 import logging
 
-# from examples.utils import show_all_orders
-from gte_py.api.chain.utils import make_web3
-from gte_py.clients import Client
+from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
-from gte_py.models import OrderSide, TimeInForce
+from gte_py.models import Market, OrderSide, TimeInForce
 
-from utils import (
-    display_market_info,
+from examples.utils import (
     WALLET_ADDRESS,
     WALLET_PRIVATE_KEY,
-    MARKET_ADDRESS
 )
 
+MARKET_ADDRESS = "0x0F3642714B9516e3d17a936bAced4de47A6FFa5F"
 
 async def main() -> None:
     """Run the on-chain trading examples."""
-    network = TESTNET_CONFIG
+    config = TESTNET_CONFIG
 
-    print("Initializing AsyncWeb3...")
-    web3 = await make_web3(network, WALLET_ADDRESS, WALLET_PRIVATE_KEY)
+    async with GTEClient(config=config, wallet_address=WALLET_ADDRESS, wallet_private_key=WALLET_PRIVATE_KEY) as client:
 
-    # Initialize client with AsyncWeb3
-    print("Initializing GTE client...")
-
-    client = Client(web3=web3, config=network, account=WALLET_ADDRESS)
-    await client.init()
-    # Get a market to work with
-    market = await display_market_info(client, MARKET_ADDRESS)
-
-    bid, ask = await client.market.get_tob(market)
-    quantity = 1.0
-
-    order = await client.execution.place_limit_order(
-        market=market,
-        side=OrderSide.BUY,
-        amount=market.base.convert_quantity_to_amount(quantity),
-        price=bid,
-        time_in_force=TimeInForce.POST_ONLY,
-        gas=50 * 10000000
-    )
-    print(f"Placed order: {order.order_id} at price {bid * 0.8} for {quantity} {market.base.symbol}")
-    amend_order = await client.execution.amend_order(
-        market=market,
-        order_id=order.order_id,
-        new_price=bid,
-        new_amount=market.base.convert_quantity_to_amount(quantity * 0.5),
-        gas=50 * 10000000
-    )
-    print(f"Amended order: {amend_order.order_id} to new price {bid * 0.9} and amount {quantity * 2} {market.base.symbol}")
+        raw_market = await client.info.get_market(MARKET_ADDRESS)
+        market = Market.from_api(raw_market)       
+        
+        # place a low limit order
+        order = await client.execution.place_limit_order(
+            market=market,
+            side=OrderSide.BUY,
+            amount= 10**18,
+            price=market.quote.convert_quantity_to_amount(50_000.0),
+            time_in_force=TimeInForce.GTC,
+            gas=50 * 10**6
+        )
+        
+        print(f"Placed order: {order}")
+        
+        await asyncio.sleep(5)
+        
+        # Price is only 1000, so we need to amend the order
+        amended_order = await client.execution.amend_order(
+            market=market,
+            order_id=order.order_id,
+            new_price=market.quote.convert_quantity_to_amount(100_000.0),
+            gas=50 * 10**6
+        )
+        print(f"Amended order: {amended_order}")
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
     asyncio.run(main())

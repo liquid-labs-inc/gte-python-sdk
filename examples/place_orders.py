@@ -1,186 +1,65 @@
-"""Example of on-chain trading with the GTE client."""
-import sys
-
-sys.path.append(".")
 import asyncio
-import logging
-from typing import Optional
+import os
+from dotenv import load_dotenv
+from eth_typing import ChecksumAddress, HexStr
+from eth_utils.address import to_checksum_address
 
-from web3.types import TxReceipt
-
-from gte_py.api.chain.utils import make_web3
-from gte_py.clients import Client
+from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
-from gte_py.models import OrderSide, TimeInForce, Market
+from gte_py.models import Market, OrderSide, TimeInForce
 
-from utils import (
-    print_separator,
-    display_market_info,
-    show_balances,
-    WALLET_ADDRESS,
-    WALLET_PRIVATE_KEY,
-    MARKET_ADDRESS, show_live_orders
-)
+load_dotenv()
 
+WALLET_ADDRESS_RAW = os.getenv("WALLET_ADDRESS")
+WALLET_PRIVATE_KEY_RAW = os.getenv("WALLET_PRIVATE_KEY")
 
-async def limit_order_example(client: Client, market: Market, quantity: float, price: float) -> list[int]:
-    """Example of creating a limit order."""
-    print_separator("Limit Order Example")
-    order_futures = []
-    for i in range(15):
-        order = client.execution.place_limit_order(
-            market=market,
-            side=OrderSide.BUY,
-            amount=market.base.convert_quantity_to_amount(quantity),
-            price=market.quote.convert_quantity_to_amount(price),
-            time_in_force=TimeInForce.GTC,
-            gas=50 * 10000000
-        )
-        order_futures.append(order)
-    # Wait for all orders to be created
-    await asyncio.gather(*order_futures)
+if not WALLET_ADDRESS_RAW or not WALLET_PRIVATE_KEY_RAW:
+    raise ValueError("Missing wallet credentials")
 
-    return []
-    results = []
-    print(f"Creating BUY limit order at price: {price}")
-    order = await client.execution.place_limit_order(
-        market=market,
-        side=OrderSide.BUY,
-        amount=market.base.convert_quantity_to_amount(quantity),
-        price=market.quote.convert_quantity_to_amount(price),
-        time_in_force=TimeInForce.GTC,
-        gas=50 * 10000000
-    )
-    print(f"Order created: {order}")
-    if order:
-        results.append(order.order_id)
-        await get_order_status(client, market, order.order_id)
+WALLET_ADDRESS: ChecksumAddress = to_checksum_address(WALLET_ADDRESS_RAW)
+WALLET_PRIVATE_KEY: HexStr = HexStr(WALLET_PRIVATE_KEY_RAW)
 
-    print(f"Creating SELL limit order at price: {price}")
-    order = await client.execution.place_limit_order(
-        market=market,
-        side=OrderSide.SELL,
-        amount=market.base.convert_quantity_to_amount(quantity),
-        price=market.quote.convert_quantity_to_amount(price),
-        time_in_force=TimeInForce.GTC,
-        gas=50 * 10000000
-    )
-    print(f"Order created: {order}")
-    if order:
-        results.append(order.order_id)
-        await get_order_status(client, market, order.order_id)
+MARKET_ADDRESS = to_checksum_address("0x0F3642714B9516e3d17a936bAced4de47A6FFa5F")
 
-    return results
+def print_separator(title: str) -> None:
+    """Print a section separator."""
+    print("\n" + "=" * 50)
+    print(title)
+    print("=" * 50)
 
 
-async def cancel_order_example(client: Client, market: Market, order_id: int = None) -> Optional[TxReceipt]:
-    """Example of cancelling an order."""
-    print_separator("Cancel Order Example")
-
-    print(f"Creating cancel transaction for order ID {order_id}...")
-    await client.execution.cancel_order(
-        market=market,
-        order_id=order_id,
-    )
-
-
-async def get_order_status(client: Client, market: Market, order_id: int) -> None:
-    """Get the status of an order."""
-    print_separator("Order Status Example")
-
-    try:
-        order = await client.market.get_order(market, order_id=order_id)
-
-        print(f"Order ID: {order.order_id}")
-        print(f"Market: {market.pair}")
-        print(f"Side: {order.side.name}")
-        print(f"Price: {order.price}")
-        print(f"Amount: {order.remaining_amount}")
-        print(f"Status: {order.status}")
-
-    except Exception as e:
-        print(f"Couldn't fetch on-chain order status: {str(e)}")
-
-
-async def display_recent_matches(client: Client, market: Market, block_range: int = 1000) -> None:
-    """Fetch and display recent order matches for the market."""
-    print_separator("Recent Order Matches")
-
-    try:
-        # Get current block number
-        current_block = await client._web3.eth.block_number
-        from_block = max(1, current_block - block_range)
-
-        # Initialize the historical querier
-        clob = client.clob.get_clob(market.address)
-
-        # Fetch recent order matches
-        matches = await clob.get_order_matched_events(from_block)
-
-        if not matches:
-            print(f"No order matches found in the last {block_range} blocks")
-            return
-
-        print(f"Found {len(matches)} recent order matches:")
-
-        for i, match in enumerate(matches, 1):
-            print(f"\nMatch #{i}:")
-            print(f"  Block: {match.block_number}")
-            print(f"  Transaction Hash: {match.tx_hash.to_0x_hex()}")
-            print(f"  Maker Order ID: {match.maker_order_id}")
-            print(f"  Taker Order ID: {match.taker_order_id}")
-            print(f"  Maker Order: {match.maker_order}")
-            print(f"  Taker Order: {match.taker_order}")
-            print(f"  Traded Base: {match.traded_base}")
-
-
-    except Exception as e:
-        print(f"Error fetching recent order matches: {str(e)}")
-
-
-async def main() -> None:
-    """Run the on-chain trading examples."""
-    network = TESTNET_CONFIG
-
-    print("Initializing AsyncWeb3...")
-    web3 = await make_web3(network, WALLET_ADDRESS, WALLET_PRIVATE_KEY)
-
-    print("Connected to blockchain:")
-    print(f"Chain ID: {await web3.eth.chain_id}")
-
-    # Initialize client with AsyncWeb3
-    print("Initializing GTE client...")
-
-    client = Client(web3=web3, config=network, account=WALLET_ADDRESS)
-    await client.init()
-    # Get a market to work with
-    market = await display_market_info(client, MARKET_ADDRESS)
-
-    # Show balances
-    await show_balances(client, market)
-    # Display all orders
-    await show_live_orders(client, market)
-
-    # Display recent order matches
-    # await display_recent_matches(client, market)
-
-    print("\nNOTE: For WETH wrapping and unwrapping examples, see wrap_weth.py")
-
-    bid, ask = await client.market.get_tob(market)
-    price = market.base.convert_amount_to_quantity(bid)
-    quantity = 1.0
-
-    # Check balances after deposit
-    await show_balances(client, market)
-
-    order_ids = await limit_order_example(client, market, quantity=quantity, price=price)
-    for order_id in order_ids:
-        await cancel_order_example(client, market, order_id)
-
-    # Show all orders
-    # await show_all_orders(client, market)
-
+async def main():
+    config = TESTNET_CONFIG
+        
+    async with GTEClient(config=config, wallet_address=WALLET_ADDRESS, wallet_private_key=WALLET_PRIVATE_KEY) as client:
+        side = OrderSide.BUY
+        
+        # 0.01 BTC
+        size = 10 ** 16
+        
+        market = Market.from_api(await client.info.get_market(MARKET_ADDRESS))
+        
+        # Place a market order
+        order = await client.execution.place_market_order(market, side, size, slippage=0.05, gas=50 * 10 ** 6)
+        
+        print_separator(f"Market order placed: {order}")
+        
+        order_book = await client.info.get_order_book(MARKET_ADDRESS)
+        
+        if side == OrderSide.BUY:
+            price = market.quote.convert_quantity_to_amount(float(order_book['bids'][0]['price']))
+        else:
+            price = market.quote.convert_quantity_to_amount(float(order_book['asks'][0]['price']))
+        
+        print(f"TOB Price: {price}")
+        
+        # Place a limit order
+        order = await client.execution.place_limit_order(market, side, size, price, time_in_force=TimeInForce.GTC, gas=50 * 10 ** 6)
+        
+        print_separator(f"Limit order placed: {order}")
+    
+    return
+    
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
     asyncio.run(main())

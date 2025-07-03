@@ -1,14 +1,14 @@
 """Common utilities for GTE examples."""
 
 import os
-from typing import Optional, List
+from typing import Optional, List, Any
 
 from dotenv import load_dotenv
 from eth_typing import ChecksumAddress, HexStr
 from tabulate import tabulate
 from web3 import AsyncWeb3
 
-from gte_py.clients import Client
+from gte_py.clients import GTEClient
 from gte_py.models import Market, Order
 
 # Load environment variables from .env file
@@ -18,7 +18,7 @@ load_dotenv()
 WALLET_ADDRESS = AsyncWeb3.to_checksum_address(os.getenv("WALLET_ADDRESS"))
 WALLET_PRIVATE_KEY = HexStr(os.getenv("WALLET_PRIVATE_KEY"))
 MARKET_ADDRESS = AsyncWeb3.to_checksum_address(
-    os.getenv("MARKET_ADDRESS", "0x5ca9f32d4ce7cc0f782213c446c2ae14b754a623"))  # ETH/USD
+    os.getenv("MARKET_ADDRESS", "0x0f3642714b9516e3d17a936baced4de47a6ffa5f"))  # ETH/USD
 
 
 def print_separator(title: str) -> None:
@@ -72,33 +72,19 @@ def get_web3_wallet() -> str:
     return AsyncWeb3.to_checksum_address(WALLET_ADDRESS)
 
 
-async def display_market_info(client: Client, market_address: ChecksumAddress) -> Market:
+async def display_market_info(client: GTEClient, market_address: ChecksumAddress) -> dict[str, Any]:
     """Get and display market information."""
 
     print(f"Using market: {market_address}")
     market = await client.info.get_market(market_address)
 
-    print(f"Market: {market.pair}")
-    print(f"Base token: {market.base.symbol} ({market.base.address})")
-    print(f"Quote token: {market.quote.symbol} ({market.quote.address})")
+    print(f"Market type: {market['marketType']}")
+    print(f"Base token: {market['baseToken']['symbol']} ({market['baseToken']['address']})")
+    print(f"Quote token: {market['quoteToken']['symbol']} ({market['quoteToken']['address']})")
 
     return market
 
-
-async def show_balances(client: Client, market: Market) -> None:
-    """Display token balances for a market."""
-    print_separator("Token Balances")
-
-    print(f"Getting balances for {market.base.symbol} and {market.quote.symbol}...")
-    wei = await client.user.get_eth_balance()
-    print("ETH balance:", AsyncWeb3.from_wei(wei, "ether"))
-
-    await display_token_balances(client, market.base.address)
-
-    await display_token_balances(client, market.quote.address)
-
-
-async def display_token_balances(client: Client, token_address: ChecksumAddress, header: bool = True) -> None:
+async def display_token_balances(client: GTEClient, token_address: ChecksumAddress, header: bool = True) -> None:
     """
     Display detailed balance information for a specific token.
 
@@ -128,7 +114,7 @@ async def display_token_balances(client: Client, token_address: ChecksumAddress,
         print(f"Error retrieving token details: {e}")
 
 
-async def show_live_orders(client: Client, market: Market):
+async def show_live_orders(client: GTEClient, market: Market):
     """Show live orders for a market and the account."""
     print_separator("All Orders")
 

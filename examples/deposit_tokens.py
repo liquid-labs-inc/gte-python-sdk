@@ -91,8 +91,8 @@ async def main() -> None:
     # Initialize client with AsyncWeb3
     print("Initializing GTE client...")
 
-    async with Client(web3=web3, config=network, account=WALLET_ADDRESS) as client:
-        await client.init()
+    async with Client(web3=web3, config=network, wallet_address=WALLET_ADDRESS) as client:
+        await client.initialize()
 
         # Get market information
         market = await display_market_info(client, MARKET_ADDRESS)

@@ -1,36 +1,42 @@
-"""Simple example demonstrating how to watch a market's orderbook using WebSocket ETH RPC."""
-import sys
+import asyncio
+from typing import Any
+import logging
+from eth_utils.address import to_checksum_address
 
-sys.path.append(".")
-
-from examples.utils import MARKET_ADDRESS
-
-from gte_py.api.chain.utils import make_web3
-from gte_py.clients import Client
+from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
 
-import asyncio
-import logging
+# BTC/USD market address
+MARKET_ADDRESS = to_checksum_address("0x0F3642714B9516e3d17a936bAced4de47A6FFa5F")
 
+
+def print_separator(title: str) -> None:
+    """Print a section separator."""
+    print("\n" + "=" * 50)
+    print(title)
+    print("=" * 50)
+
+
+async def handle_trade_data(raw_data: dict[str, Any]):
+    """Handle trade data."""
+    print(raw_data)
+    
 
 async def main():
-    """Run the orderbook watcher example."""
-    web3 = await make_web3(TESTNET_CONFIG)
+    config = TESTNET_CONFIG
+        
+    async with GTEClient(config=config) as client:
 
-    # Initialize GTE client for market info
-    client = Client(web3=web3, config=TESTNET_CONFIG)
+        # Subscribe to trades
+        await client.info.subscribe_trades(MARKET_ADDRESS, handle_trade_data)
 
-    # Get market details
-    market_address = MARKET_ADDRESS
-    market = await client.info.get_market(market_address)
+        # Wait for 30 seconds
+        await asyncio.sleep(30)
 
-    # Create and start the watcher
-    await client.market.subscribe_trades(market, lambda x: print(x))
-
-    while True:
-        await asyncio.sleep(1)
-
+    # Context manager will close the connection
+    print("Connection closed")
+    
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())
