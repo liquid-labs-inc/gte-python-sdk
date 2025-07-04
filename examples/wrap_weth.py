@@ -29,6 +29,7 @@ async def get_weth_balance(client: Client, web3: AsyncWeb3, weth_address: str) -
 
     # Get exchange balance through the client
     exchange_balance = await client.user.get_token_balance(weth_address)
+    exchange_balance = await weth.convert_amount_to_quantity(exchange_balance)
 
     # Get native ETH balance
     eth_balance = web3.from_wei(await web3.eth.get_balance(WALLET_ADDRESS, 'latest'), 'ether')

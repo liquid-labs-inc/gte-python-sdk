@@ -10,7 +10,7 @@ from web3.types import TxParams
 from gte_py.api.chain.clob_client import CLOBClient
 from gte_py.api.chain.clob_manager import ICLOBManager
 from gte_py.api.chain.clob_factory import CLOBFactory
-from gte_py.api.chain.structs import OperatorRole
+from gte_py.api.chain.structs import OperatorRole, Settlement
 from gte_py.api.rest import RestApi
 from gte_py.api.chain.token_client import TokenClient
 from gte_py.api.rest.models import trade_to_model
@@ -70,8 +70,9 @@ class UserClient:
     ):
         return await self._token.get_weth(weth_address).withdraw_eth(amount, **kwargs).send_wait()
 
-    async def deposit(
-            self, token_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
+    async def approve(
+            self, token_address: ChecksumAddress, amount: int,
+            **kwargs: Unpack[TxParams]
     ):
         """
         Deposit tokens to the exchange for trading.
@@ -105,6 +106,25 @@ class UserClient:
             await token.approve(
                 spender=self._clob.get_factory_address(), amount=amount, **kwargs
             ).send_wait()
+
+
+    async def deposit(
+            self, token_address: ChecksumAddress, amount: int,
+            **kwargs: Unpack[TxParams]
+    ):
+        """
+        Deposit tokens to the exchange for trading.
+
+        Args:
+            token_address: Address of token to deposit
+            amount: Amount to deposit
+            **kwargs: Additional transaction parameters
+
+        Returns:
+            List of TypedContractFunction objects (approve and deposit)
+        """
+        await self.approve(token_address, amount, **kwargs)
+        clob_factory = self.get_clob_factory()
 
         # Then deposit the tokens
         await clob_factory.deposit(

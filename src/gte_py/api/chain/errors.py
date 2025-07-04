@@ -104,7 +104,10 @@ class TransferFromFailed(GTEError):
 
     error_code = "0x7939f424"
 
+class LimitPriceOutOfBounds(GTEError):
+    """Limit price is out of bounds for the market."""
 
+    error_code = "0x52654a3d"
 
 ERROR_EXCEPTIONS = {
     "0xf4d678b8": InsufficientBalance,
@@ -122,4 +125,5 @@ ERROR_EXCEPTIONS = {
     "0x4ef36a18": ZeroTrade,
     "0xb82df155": ZeroOrder,
     "0x7939f424": TransferFromFailed,
+    "0x52654a3d": LimitPriceOutOfBounds,
 }

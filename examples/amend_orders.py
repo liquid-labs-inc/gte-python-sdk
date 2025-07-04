@@ -1,5 +1,8 @@
 """Example of on-chain trading with the GTE client."""
 import sys
+
+from gte_py.api.chain.structs import Settlement
+
 sys.path.append(".")
 import asyncio
 import logging
@@ -34,7 +37,8 @@ async def main() -> None:
     market = await display_market_info(client, MARKET_ADDRESS)
 
     bid, ask = await client.market.get_tob(market)
-    quantity = 1.0
+    bid_price = market.quote.convert_amount_to_quantity(bid)
+    quantity = 20 / bid_price
 
     order = await client.execution.place_limit_order(
         market=market,
@@ -42,6 +46,7 @@ async def main() -> None:
         amount=market.base.convert_quantity_to_amount(quantity),
         price=bid,
         time_in_force=TimeInForce.POST_ONLY,
+        settlement=Settlement.ACCOUNT,
         gas=50 * 10000000
     )
     print(f"Placed order: {order.order_id} at price {bid * 0.8} for {quantity} {market.base.symbol}")
@@ -52,7 +57,7 @@ async def main() -> None:
         new_amount=market.base.convert_quantity_to_amount(quantity * 0.5),
         gas=50 * 10000000
     )
-    print(f"Amended order: {amend_order.order_id} to new price {bid * 0.9} and amount {quantity * 2} {market.base.symbol}")
+    print(f"Amended order: {amend_order.args['orderId']} to new price {bid} and amount {quantity * 2} {market.base.symbol}")
 
 
 if __name__ == "__main__":
