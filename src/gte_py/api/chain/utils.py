@@ -416,8 +416,6 @@ class Web3RequestManager:
                     self.free_nonces.remove(free_nonce)
 
             if latest_tx_cnt == self._prev_latest_tx_cnt:
-                # nonce to be recycled
-                # or
                 # transactions stuck for 5 seconds: nonce gap, too low fee price, chain stuck
                 self.logger.warning(f"Nonce stuck at {nonce} for {self.account.address}, trying to cancel")
                 try:
