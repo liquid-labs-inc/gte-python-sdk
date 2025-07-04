@@ -9,7 +9,8 @@ from web3 import AsyncWeb3
 from web3.types import TxParams
 
 from gte_py.api.chain.clob_client import CLOBClient
-from gte_py.api.chain.events import OrderCanceledEvent, FillOrderProcessedEvent, LimitOrderProcessedEvent
+from gte_py.api.chain.events import OrderCanceledEvent, FillOrderProcessedEvent, LimitOrderProcessedEvent, \
+    OrderAmendedEvent
 from gte_py.api.chain.structs import OrderSide, Settlement, LimitOrderType, FillOrderType
 from gte_py.api.chain.utils import TypedContractFunction
 from gte_py.api.rest import RestApi
@@ -318,7 +319,7 @@ class ExecutionClient:
             new_amount: Optional[int] = None,
             new_price: Optional[int] = None,
             **kwargs,
-    ):
+    ) -> Optional[OrderAmendedEvent]:
         tx = await self.amend_order_tx(
             market=market, order_id=order_id, new_amount=new_amount, new_price=new_price, **kwargs
         )
