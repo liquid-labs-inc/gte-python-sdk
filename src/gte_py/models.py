@@ -93,15 +93,14 @@ class Token(BaseModel):
         return getattr(self, key)
 
     def convert_amount_to_quantity(self, amount: int) -> float:
-        """Convert amount in base units to float."""
+        """Convert amount in atomic units to base units."""
         assert isinstance(amount, int), f"amount {amount} is not an integer"
         return amount / (10 ** self.decimals)
 
-    def convert_quantity_to_amount(self, quantity: float) -> int:
-        """Convert amount in float to base units."""
-        assert isinstance(quantity, float), f"quantity {quantity} is not a float"
+    def convert_quantity_to_amount(self, quantity: float | int) -> int:
+        """Convert amount in base units to atomic units."""
         scaled = quantity * (10 ** self.decimals)
-        rounded = round_decimals_int(scaled, sig=8)
+        rounded = round_decimals_int(scaled, sig=self.decimals)
         return rounded
 
     @classmethod
@@ -190,6 +189,8 @@ class Candle(BaseModel):
 
 class Trade(BaseModel):
     """Trade model."""
+    
+    model_config = {"arbitrary_types_allowed": True}
 
     market_address: ChecksumAddress
     timestamp: int  # e.g. 1748406437000
@@ -319,6 +320,8 @@ class OrderbookUpdate(BaseModel):
 
 class Order(BaseModel):
     """Order model."""
+    
+    model_config = {"arbitrary_types_allowed": True}
 
     order_id: int
     market_address: str
