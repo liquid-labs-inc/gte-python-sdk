@@ -316,15 +316,22 @@ def format_contract_function(func: AsyncContractFunction, tx_hash: HexBytes | No
 
 def make_web3(
     rpc_url: str,
-    wallet_address: ChecksumAddress | None = None,
     wallet_private_key: PrivateKeyType | None = None,
 ) -> tuple[AsyncWeb3, LocalAccount | None]:
+    """
+    Create a Web3 instance and set the default account.
+
+    Args:
+        rpc_url: The URL of the RPC endpoint
+        wallet_private_key: The private key of the wallet
+
+    Returns:
+        A tuple containing the Web3 instance and the account
+    """
     w3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(rpc_url))
     validation.METHODS_TO_VALIDATE = []
 
     account: LocalAccount | None = None
-    if wallet_address:
-        w3.eth.default_account = wallet_address
     if wallet_private_key:
         account = Account.from_key(wallet_private_key)
         w3.eth.default_account = account.address

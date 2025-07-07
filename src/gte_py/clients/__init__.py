@@ -26,7 +26,6 @@ class GTEClient:
     def __init__(
         self,
         config: NetworkConfig,
-        wallet_address: ChecksumAddress | None = None,
         wallet_private_key: PrivateKeyType | None = None,
     ):
         """Initializes the GTE client and subcomponents.
@@ -37,12 +36,10 @@ class GTEClient:
             wallet_private_key: Optional wallet private key for signing transactions.
         """
         self.config = config
-        self._wallet_address = wallet_address
         
         # Initialize Web3 and account
         self._web3, self._account = make_web3(
             config.rpc_http,
-            wallet_address=wallet_address,
             wallet_private_key=wallet_private_key,
         )
 
@@ -55,10 +52,10 @@ class GTEClient:
         
         self._execution: ExecutionClient | None = None
         
-        if self._wallet_address:
+        if self._account:
             self._execution = ExecutionClient(
                 web3=self._web3,
-                main_account=self._wallet_address,
+                main_account=self._account.address,
                 gte_router_address=config.router_address,
                 weth_address=config.weth_address,
             )
