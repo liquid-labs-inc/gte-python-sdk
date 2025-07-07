@@ -79,6 +79,11 @@ def round_decimals_int(n: float, sig: int) -> int:
         d = sig - int(floor(log10(abs(n_int)))) - 1
         return round(n_int, d)
 
+def round_to_tick_size(n: float) -> int:
+    """Round a number to the nearest tick size (10^15)."""
+    tick_size = 10 ** 15
+    return round(n / tick_size) * tick_size
+
 
 class Token(BaseModel):
     """Asset model."""
@@ -91,6 +96,9 @@ class Token(BaseModel):
     
     def __getitem__(self, key: str):
         return getattr(self, key)
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
 
     def convert_amount_to_quantity(self, amount: int) -> float:
         """Convert amount in atomic units to base units."""
@@ -100,7 +108,8 @@ class Token(BaseModel):
     def convert_quantity_to_amount(self, quantity: float | int) -> int:
         """Convert amount in base units to atomic units."""
         scaled = quantity * (10 ** self.decimals)
-        rounded = round_decimals_int(scaled, sig=self.decimals)
+        # Round to nearest tick size (10^15) to ensure valid contract prices
+        rounded = round_to_tick_size(scaled)
         return rounded
 
     @classmethod
@@ -129,6 +138,9 @@ class Market(BaseModel):
     
     def __getitem__(self, key: str):
         return getattr(self, key)
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
 
     @property
     def pair(self) -> str:
@@ -165,6 +177,9 @@ class Candle(BaseModel):
 
     def __getitem__(self, key: str):
         return getattr(self, key)
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
 
     @property
     def datetime(self) -> datetime:
@@ -196,7 +211,7 @@ class Trade(BaseModel):
     timestamp: int  # e.g. 1748406437000
     price: float
     size: float
-    side: OrderSide
+    side: str
     tx_hash: HexBytes | None = None  # Transaction hash is an Ethereum address
     maker: ChecksumAddress | None = None
     taker: ChecksumAddress | None = None
@@ -204,6 +219,9 @@ class Trade(BaseModel):
 
     def __getitem__(self, key: str):
         return getattr(self, key)
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
 
     @property
     def datetime(self) -> datetime:
@@ -218,7 +236,7 @@ class Trade(BaseModel):
         if "timestamp" not in data:
             raise ValueError("Missing 'timestamp' in trade data")
 
-        side = OrderSide.from_str(data["side"])
+        side = data["side"]
         tx_hash = HexBytes(data["txnHash"]) if data.get("txnHash") else None
         maker = to_checksum_address(data["maker"]) if data.get("maker") else None
         taker = to_checksum_address(data["taker"]) if data.get("taker") else None
@@ -241,22 +259,31 @@ class Position(BaseModel):
 
     market: Market
     user: ChecksumAddress
+    share_of_pool: float
+    apr: float
     token0_amount: float
     token1_amount: float
 
     def __getitem__(self, key: str):
         return getattr(self, key)
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Position":
         """Create a Position object from API response data."""
         user = data.get("user", "")
+        data["market"]["marketType"] = "amm"
+        
         if user and isinstance(user, str):
             user = AsyncWeb3.to_checksum_address(user)
 
         return cls(
             market=Market.from_api(data.get("market", {})),
             user=user,
+            share_of_pool=data.get("shareOfPool", 0.0),
+            apr=data.get("apr", 0.0),
             token0_amount=data.get("token0Amount", 0.0),
             token1_amount=data.get("token1Amount", 0.0),
         )
@@ -271,6 +298,9 @@ class PriceLevel(BaseModel):
 
     def __getitem__(self, key: str):
         return getattr(self, key)
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
 
 
 class OrderbookUpdate(BaseModel):
@@ -283,6 +313,9 @@ class OrderbookUpdate(BaseModel):
 
     def __getitem__(self, key: str):
         return getattr(self, key)
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
 
     @property
     def best_bid(self) -> PriceLevel | None:
@@ -325,7 +358,7 @@ class Order(BaseModel):
 
     order_id: int
     market_address: str
-    side: OrderSide
+    side: str
     order_type: OrderType
     price: int | None
     time_in_force: TimeInForce
@@ -340,6 +373,9 @@ class Order(BaseModel):
 
     def __getitem__(self, key: str):
         return getattr(self, key)
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
 
     @property
     def datetime(self) -> datetime | None:
@@ -422,13 +458,16 @@ class Order(BaseModel):
 class OrderBookSnapshot(BaseModel):
     """Snapshot of the orderbook at a point in time."""
 
-    bids: list[tuple[float, float, int]]  # (price, size, count)
-    asks: list[tuple[float, float, int]]  # (price, size, count)
+    bids: list[dict[str, float | int]]  # (price, size, count)
+    asks: list[dict[str, float | int]]  # (price, size, count)
     timestamp: int
     market_address: str | None = None
 
     def __getitem__(self, key: str):
         return getattr(self, key)
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "OrderBookSnapshot":
