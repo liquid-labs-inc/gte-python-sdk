@@ -13,7 +13,7 @@ from gte_py.api.chain.token_client import TokenClient
 from gte_py.api.chain.events import OrderCanceledEvent, FillOrderProcessedEvent, LimitOrderProcessedEvent
 from gte_py.api.chain.structs import OrderSide, Settlement, LimitOrderType, FillOrderType, OperatorRole
 from gte_py.api.chain.utils import TypedContractFunction
-from gte_py.models import Market, Order, OrderStatus, TimeInForce, OrderType
+from gte_py.models import Market, Order, OrderStatus, TimeInForce
 from gte_py.api.chain.erc20 import ERC20
 
 logger = logging.getLogger(__name__)
@@ -135,11 +135,17 @@ class ExecutionClient:
             account=self.main_account, token=token_address, amount=amount, to_operator=False, **kwargs
         ).send_wait()
         
+    async def get_token_balance(self, token_address: ChecksumAddress) -> int:
+        """
+        Get the balance of a token in the wallet.
+        """
+        return await self._token_client.get_erc20(token_address).balance_of(self.main_account)
+    
     async def get_weth_balance(self) -> int:
         """
         Get the balance of WETH in the wallet.
         """
-        return await self._token_client.get_weth(self._weth_address).balance_of(self.main_account)
+        return await self.get_token_balance(self._weth_address)
 
     async def wrap_eth(
             self, amount: int, **kwargs: Unpack[TxParams]
@@ -357,6 +363,14 @@ class ExecutionClient:
         """
         amount = int(market.base.convert_quantity_to_amount(amount) if not amount_is_raw else amount)
         price = int(market.quote.convert_quantity_to_amount(price) if not price_is_raw else price)
+        
+        token, approval_amount = self._compute_approval_requirements(market, side, amount, True, price)
+        await self._ensure_approval(
+            amount=approval_amount,
+            token=token,
+            **kwargs,
+        )
+        
         tx = self.place_limit_order_tx(
             market_address=market.address,
             side=side,
@@ -551,6 +565,14 @@ class ExecutionClient:
 
         amount_in_base = new_amount or current_amount
         price_in_ticks = new_price if new_price is not None else current_price
+        
+        # ensure approval
+        token, approval_amount = self._compute_approval_requirements(market, side, amount_in_base, True, price_in_ticks)
+        await self._ensure_approval(
+            amount=approval_amount,
+            token=token,
+            **kwargs,
+        )
 
         # Create amend args
         args = clob.create_amend_args(
