@@ -149,7 +149,6 @@ class OrderbookWatcher:
         
         console.print(f"[green]Subscribed to orderbook for {self.market_address}[/green]")
 
-
 async def main():
     """Run the orderbook watcher example."""
     # Parse command line arguments

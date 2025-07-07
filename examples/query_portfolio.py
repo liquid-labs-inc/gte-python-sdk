@@ -1,6 +1,5 @@
 """Example of querying portfolio and LP positions with the GTE client."""
 import sys
-
 sys.path.append(".")
 import asyncio
 

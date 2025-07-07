@@ -161,6 +161,10 @@ class Market(BaseModel):
             volume_24hr_usd=data.get("volume24HrUsd"),
         )
 
+    @property
+    def pair(self) -> str:
+        """Get the trading pair symbol."""
+        return f"{self.base.symbol}/{self.quote.symbol}"
 
 class Candle(BaseModel):
     """Candlestick model."""
