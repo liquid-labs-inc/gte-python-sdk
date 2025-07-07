@@ -1,22 +1,20 @@
 """Simple example demonstrating how to watch a market's orderbook using WebSocket subscription."""
 import sys
-
-from examples.utils import MARKET_ADDRESS
-
 sys.path.append(".")
 from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
 
 import argparse
 import asyncio
-import logging
-import os
 from typing import Dict, Any
 from eth_typing import ChecksumAddress
 
 from rich.console import Console
 from rich.table import Table
 from web3 import AsyncWeb3
+
+# BTC/USD CLOB
+MARKET_ADDRESS = "0x0F3642714B9516e3d17a936bAced4de47A6FFa5F"
 
 # Initialize console for rich text output
 console = Console()

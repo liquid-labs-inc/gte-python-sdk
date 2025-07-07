@@ -1,6 +1,8 @@
+"""Example of subscribing to trades on a market."""
+import sys
+sys.path.append(".")
 import asyncio
 from typing import Any
-import logging
 from eth_utils.address import to_checksum_address
 
 from gte_py.clients import GTEClient
@@ -8,13 +10,6 @@ from gte_py.configs import TESTNET_CONFIG
 
 # BTC/USD market address
 MARKET_ADDRESS = to_checksum_address("0x0F3642714B9516e3d17a936bAced4de47A6FFa5F")
-
-
-def print_separator(title: str) -> None:
-    """Print a section separator."""
-    print("\n" + "=" * 50)
-    print(title)
-    print("=" * 50)
 
 
 async def handle_trade_data(raw_data: dict[str, Any]):
@@ -38,5 +33,4 @@ async def main():
     
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())

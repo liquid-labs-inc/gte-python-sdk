@@ -4,16 +4,30 @@ sys.path.append(".")
 import asyncio
 
 from eth_typing import ChecksumAddress
+from eth_utils.address import to_checksum_address
 
-from gte_py.api.chain.utils import make_web3
 from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
-from examples.utils import print_separator, MARKET_ADDRESS, display_market_info
+from gte_py.models import Market
 
+
+MARKET_ADDRESS = to_checksum_address("0x0F3642714B9516e3d17a936bAced4de47A6FFa5F")
+
+async def display_market_info(client: GTEClient, market_address: ChecksumAddress) -> Market:
+    """Get and display market information."""
+
+    print(f"Using market: {market_address}")
+    market = await client.info.get_market(market_address)
+
+    print(f"Market type: {market['market_type']}")
+    print(f"Base token: {market['base']['symbol']} ({market['base']['address']})")
+    print(f"Quote token: {market['quote']['symbol']} ({market['quote']['address']})")
+
+    return market
 
 async def query_market_trades(client: GTEClient, market_address: ChecksumAddress) -> None:
     """Query trades for a specific market."""
-    print_separator("Market Trades Query")
+    print("Market Trades Query")
 
     # Get trades for the market
     trades = await client.info.get_trades(market_address)
@@ -22,7 +36,7 @@ async def query_market_trades(client: GTEClient, market_address: ChecksumAddress
     print(f"Trades for market {market_address}:")
     for trade in trades:
         print('-' * 75)
-        print(f"  Txn: {trade['txnHash']}")
+        print(f"  Txn: {trade['tx_hash'].to_0x_hex()}")
         print(f"  Price: {trade['price']}")
         print(f"  Size: {trade['size']}")
         print(f"  Side: {trade['side']}")

@@ -1,38 +1,18 @@
+"""Example of placing an order on a WETH market."""
+import sys
+sys.path.append(".")
 import asyncio
-import os
-from dotenv import load_dotenv
-from eth_typing import ChecksumAddress, HexStr
-from eth_utils.address import to_checksum_address
+from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
-from eth_utils.currency import to_wei
-import time
 
-# from examples.utils import show_all_orders
+from examples.utils import WALLET_PRIVATE_KEY
 from gte_py.clients import GTEClient
 from gte_py.api.chain.structs import OrderSide
 from gte_py.configs import TESTNET_CONFIG
-from gte_py.models import TimeInForce, Token, Market, OrderType
 
-load_dotenv()
-
-WALLET_ADDRESS_RAW = os.getenv("WALLET_ADDRESS")
-WALLET_PRIVATE_KEY_RAW = os.getenv("WALLET_PRIVATE_KEY")
 MARKET_ADDRESS: ChecksumAddress = AsyncWeb3.to_checksum_address("0x5ca9f32d4ce7cc0f782213c446c2ae14b754a623")
 # BTC CLOB: 0x0F3642714B9516e3d17a936bAced4de47A6FFa5F
 # ETH CLOB: 0x5ca9f32d4ce7cc0f782213c446c2ae14b754a623
-
-if not WALLET_ADDRESS_RAW or not WALLET_PRIVATE_KEY_RAW:
-    raise ValueError("Missing wallet credentials")
-
-WALLET_ADDRESS: ChecksumAddress = AsyncWeb3.to_checksum_address(WALLET_ADDRESS_RAW)
-WALLET_PRIVATE_KEY: HexStr = HexStr(WALLET_PRIVATE_KEY_RAW)
-
-
-def print_separator(title: str) -> None:
-    """Print a section separator."""
-    print("\n" + "=" * 50)
-    print(title)
-    print("=" * 50)
 
 
 async def main():
@@ -41,24 +21,41 @@ async def main():
     if not weth_address:
         raise ValueError("WETH address not configured")
         
-    async with GTEClient(config=config, wallet_address=WALLET_ADDRESS, wallet_private_key=WALLET_PRIVATE_KEY) as client:
+    async with GTEClient(config=config, wallet_private_key=WALLET_PRIVATE_KEY) as client:
 
         market = await client.info.get_market(MARKET_ADDRESS)
         print(market)
         
+        eth_amount = 0.001
+        eth_amount_wei = market.base.convert_quantity_to_amount(eth_amount)
+        
         # if using an eth clob market you have to wrap before selling eth and unwrap after buying eth
+        
         # wrap the eth
         weth_balance = await client.execution.get_weth_balance()
         if weth_balance < 10 ** 16:
             await client.execution.wrap_eth(amount=10 ** 16 - weth_balance, gas=50 * 10**6)
         
         # buy eth
+        # if you want to use quote units, you can set amount_is_base=False
+        # amount is accepted in raw units (atoms, wei, etc.) unless you set amount_is_raw=False
         order = await client.execution.place_market_order(  # type: ignore
             market=market,
             side=OrderSide.BUY,
-            amount=10 ** 16,
-            amount_is_raw=True,
-            amount_is_base=True,
+            amount=eth_amount_wei,
+            slippage=0.05,
+            gas=50 * 10**6
+        )
+        
+        print(f"Order posted: {order}")
+        print('-' * 50)
+        
+        # or if you want to use amount in base units
+        order = await client.execution.place_market_order(  # type: ignore
+            market=market,
+            side=OrderSide.BUY,
+            amount=eth_amount,
+            amount_is_raw=False,
             slippage=0.05,
             gas=50 * 10**6
         )
@@ -66,10 +63,9 @@ async def main():
         weth_balance = await client.execution.get_weth_balance()
         await client.execution.unwrap_eth(amount=weth_balance, gas=50 * 10**6)
 
+        print(f"Order posted: {order}")
         
-        print_separator(f"Order posted: {order}")
-        
-        return
+    return
 
 
 if __name__ == "__main__":

@@ -6,10 +6,8 @@ import asyncio
 
 from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
-from examples.utils import (
-    print_separator,
-    WALLET_ADDRESS,
-)
+
+from examples.utils import WALLET_ADDRESS, print_separator
 
 
 async def display_portfolio(client: GTEClient) -> None:
@@ -75,15 +73,15 @@ async def display_lp_positions(client: GTEClient) -> None:
         print("--------------------------------------------------------------")
 
         for position in lp_positions:
-            market = position.get('market', {})
-            base_token = market.get('baseToken', {}).get('symbol', 'UNKNOWN')
-            quote_token = market.get('quoteToken', {}).get('symbol', 'UNKNOWN')
+            market = position.market
+            base_token = market.base.symbol
+            quote_token = market.quote.symbol
             market_name = f"{base_token}/{quote_token}"
+            share = position.share_of_pool * 100
+            apr = position.apr * 100
 
-            share = position.get('shareOfPool', 0) * 100  # Convert to percentage
-            apr = position.get('apr', 0) * 100  # Convert to percentage
-            token0_amount = float(position.get('token0Amount', 0))
-            token1_amount = float(position.get('token1Amount', 0))
+            token0_amount = position.token0_amount
+            token1_amount = position.token1_amount
 
             token_amounts = f"{token0_amount:.4f} {base_token}, {token1_amount:.4f} {quote_token}"
 

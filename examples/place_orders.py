@@ -1,23 +1,13 @@
+"""Example of placing a market and limit order on a BTC market."""
+import sys
+sys.path.append(".")
 import asyncio
-import os
-from dotenv import load_dotenv
-from eth_typing import ChecksumAddress, HexStr
 from eth_utils.address import to_checksum_address
 
 from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
 from gte_py.models import Market, OrderSide, TimeInForce
-
-load_dotenv()
-
-WALLET_ADDRESS_RAW = os.getenv("WALLET_ADDRESS")
-WALLET_PRIVATE_KEY_RAW = os.getenv("WALLET_PRIVATE_KEY")
-
-if not WALLET_ADDRESS_RAW or not WALLET_PRIVATE_KEY_RAW:
-    raise ValueError("Missing wallet credentials")
-
-WALLET_ADDRESS: ChecksumAddress = to_checksum_address(WALLET_ADDRESS_RAW)
-WALLET_PRIVATE_KEY: HexStr = HexStr(WALLET_PRIVATE_KEY_RAW)
+from examples.utils import WALLET_PRIVATE_KEY
 
 MARKET_ADDRESS = to_checksum_address("0x0F3642714B9516e3d17a936bAced4de47A6FFa5F")
 
@@ -27,15 +17,15 @@ def print_separator(title: str) -> None:
     print(title)
     print("=" * 50)
 
-
 async def main():
     config = TESTNET_CONFIG
         
-    async with GTEClient(config=config, wallet_address=WALLET_ADDRESS, wallet_private_key=WALLET_PRIVATE_KEY) as client:
+    async with GTEClient(config=config, wallet_private_key=WALLET_PRIVATE_KEY) as client:
         side = OrderSide.BUY
         
         # 0.01 BTC
         size = 10 ** 16
+        
         
         market = await client.info.get_market(MARKET_ADDRESS)
         
@@ -45,13 +35,19 @@ async def main():
         print_separator(f"Market order placed: {order}")
         
         order_book = await client.info.get_order_book(MARKET_ADDRESS)
+        print(order_book)
         
         if side == OrderSide.BUY:
-            price = market.quote.convert_quantity_to_amount(float(order_book['bids'][0]['price']))
+            # For BUY orders, use the best ask price (lowest selling price)
+            price = market.quote.convert_quantity_to_amount(float(order_book['bids'][0]['price'])-1000)
         else:
-            price = market.quote.convert_quantity_to_amount(float(order_book['asks'][0]['price']))
+            # For SELL orders, use the best bid price (highest buying price)
+            price = market.quote.convert_quantity_to_amount(float(order_book['asks'][0]['price'])+1000)
         
         print(f"TOB Price: {price}")
+        token = client.execution._token_client.get_erc20(market.quote.address)
+        # approve quote token
+        
         
         # Place a limit order
         order = await client.execution.place_limit_order(market, side, size, price, time_in_force=TimeInForce.GTC, gas=50 * 10 ** 6)
