@@ -32,11 +32,6 @@ def config():
 
 
 @pytest.fixture
-def wallet_address():
-    return to_checksum_address("0x1234567890abcdef1234567890abcdef12345678")
-
-
-@pytest.fixture
 def private_key():
     return b"\x01" * 32
 
@@ -44,8 +39,10 @@ def private_key():
 @pytest.fixture
 def patched_clients():
     def make_web3_side_effect(*args, **kwargs):
-        if kwargs.get("wallet_address") or kwargs.get("wallet_private_key"):
-            return MagicMock(), MagicMock()
+        if kwargs.get("wallet_private_key"):
+            mock_account = MagicMock()
+            mock_account.address = to_checksum_address("0x1234567890abcdef1234567890abcdef12345678")
+            return MagicMock(), mock_account
         return MagicMock(), None
 
     with patch("gte_py.clients.make_web3", side_effect=make_web3_side_effect) as make_web3, \
@@ -70,45 +67,44 @@ def patched_clients():
         }
 
 
-def test_initialization_with_wallet(config, wallet_address, private_key, patched_clients):
-    client = GTEClient(config=config, wallet_address=wallet_address, wallet_private_key=private_key)
+def test_initialization_with_wallet(config, private_key, patched_clients):
+    client = GTEClient(config=config, wallet_private_key=private_key)
 
     assert client.config == config
-    assert client._wallet_address == wallet_address
-    assert client._web3 is not None
     assert client._account is not None
+    assert client._web3 is not None
     assert client.rest is patched_clients["rest"].return_value
     assert client.websocket is patched_clients["ws"].return_value
     assert client.info is patched_clients["info"].return_value
     assert client.execution is patched_clients["execution"]
     assert client.connected is False
+    assert client._account.address == to_checksum_address("0x1234567890abcdef1234567890abcdef12345678")
 
 
 def test_initialization_without_wallet(config, patched_clients):
     client = GTEClient(config=config)
 
-    assert client._wallet_address is None
+    assert client._account is None
     assert client._execution is None
     assert client._web3 is not None
-    assert client._account is None
 
 
-def test_execution_client_initialization_parameters(config, wallet_address, private_key, patched_clients):
+def test_execution_client_initialization_parameters(config, private_key, patched_clients):
     """Test that ExecutionClient is initialized with correct parameters."""
-    client = GTEClient(config=config, wallet_address=wallet_address, wallet_private_key=private_key)
+    client = GTEClient(config=config, wallet_private_key=private_key)
     
     # Verify ExecutionClient was called with correct parameters
     patched_clients["execution_class"].assert_called_once_with(
         web3=client._web3,
-        main_account=wallet_address,
+        main_account=client._account.address,
         gte_router_address=config.router_address,
         weth_address=config.weth_address,
     )
 
 
-def test_execution_property_with_wallet(config, wallet_address, private_key, patched_clients):
+def test_execution_property_with_wallet(config, private_key, patched_clients):
     """Test that execution property returns the execution client when wallet is provided."""
-    client = GTEClient(config=config, wallet_address=wallet_address, wallet_private_key=private_key)
+    client = GTEClient(config=config, wallet_private_key=private_key)
     
     assert client.execution is patched_clients["execution"]
     assert client._execution is patched_clients["execution"]
@@ -124,18 +120,18 @@ def test_execution_property_without_wallet(config, patched_clients):
         _ = client.execution
 
 
-def test_execution_property_after_wallet_removal(config, wallet_address, private_key, patched_clients):
+def test_execution_property_after_wallet_removal(config, private_key, patched_clients):
     """Test that execution property works correctly when wallet is provided."""
-    client = GTEClient(config=config, wallet_address=wallet_address, wallet_private_key=private_key)
+    client = GTEClient(config=config, wallet_private_key=private_key)
     
     # Should work when execution client is initialized
     assert client.execution is patched_clients["execution"]
     assert client._execution is patched_clients["execution"]
 
 
-def test_execution_property_edge_cases(config, wallet_address, private_key, patched_clients):
+def test_execution_property_edge_cases(config, private_key, patched_clients):
     """Test edge cases for the execution property."""
-    client = GTEClient(config=config, wallet_address=wallet_address, wallet_private_key=private_key)
+    client = GTEClient(config=config, wallet_private_key=private_key)
     
     # Normal case - should work when wallet is provided
     assert client.execution is patched_clients["execution"]
@@ -148,7 +144,7 @@ def test_execution_property_edge_cases(config, wallet_address, private_key, patc
 
 
 @pytest.mark.asyncio
-async def test_connect_and_disconnect(config, wallet_address, private_key, patched_clients):
+async def test_connect_and_disconnect(config, private_key, patched_clients):
     rest = MagicMock()
     rest.connect = AsyncMock()
     rest.disconnect = AsyncMock()
@@ -164,7 +160,7 @@ async def test_connect_and_disconnect(config, wallet_address, private_key, patch
     patched_clients["ws"].return_value = ws
     patched_clients["info"].return_value = info
 
-    client = GTEClient(config=config, wallet_address=wallet_address, wallet_private_key=private_key)
+    client = GTEClient(config=config, wallet_private_key=private_key)
 
     await client.connect()
     assert client.connected is True
@@ -229,9 +225,8 @@ async def test_context_manager(config, patched_clients):
     patched_clients["ws"].return_value = ws
     patched_clients["info"].return_value = info
 
-    wallet_address = to_checksum_address("0x1234567890abcdef1234567890abcdef12345678")
     private_key = b"\x01" * 32
-    client = GTEClient(config=config, wallet_address=wallet_address, wallet_private_key=private_key)
+    client = GTEClient(config=config, wallet_private_key=private_key)
     async with client:
         assert client.connected is True
         assert client.execution is patched_clients["execution"]  # This should work with wallet
@@ -265,9 +260,8 @@ async def test_double_connect_disconnect_noop(config, patched_clients):
     patched_clients["ws"].return_value = ws
     patched_clients["info"].return_value = info
 
-    wallet_address = to_checksum_address("0x1234567890abcdef1234567890abcdef12345678")
     private_key = b"\x01" * 32
-    client = GTEClient(config=config, wallet_address=wallet_address, wallet_private_key=private_key)
+    client = GTEClient(config=config, wallet_private_key=private_key)
 
     await client.connect()
     await client.connect()  # no-op
