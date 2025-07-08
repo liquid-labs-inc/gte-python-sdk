@@ -94,52 +94,50 @@ Located in `src/gte_py/api/`:
 
 Located in `src/gte_py/clients/`:
 
-- **Account**: User account management
-- **CLOB**: Central Limit Order Book operations
-- **Token**: ERC20 token operations
-- **Trades**: Trading functions
-- **Info**: Market information
-- **Orderbook**: Order book queries and monitoring
-- **Execution**: Order execution handling
+- **GTEClient**:  Entrypoint for initializing sub-clients
+- **Info**: Market information from GTE's Rest and Websocket API
+- **Execution**: On-chain interaction handling
 
 ## Quick Start
 
 ```python
 import asyncio
-from web3 import AsyncWeb3
-from eth_utils import to_checksum_address
-from hexbytes import HexBytes
-from gte_py.clients import Client
+from eth_utils.address import to_checksum_address
+from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
-from gte_py.api.chain.utils import make_web3
+from gte_py.models import OrderSide, TimeInForce
 
+MARKET_ADDRESS = to_checksum_address("0xMarketAddress")
 WALLET_ADDRESS = to_checksum_address("0xYourWalletAddress")
 PRIVATE_KEY = HexBytes("0xYourPrivateKey")
 
 
 async def main():
-    # Initialize AsyncWeb3
+    # Load the default testnet configuration for MegaETH
     config = TESTNET_CONFIG
+        
+    # Initialize the GTEClient with the testnet config and your wallet's private key
+    async with GTEClient(config=config, wallet_private_key=WALLET_PRIVATE_KEY) as client:
+        # Set the order side to BUY (can also be OrderSide.SELL)
+        side = OrderSide.BUY
+        
+        # Specify the order size
+        size = 0.01
+        size_in_atoms = 10 ** 16
+        
+        # Fetch market information for the specified market address
+        market = await client.info.get_market(MARKET_ADDRESS)
+        
+        # Place a market order with the given parameters (side, size, slippage tolerance, and gas limit)
+        order = await client.execution.place_market_order(market, side, size, amount_is_raw=False slippage=0.05, gas=50 * 10 ** 6)
 
-    web3 = await make_web3(config, WALLET_ADDRESS, PRIVATE_KEY)
+        print_separator(f"Market order placed: {order}")
 
-    # Initialize the client
-    client = Client(
-        web3=web3,
-        config=config
-    )
-
-    # Query available markets
-    markets = await client.clob.get_markets()
-    print(f"Available markets: {len(markets)}")
-
-    # Get more information
-    for market in markets[:3]:  # Print first 3 markets
-        market_info = await client.clob.get_market_info(market.address)
-        print(f"Market: {market_info.name} ({market_info.symbol})")
-        print(f"  Address: {market_info.address}")
-        print(f"  Base token: {market_info.base_token_symbol}")
-        print(f"  Quote token: {market_info.quote_token_symbol}")
+        # Or place it using the atomic unit (default behavior)
+        order = await client.execution.place_market_order(market, side, size, amount_is_raw=True slippage=0.05, gas=50 * 10 ** 6)
+        
+        # Print the result of the placed order
+        print_separator(f"Market order placed: {order}")
 
 
 if __name__ == "__main__":
@@ -187,7 +185,7 @@ pyright
 
 ## License
 
-[License information]
+This project is licensed under the [MIT License](LICENSE.md).
 
 ## Contributing
 
