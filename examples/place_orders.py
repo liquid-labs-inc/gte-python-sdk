@@ -21,16 +21,14 @@ async def main():
     config = TESTNET_CONFIG
         
     async with GTEClient(config=config, wallet_private_key=WALLET_PRIVATE_KEY) as client:
+        
         side = OrderSide.BUY
-        
-        # 0.01 BTC
-        size = 10 ** 16
-        
+        size = 0.01
         
         market = await client.info.get_market(MARKET_ADDRESS)
         
         # Place a market order
-        order = await client.execution.place_market_order(market, side, size, slippage=0.05, gas=50 * 10 ** 6)
+        order = await client.execution.place_market_order(market, side, size, amount_is_raw=False, slippage=0.05, gas=50 * 10 ** 6)
         
         print_separator(f"Market order placed: {order}")
         
@@ -39,22 +37,17 @@ async def main():
         
         if side == OrderSide.BUY:
             # For BUY orders, use the best ask price (lowest selling price)
-            price = market.quote.convert_quantity_to_amount(float(order_book['bids'][0]['price'])-1000)
+            price = market.quote.convert_quantity_to_amount(float(order_book['bids'][0]['price'])-10)
         else:
             # For SELL orders, use the best bid price (highest buying price)
-            price = market.quote.convert_quantity_to_amount(float(order_book['asks'][0]['price'])+1000)
+            price = market.quote.convert_quantity_to_amount(float(order_book['asks'][0]['price'])+10)
         
         print(f"TOB Price: {price}")
-        token = client.execution._token_client.get_erc20(market.quote.address)
-        # approve quote token
-        
         
         # Place a limit order
-        order = await client.execution.place_limit_order(market, side, size, price, time_in_force=TimeInForce.GTC, gas=50 * 10 ** 6)
+        order = await client.execution.place_limit_order(market, side, size, price, amount_is_raw=False, time_in_force=TimeInForce.GTC, gas=50 * 10 ** 6)
         
         print_separator(f"Limit order placed: {order}")
-    
-    return
     
 
 if __name__ == "__main__":
