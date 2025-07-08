@@ -10,14 +10,6 @@ from .structs import ICLOBCancelArgs, ICLOBPostLimitOrderArgs
 from .utils import TypedContractFunction, load_abi
 
 
-class Settlement:
-    """Enum for CLOB settlement options"""
-
-    NONE = 0
-    WRAP = 1
-    UNWRAP = 2
-
-
 class Router:
     """
     Python wrapper for the GTERouter smart contract.
@@ -157,7 +149,7 @@ class Router:
         func = self.contract.functions.clobWithdraw(token_address, amount)
         return TypedContractFunction(func, tx_params)
 
-    def execute_clob_post_fill_order(
+    def clob_post_fill_order(
         self, clob_address: str, args: dict[str, Any], **kwargs
     ) -> TypedContractFunction[HexBytes]:
         """
@@ -172,10 +164,8 @@ class Router:
             TypedContractFunction that can be executed
         """
         clob_address = self.web3.to_checksum_address(clob_address)
-
         tx_params = {**kwargs}
-
-        func = self.contract.functions.executeClobPostFillOrder(clob_address, args)
+        func = self.contract.functions.clobPostFillOrder(clob_address, args)
         return TypedContractFunction(func, tx_params)
 
     def execute_route(
@@ -215,7 +205,7 @@ class Router:
         )
         return TypedContractFunction(func, tx_params)
 
-    def execute_univ2_swap_exact_tokens_for_tokens(
+    def univ2_swap_exact_tokens_for_tokens(
         self,
         amount_in: int,
         amount_out_min: int,
@@ -234,10 +224,8 @@ class Router:
         Returns:
             TypedContractFunction that can be executed
         """
-
         tx_params = {**kwargs}
-
-        func = self.contract.functions.executeUniV2SwapExactTokensForTokens(
+        func = self.contract.functions.uniV2SwapExactTokensForTokens(
             amount_in, amount_out_min, path
         )
         return TypedContractFunction(func, tx_params)
@@ -344,6 +332,7 @@ class Router:
         token: str,
         amount_in_base: int,
         worst_amount_out_quote: int,
+        unwrap_eth: bool,
         permit_single: dict[str, Any],
         signature: bytes,
         **kwargs,
@@ -355,6 +344,7 @@ class Router:
             token: Address of the token to sell
             amount_in_base: Amount of base tokens to sell
             worst_amount_out_quote: Minimum amount of quote tokens to receive
+            unwrap_eth: Whether to unwrap WETH to ETH
             permit_single: PermitSingle struct from the IAllowanceTransfer interface
             signature: Signature bytes for the permit
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
@@ -364,8 +354,7 @@ class Router:
         """
         token = self.web3.to_checksum_address(token)
         tx_params = {**kwargs}
-
         func = self.contract.functions.launchpadSellPermit2(
-            token, amount_in_base, worst_amount_out_quote, permit_single, signature
+            token, amount_in_base, worst_amount_out_quote, unwrap_eth, permit_single, signature
         )
         return TypedContractFunction(func, tx_params)
