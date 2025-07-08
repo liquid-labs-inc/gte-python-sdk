@@ -1,21 +1,15 @@
 """Example of querying portfolio and LP positions with the GTE client."""
 import sys
-
 sys.path.append(".")
 import asyncio
 
-from examples.utils import MARKET_ADDRESS, show_balances
-from gte_py.api.chain.utils import make_web3
-from gte_py.clients import Client
+from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
-from utils import (
-    print_separator,
-    WALLET_ADDRESS,
-    WALLET_PRIVATE_KEY
-)
+
+from examples.utils import WALLET_ADDRESS, print_separator
 
 
-async def display_portfolio(client: Client) -> None:
+async def display_portfolio(client: GTEClient) -> None:
     """
     Retrieve and display the user's portfolio information.
     
@@ -26,14 +20,14 @@ async def display_portfolio(client: Client) -> None:
 
     try:
         # Get the full portfolio information
-        # portfolio = await client.user.get_portfolio()
+        portfolio = await client.info.get_user_portfolio(WALLET_ADDRESS)
 
         # Display total USD value
-        total_usd_balance = await client.user.get_total_usd_balance()
+        total_usd_balance = portfolio.get('totalUsdBalance', 0)
         print(f"Total Portfolio Value: ${total_usd_balance:.2f} USD")
 
         # Display individual token balances
-        token_balances = await client.user.get_token_balances()
+        token_balances = portfolio.get('tokens', [])
 
         print("\nToken Balances:")
         print("--------------------------------------------------------------")
@@ -55,7 +49,7 @@ async def display_portfolio(client: Client) -> None:
         print(f"Error retrieving portfolio: {e}")
 
 
-async def display_lp_positions(client: Client) -> None:
+async def display_lp_positions(client: GTEClient) -> None:
     """
     Retrieve and display the user's liquidity provider positions.
     
@@ -66,7 +60,7 @@ async def display_lp_positions(client: Client) -> None:
 
     try:
         # Get LP positions
-        lp_positions = await client.user.get_lp_positions()
+        lp_positions = await client.info.get_user_lp_positions(WALLET_ADDRESS)
 
         if not lp_positions:
             print("No LP positions found.")
@@ -74,23 +68,23 @@ async def display_lp_positions(client: Client) -> None:
 
         print(f"Found {len(lp_positions)} LP positions:\n")
         print("--------------------------------------------------------------")
-        print(f"{'Market':<20} {'Share':<10} {'APR':<10} {'Token Amounts':<30}")
+        print(f"{'Market':<10} {'Share':<10} {'APR':<10} {'Token Amounts':<30}")
         print("--------------------------------------------------------------")
 
         for position in lp_positions:
-            market = position.get('market', {})
-            base_token = market.get('baseToken', {}).get('symbol', 'UNKNOWN')
-            quote_token = market.get('quoteToken', {}).get('symbol', 'UNKNOWN')
+            market = position.market
+            base_token = market.base.symbol
+            quote_token = market.quote.symbol
             market_name = f"{base_token}/{quote_token}"
+            share = position.share_of_pool * 100
+            apr = position.apr * 100
 
-            share = position.get('shareOfPool', 0) * 100  # Convert to percentage
-            apr = position.get('apr', 0) * 100  # Convert to percentage
-            token0_amount = float(position.get('token0Amount', 0))
-            token1_amount = float(position.get('token1Amount', 0))
+            token0_amount = position.token0_amount
+            token1_amount = position.token1_amount
 
             token_amounts = f"{token0_amount:.4f} {base_token}, {token1_amount:.4f} {quote_token}"
 
-            print(f"{market_name:<20} {share:<10.2f}% {apr:<10.2f}% {token_amounts:<30}")
+            print(f"{market_name:<10} {f'{share:.2f}%':<10} {f'{apr:.2f}%':<10} {token_amounts:<30}")
 
     except Exception as e:
         print(f"Error retrieving LP positions: {e}")
@@ -98,28 +92,23 @@ async def display_lp_positions(client: Client) -> None:
 
 async def main() -> None:
     """Run the portfolio query examples."""
-    network = TESTNET_CONFIG
-
-    print("Initializing AsyncWeb3...")
-    web3 = await make_web3(network, WALLET_ADDRESS, WALLET_PRIVATE_KEY)
+    config = TESTNET_CONFIG
 
     print("Connected to blockchain:")
-    print(f"Chain ID: {await web3.eth.chain_id}")
     print(f"Account: {WALLET_ADDRESS}")
 
-    # Initialize client with AsyncWeb3
+    # Initialize client with GTEClient
     print("Initializing GTE client...")
-    async with Client(web3=web3, config=network, account=WALLET_ADDRESS) as client:
-        await client.init()
+    async with GTEClient(
+        config=config,
+    ) as client:
+        print(f"Chain ID: {await client._web3.eth.chain_id}")
 
         # Display portfolio overview
         await display_portfolio(client)
 
         # Display LP positions
         await display_lp_positions(client)
-
-        market = await client.info.get_market(MARKET_ADDRESS)
-        await show_balances(client, market)
 
 
 if __name__ == "__main__":

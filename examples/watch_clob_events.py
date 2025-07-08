@@ -4,20 +4,17 @@ sys.path.append(".")
 import asyncio
 import logging
 from datetime import datetime, timedelta
-
-from examples.utils import WALLET_ADDRESS, MARKET_ADDRESS
+from typing import Any
+from eth_utils.address import to_checksum_address
+from web3 import AsyncWeb3
 from gte_py.api.chain.clob import ICLOB
 from gte_py.api.chain.event_source import EventStream
-from gte_py.api.chain.utils import make_web3
-from gte_py.clients import Client
+from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
+from examples.utils import WALLET_PRIVATE_KEY, WALLET_ADDRESS, print_separator
 
-
-def print_separator(title):
-    """Print a section separator."""
-    print("\n" + "=" * 50)
-    print(title)
-    print("=" * 50)
+# BTC/USD market address
+MARKET_ADDRESS = to_checksum_address("0x0F3642714B9516e3d17a936bAced4de47A6FFa5F")
 
 
 def handle_limit_order(event):
@@ -80,9 +77,10 @@ async def watch_account_orders(clob: ICLOB, account, duration_seconds=60):
 
     print(f"Streaming events for {duration_seconds} seconds...")
 
-    # Create streams
-    limit_stream = clob.stream_limit_order_processed_events(account=account)
-    fill_stream = clob.stream_fill_order_processed_events(account=account)
+    # Create streams with longer poll intervals to avoid rate limiting
+    # 5 streams * 1 request per 6 seconds = ~0.83 requests/second (well under 5/sec limit)
+    limit_stream = clob.stream_limit_order_processed_events(account=account, poll_interval=6.0)
+    fill_stream = clob.stream_fill_order_processed_events(account=account, poll_interval=6.0)
 
     # Set up handlers and exit conditions
     start_time = datetime.now()
@@ -108,12 +106,12 @@ async def watch_all_market_activity(clob: ICLOB, duration_seconds=60):
 
     print(f"Streaming events for {duration_seconds} seconds...")
 
-    # Create streams for essential event types
-    limit_stream = clob.stream_limit_order_processed_events()
-    fill_stream = clob.stream_fill_order_processed_events()
-    cancel_stream = clob.stream_order_canceled_events()
-    amend_stream = clob.stream_order_amended_events()
-    match_stream = clob.stream_order_matched_events()
+    # Create streams with staggered poll intervals to avoid rate limiting
+    limit_stream = clob.stream_limit_order_processed_events(poll_interval=3.0)
+    fill_stream = clob.stream_fill_order_processed_events(poll_interval=3.0)
+    cancel_stream = clob.stream_order_canceled_events(poll_interval=3.0)
+    amend_stream = clob.stream_order_amended_events(poll_interval=3.0)
+    match_stream = clob.stream_order_matched_events(poll_interval=3.0)
 
     # Set up handlers and exit conditions
     start_time = datetime.now()
@@ -136,7 +134,7 @@ async def watch_all_market_activity(clob: ICLOB, duration_seconds=60):
     print(f"Finished watching market activity after {duration_seconds} seconds")
 
 
-async def process_stream_async(stream: EventStream, handler, exit_condition):
+async def process_stream_async(stream: EventStream[Any], handler, exit_condition):
     """Process an event stream asynchronously."""
     # Get initial events
     async for event in stream.stream():
@@ -147,31 +145,26 @@ async def process_stream_async(stream: EventStream, handler, exit_condition):
 
 async def main():
     """Run the CLOB event watching examples."""
-    # Get configuration and AsyncWeb3 connection
-    network = TESTNET_CONFIG
+    config = TESTNET_CONFIG
 
-    print("Initializing AsyncWeb3...")
-    web3 = await make_web3(network)
+    async with GTEClient(
+        config=config,
+        wallet_private_key=WALLET_PRIVATE_KEY,
+    ) as client:
+        print("Connected to blockchain:")
+        print(f"Chain ID: {await client._web3.eth.chain_id}")
+        print(f"Latest block: {await client._web3.eth.get_block_number()}")
 
-    print("Connected to blockchain:")
-    print(f"Chain ID: {await web3.eth.chain_id}")
-    print(f"Latest block: {await web3.eth.get_block_number()}")
+        # Get the CLOB contract from execution
+        clob = client.execution._clob_client.get_clob(AsyncWeb3.to_checksum_address(MARKET_ADDRESS))
 
-    # Initialize client with AsyncWeb3
-    print("Initializing GTE client...")
-    client = Client(web3=web3, config=network, account=WALLET_ADDRESS)
+        # Example 1: Watch for all market activity for 30 seconds
+        await watch_all_market_activity(clob, duration_seconds=30)
 
-    # Initialize CLOB contract wrapper
-    print(f"Initializing CLOB contract at {MARKET_ADDRESS}...")
-    clob = client.clob.get_clob(MARKET_ADDRESS)
-    
-    # Example 1: Watch for all market activity for 30 seconds
-    await watch_all_market_activity(clob, duration_seconds=30)
+        # Example 2: Watch for specific account activity for 30 seconds
+        await watch_account_orders(clob, WALLET_ADDRESS, duration_seconds=30)
 
-    # Example 2: Watch for specific account activity for 30 seconds
-    await watch_account_orders(clob, WALLET_ADDRESS, duration_seconds=30)
-
-    print("\nAll examples completed. Exiting.")
+        print("\nAll examples completed. Exiting.")
 
 
 if __name__ == "__main__":

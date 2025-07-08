@@ -47,12 +47,12 @@ class NetworkConfig:
     router_address: ChecksumAddress
     launchpad_address: ChecksumAddress
     clob_manager_address: ChecksumAddress
-    weth_address: ChecksumAddress | None = None
+    weth_address: ChecksumAddress
 
 
 TESTNET_CONFIG = NetworkConfig(
     name="MegaETH Testnet",
-    api_url="https://api-testnet.gte.xyz",
+    api_url="https://api-testnet.gte.xyz/v1",
     ws_url="wss://api-testnet.gte.xyz/ws",
     chain_id=6342,
     native_token="MegaETH Testnet Ether (ETH)",

@@ -27,6 +27,9 @@ class CLOBClient:
         self._contracts: dict[ChecksumAddress, ICLOB] = {}
 
     async def init(self):
+        if self._clob_factory_address and self.clob_factory:
+            return
+
         # Get and initialize CLOB factory
         self._clob_factory_address = await self._router.get_clob_factory()
         self.clob_factory = CLOBFactory(

@@ -2,91 +2,100 @@
 
 import logging
 
-from typing import Optional, cast
 from eth_typing import ChecksumAddress
-from web3 import AsyncWeb3
+from eth_account.types import PrivateKeyType
 
-from gte_py.api.chain.clob_client import CLOBClient
-from gte_py.api.chain.token_client import TokenClient
-from gte_py.api.rest import RestApi
-from gte_py.configs import NetworkConfig
-from .user import UserClient
+from ..api.chain.utils import make_web3, Web3RequestManager
+from ..api.rest import RestApi
+from ..api.ws import WebSocketApi
+from ..configs import NetworkConfig
+
 from .execution import ExecutionClient
 from .info import InfoClient
-from .market import MarketClient
 
 logger = logging.getLogger(__name__)
 
 
-class Client:
-    """User-friendly client for interacting with GTE."""
+class GTEClient:
+    """User-friendly client for interacting with GTE.
+
+    Provides an interface to communicate with the GTE protocol through REST and Web3.
+    Aggregates low-level clients including CLOB, token, user, market, info, and execution layers.
+    """
 
     def __init__(
         self,
-        web3: AsyncWeb3,
         config: NetworkConfig,
-        account: Optional[ChecksumAddress] = None,
+        wallet_private_key: PrivateKeyType | None = None,
     ):
-        """
-        Initialize the client.
+        """Initializes the GTE client and subcomponents.
 
         Args:
-            web3: AsyncWeb3 instance
-            config: Network configuration
-            account: Address of main account
+            config: Network configuration for connecting to the network.
+            wallet_address: Optional user wallet address.
+            wallet_private_key: Optional wallet private key for signing transactions.
         """
-        default = web3.eth.default_account
-        if account is None and isinstance(default, str):
-            account = cast(ChecksumAddress, default)
-
-        self.rest = RestApi(base_url=config.api_url)
-        self._ws_url = config.ws_url
-        self.config: NetworkConfig = config
-
-        self._web3 = web3
-        self.clob = CLOBClient(self._web3, config.router_address)
-        # Initialize market service for fetching market information
-        self.token = TokenClient(self._web3)
-        self.info = InfoClient(
-            web3=self._web3, rest=self.rest, clob_client=self.clob, token_client=self.token
-        )
-        self.market: MarketClient = MarketClient(config, self.rest, self.info, self.clob)
+        self.config = config
         
-        if account is None:
-            self.user: Optional[UserClient] = None
-            self.execution: Optional[ExecutionClient] = None
-        else:
-            self.user = UserClient(
-                config=config,
-                account=account,
-                clob=self.clob,
-                token=self.token,
-                rest=self.rest
-            )
-            self.execution = ExecutionClient(
+        # Initialize Web3 and account
+        self._web3, self._account = make_web3(
+            config.rpc_http,
+            wallet_private_key=wallet_private_key,
+        )
+
+        # Initialize API clients
+        self.rest = RestApi(base_url=config.api_url)
+        self.websocket = WebSocketApi(ws_url=config.ws_url)
+        
+        # Initialize core clients
+        self.info = InfoClient(self.rest, self.websocket)
+        
+        self._execution: ExecutionClient | None = None
+        
+        if self._account:
+            self._execution = ExecutionClient(
                 web3=self._web3,
-                main_account=account,
-                clob=self.clob,
-                token=self.token,
-                rest=self.rest,
-                market=self.market,
-                user=self.user
+                main_account=self._account.address,
+                gte_router_address=config.router_address,
+                weth_address=config.weth_address,
             )
-
-        self._sender_address = account
-
-    async def init(self):
-        await self.clob.init()
-
-    async def __aenter__(self):
-        """Enter async context."""
-        await self.rest.__aenter__()
+        
+        self.connected = False
+    
+    async def connect(self):
+        if self.connected:
+            return
+        
+        if self._account:
+            await Web3RequestManager.ensure_instance(self._web3, self._account)
+        
+        await self.rest.connect()
+        await self.websocket.connect()
+        
+        if self._execution:
+            await self._execution.init()
+        
+        self.connected = True
+    
+    async def disconnect(self):
+        if not self.connected:
+            return
+        
+        await self.info.unsubscribe_all()
+        await self.rest.disconnect()
+        await self.websocket.disconnect()
+        
+        self.connected = False
+    
+    async def __aenter__(self) -> "GTEClient":
+        await self.connect()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Exit async context."""
-        await self.rest.__aexit__(exc_type, exc_val, exc_tb)
+        await self.disconnect()
 
-    async def close(self):
-        """Close the client and release resources."""
-        await self.__aexit__(None, None, None)
+    @property
+    def execution(self) -> ExecutionClient:
+        assert self._execution is not None, "Execution client not initialized"
+        return self._execution
+
