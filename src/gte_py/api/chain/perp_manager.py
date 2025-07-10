@@ -1,5 +1,12 @@
 
 from typing import List, Union
+from .structs import (
+    PostLimitOrderArgs,
+    PostFillOrderArgs,
+    CancelArgs,
+    MarketConfig,
+    MarketSettings,
+)
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 from .utils import load_abi, TxParams, TypedContractFunction
@@ -51,34 +58,43 @@ class PerpManager:
     async def get_collateral_balance(self, account: ChecksumAddress) -> int:
         return await self.contract.functions.getCollateralBalance(account).call()
 
-    async def get_cumulative_funding(self, asset: bytes) -> int:
+
+    async def get_cumulative_funding(self, asset: str) -> int:
         return await self.contract.functions.getCumulativeFunding(asset).call()
 
-    async def get_divergence_cap(self, asset: bytes) -> int:
+
+    async def get_divergence_cap(self, asset: str) -> int:
         return await self.contract.functions.getDivergenceCap(asset).call()
 
-    async def get_funding_interval(self, asset: bytes) -> int:
+
+    async def get_funding_interval(self, asset: str) -> int:
         return await self.contract.functions.getFundingInterval(asset).call()
 
     async def get_insurance_fund_balance(self) -> int:
         return await self.contract.functions.getInsuranceFundBalance().call()
 
-    async def get_last_funding_time(self, asset: bytes) -> int:
+
+    async def get_last_funding_time(self, asset: str) -> int:
         return await self.contract.functions.getLastFundingTime(asset).call()
 
-    async def get_limit_order(self, asset: bytes, order_id: int) -> dict:
+
+    async def get_limit_order(self, asset: str, order_id: int) -> dict:
         return await self.contract.functions.getLimitOrder(asset, order_id).call()
 
-    async def get_limit_order_backstop(self, asset: bytes, order_id: int) -> dict:
+
+    async def get_limit_order_backstop(self, asset: str, order_id: int) -> dict:
         return await self.contract.functions.getLimitOrderBackstop(asset, order_id).call()
 
-    async def get_limit_order_counter(self, asset: bytes) -> int:
+
+    async def get_limit_order_counter(self, asset: str) -> int:
         return await self.contract.functions.getLimitOrderCounter(asset).call()
 
-    async def get_limit_order_counter_backstop(self, asset: bytes) -> int:
+
+    async def get_limit_order_counter_backstop(self, asset: str) -> int:
         return await self.contract.functions.getLimitOrderCounterBackstop(asset).call()
 
-    async def get_liquidation_fee_rate(self, asset: bytes) -> int:
+
+    async def get_liquidation_fee_rate(self, asset: str) -> int:
         return await self.contract.functions.getLiquidationFeeRate(asset).call()
 
     async def get_margin_balance(self, account: ChecksumAddress, subaccount: int) -> int:
@@ -87,61 +103,80 @@ class PerpManager:
     async def get_margin_debt_gross(self, account: ChecksumAddress, subaccount: int) -> int:
         return await self.contract.functions.getMarginDebtGross(account, subaccount).call()
 
-    async def get_mark_price(self, asset: bytes) -> int:
+
+    async def get_mark_price(self, asset: str) -> int:
         return await self.contract.functions.getMarkPrice(asset).call()
 
-    async def get_market_status(self, asset: bytes) -> int:
+
+    async def get_market_status(self, asset: str) -> int:
         return await self.contract.functions.getMarketStatus(asset).call()
 
-    async def get_max_funding_rate(self, asset: bytes) -> int:
+
+    async def get_max_funding_rate(self, asset: str) -> int:
         return await self.contract.functions.getMaxFundingRate(asset).call()
 
-    async def get_max_leverage(self, asset: bytes) -> int:
+
+    async def get_max_leverage(self, asset: str) -> int:
         return await self.contract.functions.getMaxLeverage(asset).call()
 
-    async def get_max_limits_per_tx(self, asset: bytes) -> int:
+
+    async def get_max_limits_per_tx(self, asset: str) -> int:
         return await self.contract.functions.getMaxLimitsPerTx(asset).call()
 
-    async def get_max_num_orders(self, asset: bytes) -> int:
+
+    async def get_max_num_orders(self, asset: str) -> int:
         return await self.contract.functions.getMaxNumOrders(asset).call()
 
-    async def get_min_limit_order_amount_in_base(self, asset: bytes) -> int:
+
+    async def get_min_limit_order_amount_in_base(self, asset: str) -> int:
         return await self.contract.functions.getMinLimitOrderAmountInBase(asset).call()
 
-    async def get_min_margin_ratio(self, asset: bytes) -> int:
+
+    async def get_min_margin_ratio(self, asset: str) -> int:
         return await self.contract.functions.getMinMarginRatio(asset).call()
 
-    async def get_min_margin_ratio_backstop(self, asset: bytes) -> int:
+
+    async def get_min_margin_ratio_backstop(self, asset: str) -> int:
         return await self.contract.functions.getMinMarginRatioBackstop(asset).call()
 
-    async def get_num_asks(self, asset: bytes) -> int:
+
+    async def get_num_asks(self, asset: str) -> int:
         return await self.contract.functions.getNumAsks(asset).call()
 
-    async def get_num_asks_backstop(self, asset: bytes) -> int:
+
+    async def get_num_asks_backstop(self, asset: str) -> int:
         return await self.contract.functions.getNumAsksBackstop(asset).call()
 
-    async def get_num_bids(self, asset: bytes) -> int:
+
+    async def get_num_bids(self, asset: str) -> int:
         return await self.contract.functions.getNumBids(asset).call()
 
-    async def get_num_bids_backstop(self, asset: bytes) -> int:
+
+    async def get_num_bids_backstop(self, asset: str) -> int:
         return await self.contract.functions.getNumBidsBackstop(asset).call()
 
-    async def get_open_interest(self, asset: bytes) -> tuple:
+
+    async def get_open_interest(self, asset: str) -> tuple:
         return await self.contract.functions.getOpenInterest(asset).call()
 
-    async def get_open_interest_backstop_book(self, asset: bytes) -> tuple:
+
+    async def get_open_interest_backstop_book(self, asset: str) -> tuple:
         return await self.contract.functions.getOpenInterestBackstopBook(asset).call()
 
-    async def get_open_interest_book(self, asset: bytes) -> tuple:
+
+    async def get_open_interest_book(self, asset: str) -> tuple:
         return await self.contract.functions.getOpenInterestBook(asset).call()
 
-    async def get_partial_liquidation_rate(self, asset: bytes) -> int:
+
+    async def get_partial_liquidation_rate(self, asset: str) -> int:
         return await self.contract.functions.getPartialLiquidationRate(asset).call()
 
-    async def get_partial_liquidation_threshold(self, asset: bytes) -> int:
+
+    async def get_partial_liquidation_threshold(self, asset: str) -> int:
         return await self.contract.functions.getPartialLiquidationThreshold(asset).call()
 
-    async def get_position(self, asset: bytes, account: ChecksumAddress, subaccount: int) -> dict:
+
+    async def get_position(self, asset: str, account: ChecksumAddress, subaccount: int) -> dict:
         return await self.contract.functions.getPosition(asset, account, subaccount).call()
 
     async def get_positions(self, account: ChecksumAddress, subaccount: int) -> list:
@@ -186,7 +221,8 @@ class PerpManager:
 
     # ================= WRITE METHODS =================
 
-    def activate_market(self, asset: bytes, **kwargs) -> TypedContractFunction[None]:
+
+    def activate_market(self, asset: str, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.activateMarket(asset)
         params = {**kwargs}
         return TypedContractFunction(func, params)
@@ -206,12 +242,14 @@ class PerpManager:
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def cancel_limit_orders(self, asset: bytes, account: ChecksumAddress, subaccount: int, order_ids: list, settlement: int, **kwargs) -> TypedContractFunction[int]:
+
+    def cancel_limit_orders(self, asset: str, account: ChecksumAddress, subaccount: int, order_ids: list[int], settlement: int, **kwargs) -> TypedContractFunction[int]:
         func = self.contract.functions.cancelLimitOrders(asset, account, subaccount, order_ids, settlement)
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def cancel_limit_orders_backstop(self, asset: bytes, account: ChecksumAddress, subaccount: int, order_ids: list, settlement: int, **kwargs) -> TypedContractFunction[int]:
+
+    def cancel_limit_orders_backstop(self, asset: str, account: ChecksumAddress, subaccount: int, order_ids: list[int], settlement: int, **kwargs) -> TypedContractFunction[int]:
         func = self.contract.functions.cancelLimitOrdersBackstop(asset, account, subaccount, order_ids, settlement)
         params = {**kwargs}
         return TypedContractFunction(func, params)
@@ -226,12 +264,14 @@ class PerpManager:
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def create_market(self, asset: bytes, params_struct: dict, **kwargs) -> TypedContractFunction[None]:
+
+    def create_market(self, asset: str, params_struct: MarketConfig, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.createMarket(asset, params_struct)
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def deactivate_market(self, asset: bytes, **kwargs) -> TypedContractFunction[None]:
+
+    def deactivate_market(self, asset: str, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.deactivateMarket(asset)
         params = {**kwargs}
         return TypedContractFunction(func, params)
@@ -241,7 +281,8 @@ class PerpManager:
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def delist_market(self, asset: bytes, **kwargs) -> TypedContractFunction[None]:
+
+    def delist_market(self, asset: str, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.delistMarket(asset)
         params = {**kwargs}
         return TypedContractFunction(func, params)
@@ -251,12 +292,14 @@ class PerpManager:
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def disable_cross_margin(self, asset: bytes, **kwargs) -> TypedContractFunction[None]:
+
+    def disable_cross_margin(self, asset: str, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.disableCrossMargin(asset)
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def enable_cross_margin(self, asset: bytes, **kwargs) -> TypedContractFunction[None]:
+
+    def enable_cross_margin(self, asset: str, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.enableCrossMargin(asset)
         params = {**kwargs}
         return TypedContractFunction(func, params)
@@ -271,7 +314,7 @@ class PerpManager:
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def initialize(self, owner_: ChecksumAddress, taker_fees: list, maker_fees: list, **kwargs) -> TypedContractFunction[None]:
+    def initialize(self, owner_: ChecksumAddress, taker_fees: list[int], maker_fees: list[int], **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.initialize(owner_, taker_fees, maker_fees)
         params = {**kwargs}
         return TypedContractFunction(func, params)
@@ -291,22 +334,29 @@ class PerpManager:
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def post_fill_order(self, account: ChecksumAddress, args: dict, settlement: int, **kwargs) -> TypedContractFunction[dict]:
+
+
+    def post_fill_order(self, account: ChecksumAddress, args: PostFillOrderArgs, settlement: int, **kwargs) -> TypedContractFunction[dict]:
         func = self.contract.functions.postFillOrder(account, args, settlement)
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def post_limit_order(self, account: ChecksumAddress, args: dict, settlement: int, **kwargs) -> TypedContractFunction[dict]:
+
+
+    def post_limit_order(self, account: ChecksumAddress, args: PostLimitOrderArgs, settlement: int, **kwargs) -> TypedContractFunction[dict]:
         func = self.contract.functions.postLimitOrder(account, args, settlement)
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def post_limit_order_backstop(self, account: ChecksumAddress, args: dict, settlement: int, **kwargs) -> TypedContractFunction[dict]:
+
+
+    def post_limit_order_backstop(self, account: ChecksumAddress, args: PostLimitOrderArgs, settlement: int, **kwargs) -> TypedContractFunction[dict]:
         func = self.contract.functions.postLimitOrderBackstop(account, args, settlement)
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def relist_market(self, asset: bytes, **kwargs) -> TypedContractFunction[None]:
+
+    def relist_market(self, asset: str, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.relistMarket(asset)
         params = {**kwargs}
         return TypedContractFunction(func, params)
@@ -336,7 +386,8 @@ class PerpManager:
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def set_divergence_cap(self, asset: bytes, divergence_cap: int, **kwargs) -> TypedContractFunction[None]:
+
+    def set_divergence_cap(self, asset: str, divergence_cap: int, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.setDivergenceCap(asset, divergence_cap)
         params = {**kwargs}
         return TypedContractFunction(func, params)
@@ -346,12 +397,14 @@ class PerpManager:
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def set_funding_interval(self, asset: bytes, funding_interval: int, **kwargs) -> TypedContractFunction[None]:
+
+    def set_funding_interval(self, asset: str, funding_interval: int, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.setFundingInterval(asset, funding_interval)
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def set_liquidation_fee_rate(self, asset: bytes, liquidation_fee_rate: int, **kwargs) -> TypedContractFunction[None]:
+
+    def set_liquidation_fee_rate(self, asset: str, liquidation_fee_rate: int, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.setLiquidationFeeRate(asset, liquidation_fee_rate)
         params = {**kwargs}
         return TypedContractFunction(func, params)
@@ -361,47 +414,56 @@ class PerpManager:
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def set_mark_price(self, asset: bytes, mark_price: int, **kwargs) -> TypedContractFunction[None]:
+
+    def set_mark_price(self, asset: str, mark_price: int, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.setMarkPrice(asset, mark_price)
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def set_max_funding_rate(self, asset: bytes, max_funding_rate: int, **kwargs) -> TypedContractFunction[None]:
+
+    def set_max_funding_rate(self, asset: str, max_funding_rate: int, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.setMaxFundingRate(asset, max_funding_rate)
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def set_max_leverage(self, asset: bytes, max_open_leverage: int, **kwargs) -> TypedContractFunction[None]:
+
+    def set_max_leverage(self, asset: str, max_open_leverage: int, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.setMaxLeverage(asset, max_open_leverage)
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def set_max_limits_per_tx(self, asset: bytes, max_limits_per_tx: int, **kwargs) -> TypedContractFunction[None]:
+
+    def set_max_limits_per_tx(self, asset: str, max_limits_per_tx: int, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.setMaxLimitsPerTx(asset, max_limits_per_tx)
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def set_max_num_orders(self, asset: bytes, max_num_orders: int, **kwargs) -> TypedContractFunction[None]:
+
+    def set_max_num_orders(self, asset: str, max_num_orders: int, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.setMaxNumOrders(asset, max_num_orders)
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def set_min_limit_order_amount_in_base(self, asset: bytes, min_limit_order_amount_in_base: int, **kwargs) -> TypedContractFunction[None]:
+
+    def set_min_limit_order_amount_in_base(self, asset: str, min_limit_order_amount_in_base: int, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.setMinLimitOrderAmountInBase(asset, min_limit_order_amount_in_base)
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def set_partial_liquidation_rate(self, asset: bytes, partial_liquidation_rate: int, **kwargs) -> TypedContractFunction[None]:
+
+    def set_partial_liquidation_rate(self, asset: str, partial_liquidation_rate: int, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.setPartialLiquidationRate(asset, partial_liquidation_rate)
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def set_partial_liquidation_threshold(self, asset: bytes, partial_liquidation_threshold: int, **kwargs) -> TypedContractFunction[None]:
+
+    def set_partial_liquidation_threshold(self, asset: str, partial_liquidation_threshold: int, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.setPartialLiquidationThreshold(asset, partial_liquidation_threshold)
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def set_reduce_only_cap(self, asset: bytes, reduce_only_cap: int, **kwargs) -> TypedContractFunction[None]:
+
+    def set_reduce_only_cap(self, asset: str, reduce_only_cap: int, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.setReduceOnlyCap(asset, reduce_only_cap)
         params = {**kwargs}
         return TypedContractFunction(func, params)
@@ -411,12 +473,14 @@ class PerpManager:
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def set_tick_size(self, asset: bytes, tick_size: int, **kwargs) -> TypedContractFunction[None]:
+
+    def set_tick_size(self, asset: str, tick_size: int, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.setTickSize(asset, tick_size)
         params = {**kwargs}
         return TypedContractFunction(func, params)
 
-    def settle_funding(self, asset: bytes, **kwargs) -> TypedContractFunction[None]:
+
+    def settle_funding(self, asset: str, **kwargs) -> TypedContractFunction[None]:
         func = self.contract.functions.settleFunding(asset)
         params = {**kwargs}
         return TypedContractFunction(func, params)
