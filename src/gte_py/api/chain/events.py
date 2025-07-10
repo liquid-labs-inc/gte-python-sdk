@@ -11,7 +11,7 @@ from .structs import OrderStruct, ICLOBPostLimitOrderArgs, ICLOBPostFillOrderArg
 
 
 @dataclass
-class CLOBEvent:
+class EthEvent:
     """Base class for CLOB events."""
 
     tx_hash: HexBytes
@@ -24,7 +24,212 @@ class CLOBEvent:
 
 
 @dataclass
-class LimitOrderSubmittedEvent(CLOBEvent):
+class WithdrawCollateralEvent(EthEvent):
+    account: ChecksumAddress = None  # type: ignore
+    amount: int = 0
+
+
+def parse_withdraw_collateral(event_data: EventData) -> WithdrawCollateralEvent:
+    args = event_data.get("args", {})
+    account = cast(ChecksumAddress, args.get("account"))
+    amount = cast(int, args.get("amount"))
+    return WithdrawCollateralEvent(account=account, amount=amount)
+
+
+@dataclass
+class AccountLiquidatedEvent(EthEvent):
+    account: ChecksumAddress = None  # type: ignore
+    subaccount: int = 0
+    rpnl: int = 0
+    fee: int = 0
+    badDebt: int = 0
+    bookType: int = 0
+    nonce: int = 0
+
+
+def parse_account_liquidated(event_data: EventData) -> AccountLiquidatedEvent:
+    args = event_data.get("args", {})
+    return AccountLiquidatedEvent(
+        account=cast(ChecksumAddress, args.get("account")),
+        subaccount=cast(int, args.get("subaccount")),
+        rpnl=cast(int, args.get("rpnl")),
+        fee=cast(int, args.get("fee")),
+        badDebt=cast(int, args.get("badDebt")),
+        bookType=cast(int, args.get("bookType")),
+        nonce=cast(int, args.get("nonce")),
+    )
+
+
+@dataclass
+class FeeTierUpdatedEvent(EthEvent):
+    account: ChecksumAddress = None  # type: ignore
+    feeTier: int = 0
+    nonce: int = 0
+
+
+def parse_fee_tier_updated(event_data: EventData) -> FeeTierUpdatedEvent:
+    args = event_data.get("args", {})
+    return FeeTierUpdatedEvent(
+        account=cast(ChecksumAddress, args.get("account")),
+        feeTier=cast(int, args.get("feeTier")),
+        nonce=cast(int, args.get("nonce")),
+    )
+
+
+@dataclass
+class FundingIntervalUpdatedEvent(EthEvent):
+    asset: str = ""
+    fundingInterval: int = 0
+    nonce: int = 0
+
+
+def parse_funding_interval_updated(event_data: EventData) -> FundingIntervalUpdatedEvent:
+    args = event_data.get("args", {})
+    return FundingIntervalUpdatedEvent(
+        asset=cast(bytes, args.get("asset")),
+        fundingInterval=cast(int, args.get("fundingInterval")),
+        nonce=cast(int, args.get("nonce")),
+    )
+
+
+@dataclass
+class FundingPaymentRealizedEvent(EthEvent):
+    account: ChecksumAddress = None  # type: ignore
+    subaccount: int = 0
+    fundingPayment: int = 0
+    nonce: int = 0
+
+
+def parse_funding_payment_realized(event_data: EventData) -> FundingPaymentRealizedEvent:
+    args = event_data.get("args", {})
+    return FundingPaymentRealizedEvent(
+        account=cast(ChecksumAddress, args.get("account")),
+        subaccount=cast(int, args.get("subaccount")),
+        fundingPayment=cast(int, args.get("fundingPayment")),
+        nonce=cast(int, args.get("nonce")),
+    )
+
+
+@dataclass
+class FundingSettledEvent(EthEvent):
+    asset: str = ""
+    funding: int = 0
+    cumulativeFunding: int = 0
+    nonce: int = 0
+
+
+def parse_funding_settled(event_data: EventData) -> FundingSettledEvent:
+    args = event_data.get("args", {})
+    return FundingSettledEvent(
+        asset=cast(bytes, args.get("asset")),
+        funding=cast(int, args.get("funding")),
+        cumulativeFunding=cast(int, args.get("cumulativeFunding")),
+        nonce=cast(int, args.get("nonce")),
+    )
+
+
+@dataclass
+class InsuranceFundDepositEvent(EthEvent):
+    account: ChecksumAddress = None  # type: ignore
+    amount: int = 0
+
+
+def parse_insurance_fund_deposit(event_data: EventData) -> InsuranceFundDepositEvent:
+    args = event_data.get("args", {})
+    return InsuranceFundDepositEvent(
+        account=cast(ChecksumAddress, args.get("account")),
+        amount=cast(int, args.get("amount")),
+    )
+
+
+@dataclass
+class InsuranceFundWithdrawalEvent(EthEvent):
+    account: ChecksumAddress = None  # type: ignore
+    amount: int = 0
+
+
+def parse_insurance_fund_withdrawal(event_data: EventData) -> InsuranceFundWithdrawalEvent:
+    args = event_data.get("args", {})
+    return InsuranceFundWithdrawalEvent(
+        account=cast(ChecksumAddress, args.get("account")),
+        amount=cast(int, args.get("amount")),
+    )
+
+
+@dataclass
+class PerpDepositEvent(EthEvent):
+    account: ChecksumAddress = None  # type: ignore
+    amount: int = 0
+
+
+def parse_perp_deposit(event_data: EventData) -> PerpDepositEvent:
+    args = event_data.get("args", {})
+    return PerpDepositEvent(
+        account=cast(ChecksumAddress, args.get("account")),
+        amount=cast(int, args.get("amount")),
+    )
+
+
+@dataclass
+class PerpWithdrawCollateralEvent(EthEvent):
+    account: ChecksumAddress = None  # type: ignore
+    amount: int = 0
+
+
+def parse_perp_withdraw_collateral(event_data: EventData) -> PerpWithdrawCollateralEvent:
+    args = event_data.get("args", {})
+    return PerpWithdrawCollateralEvent(
+        account=cast(ChecksumAddress, args.get("account")),
+        amount=cast(int, args.get("amount")),
+    )
+
+
+@dataclass
+class PerpCrossMarginEnabledEvent(EthEvent):
+    asset: str = ""
+    nonce: int = 0
+
+
+def parse_perp_cross_margin_enabled(event_data: EventData) -> PerpCrossMarginEnabledEvent:
+    args = event_data.get("args", {})
+    return PerpCrossMarginEnabledEvent(
+        asset=cast(bytes, args.get("asset")),
+        nonce=cast(int, args.get("nonce")),
+    )
+
+
+@dataclass
+class PerpCrossMarginDisabledEvent(EthEvent):
+    asset: str = ""
+    nonce: int = 0
+
+
+def parse_perp_cross_margin_disabled(event_data: EventData) -> PerpCrossMarginDisabledEvent:
+    args = event_data.get("args", {})
+    return PerpCrossMarginDisabledEvent(
+        asset=cast(bytes, args.get("asset")),
+        nonce=cast(int, args.get("nonce")),
+    )
+
+
+@dataclass
+class DivergenceCapUpdatedEvent(EthEvent):
+    asset: str = ""
+    divergenceCap: int = 0
+    nonce: int = 0
+
+
+def parse_divergence_cap_updated(event_data: EventData) -> DivergenceCapUpdatedEvent:
+    args = event_data.get("args", {})
+    return DivergenceCapUpdatedEvent(
+        asset=cast(bytes, args.get("asset")),
+        divergenceCap=cast(int, args.get("divergenceCap")),
+        nonce=cast(int, args.get("nonce")),
+    )
+
+
+@dataclass
+class LimitOrderSubmittedEvent(EthEvent):
     """Event emitted when a limit order is submitted."""
 
     owner: ChecksumAddress
@@ -33,7 +238,7 @@ class LimitOrderSubmittedEvent(CLOBEvent):
 
 
 @dataclass
-class LimitOrderProcessedEvent(CLOBEvent):
+class LimitOrderProcessedEvent(EthEvent):
     """Event emitted when a limit order is processed."""
 
     account: ChecksumAddress
@@ -46,7 +251,7 @@ class LimitOrderProcessedEvent(CLOBEvent):
 
 
 @dataclass
-class FillOrderSubmittedEvent(CLOBEvent):
+class FillOrderSubmittedEvent(EthEvent):
     """Event emitted when a fill order is submitted."""
 
     owner: ChecksumAddress
@@ -55,7 +260,7 @@ class FillOrderSubmittedEvent(CLOBEvent):
 
 
 @dataclass
-class FillOrderProcessedEvent(CLOBEvent):
+class FillOrderProcessedEvent(EthEvent):
     """Event emitted when a fill order is processed."""
 
     account: ChecksumAddress
@@ -67,7 +272,7 @@ class FillOrderProcessedEvent(CLOBEvent):
 
 
 @dataclass
-class OrderMatchedEvent(CLOBEvent):
+class OrderMatchedEvent(EthEvent):
     """Event emitted when orders are matched."""
 
     taker_order_id: int
@@ -78,7 +283,7 @@ class OrderMatchedEvent(CLOBEvent):
 
 
 @dataclass
-class OrderAmendedEvent(CLOBEvent):
+class OrderAmendedEvent(EthEvent):
     """Event emitted when an order is amended."""
 
     pre_amend: OrderStruct
@@ -88,7 +293,7 @@ class OrderAmendedEvent(CLOBEvent):
 
 
 @dataclass
-class OrderCanceledEvent(CLOBEvent):
+class OrderCanceledEvent(EthEvent):
     """Event emitted when an order is canceled."""
 
     order_id: int
@@ -99,28 +304,28 @@ class OrderCanceledEvent(CLOBEvent):
 
 
 @dataclass
-class TickSizeUpdatedEvent(CLOBEvent):
+class TickSizeUpdatedEvent(EthEvent):
     """Event emitted when the tick size is updated."""
 
     new_tick_size: int
 
 
 @dataclass
-class MinLimitOrderAmountInBaseUpdatedEvent(CLOBEvent):
+class MinLimitOrderAmountInBaseUpdatedEvent(EthEvent):
     """Event emitted when the minimum limit order amount in base is updated."""
 
     new_min_limit_order_amount_in_base: int
 
 
 @dataclass
-class MaxLimitOrdersPerTxUpdatedEvent(CLOBEvent):
+class MaxLimitOrdersPerTxUpdatedEvent(EthEvent):
     """Event emitted when the maximum limit orders per transaction is updated."""
 
     new_max_limits: int
 
 
 @dataclass
-class MaxLimitOrdersAllowlistedEvent(CLOBEvent):
+class MaxLimitOrdersAllowlistedEvent(EthEvent):
     """Event emitted when an account is added/removed from max limit orders exemption."""
 
     account: ChecksumAddress
@@ -128,7 +333,7 @@ class MaxLimitOrdersAllowlistedEvent(CLOBEvent):
 
 
 @dataclass
-class CancelFailedEvent(CLOBEvent):
+class CancelFailedEvent(EthEvent):
     """Event emitted when a cancel operation fails."""
 
     order_id: int
@@ -136,14 +341,14 @@ class CancelFailedEvent(CLOBEvent):
 
 
 @dataclass
-class InitializedEvent(CLOBEvent):
+class InitializedEvent(EthEvent):
     """Event emitted when a contract is initialized."""
 
     version: int
 
 
 @dataclass
-class OwnershipTransferStartedEvent(CLOBEvent):
+class OwnershipTransferStartedEvent(EthEvent):
     """Event emitted when ownership transfer is started."""
 
     previous_owner: ChecksumAddress
@@ -151,7 +356,7 @@ class OwnershipTransferStartedEvent(CLOBEvent):
 
 
 @dataclass
-class ClobOwnershipTransferredEvent(CLOBEvent):
+class ClobOwnershipTransferredEvent(EthEvent):
     """Event emitted when ownership is transferred."""
 
     previous_owner: ChecksumAddress
@@ -266,21 +471,21 @@ class WithdrawEvent(CLOBManagerEvent):
 @dataclass
 class OwnershipHandoverCanceledEvent(CLOBManagerEvent):
     """Event emitted when an ownership handover is canceled."""
-    
+
     pending_owner: ChecksumAddress
 
 
 @dataclass
 class OwnershipHandoverRequestedEvent(CLOBManagerEvent):
     """Event emitted when an ownership handover is requested."""
-    
+
     pending_owner: ChecksumAddress
 
 
 @dataclass
 class ClobManagerOwnershipTransferredEvent(CLOBManagerEvent):
     """Event emitted when ownership is transferred."""
-    
+
     old_owner: ChecksumAddress
     new_owner: ChecksumAddress
 
@@ -394,7 +599,7 @@ def parse_fill_order_submitted(event_data: EventData) -> FillOrderSubmittedEvent
     """
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
-    
+
     owner = cast(ChecksumAddress, args.get("owner"))
     order_id = cast(int, args.get("orderId"))
     order_args = cast(ICLOBPostFillOrderArgs, args.get("args"))
@@ -523,7 +728,7 @@ def parse_order_canceled(event_data: EventData) -> OrderCanceledEvent:
         order_id=order_id,
         owner=owner,
         quote_token_refunded=quote_token_refunded,
-        base_token_refunded=base_token_refunded,            
+        base_token_refunded=base_token_refunded,
         settlement=settlement,
         nonce=nonce,
     )
@@ -590,7 +795,6 @@ def parse_max_limit_orders_per_tx_updated(event_data: EventData) -> MaxLimitOrde
         **base_info,
         new_max_limits=new_max_limits,
     )
-
 
 
 def parse_max_limit_orders_allowlisted(event_data: EventData) -> MaxLimitOrdersAllowlistedEvent:
@@ -699,7 +903,7 @@ def parse_ownership_handover_canceled(event_data: EventData) -> OwnershipHandove
     """
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
-    
+
     pending_owner = cast(ChecksumAddress, args.get("pendingOwner"))
 
     # This event doesn't have a nonce in the standard Ownable contract
@@ -708,7 +912,6 @@ def parse_ownership_handover_canceled(event_data: EventData) -> OwnershipHandove
         pending_owner=pending_owner,
         nonce=0,
     )
-
 
 
 def parse_ownership_handover_requested(event_data: EventData) -> OwnershipHandoverRequestedEvent:
@@ -723,7 +926,7 @@ def parse_ownership_handover_requested(event_data: EventData) -> OwnershipHandov
     """
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
-    
+
     pending_owner = cast(ChecksumAddress, args.get("pendingOwner"))
 
     # This event doesn't have a nonce in the standard Ownable contract
@@ -746,7 +949,7 @@ def parse_ownership_transferred(event_data: EventData) -> ClobManagerOwnershipTr
     """
     args = event_data.get("args", {})
     base_info = _create_base_event_info(event_data)
-    
+
     old_owner = cast(ChecksumAddress, args.get("oldOwner"))
     new_owner = cast(ChecksumAddress, args.get("newOwner"))
 
@@ -902,7 +1105,6 @@ def parse_fee_recipient_set(event_data: EventData) -> FeeRecipientSetEvent:
         **base_info,
         fee_recipient=fee_recipient,
     )
-
 
 
 def parse_market_created(event_data: EventData) -> MarketCreatedEvent:
@@ -1075,7 +1277,6 @@ def parse_withdraw(event_data: EventData) -> WithdrawEvent:
     )
 
 
-# Dictionary mapping event names to their parser functions
 EVENT_PARSERS = {
     "LimitOrderSubmitted": parse_limit_order_submitted,
     "LimitOrderProcessed": parse_limit_order_processed,
@@ -1094,7 +1295,10 @@ EVENT_PARSERS = {
     "OwnershipTransferred": parse_ownership_transferred,
 }
 
-# Add CLOB Manager event parsers to the global dictionary
+PERP_MANAGER_EVENT_PARSERS = {
+    "WithdrawCollateral": parse_withdraw_collateral,
+}
+
 CLOB_MANAGER_EVENT_PARSERS = {
     "AccountCredited": parse_account_credited,
     "AccountDebited": parse_account_debited,
@@ -1113,9 +1317,10 @@ CLOB_MANAGER_EVENT_PARSERS = {
 
 # Update the existing EVENT_PARSERS dictionary
 EVENT_PARSERS.update(CLOB_MANAGER_EVENT_PARSERS)
+EVENT_PARSERS.update(PERP_MANAGER_EVENT_PARSERS)
 
 
-def convert_event_data_to_typed_event(event_data: EventData) -> CLOBEvent:
+def convert_event_data_to_typed_event(event_data: EventData) -> EthEvent:
     """
     Convert raw event data to typed event.
 
@@ -1139,7 +1344,7 @@ def convert_event_data_to_typed_event(event_data: EventData) -> CLOBEvent:
 
     raw_data = cast(Dict[str, Any], event_data)
 
-    return CLOBEvent(
+    return EthEvent(
         tx_hash=event_data.get("transactionHash"),
         log_index=event_data.get("logIndex"),
         block_number=event_data.get("blockNumber"),
