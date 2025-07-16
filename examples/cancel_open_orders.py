@@ -29,7 +29,7 @@ async def main():
         
         # convert to order model
         for order in open_orders:
-            _ = await client.execution.cancel_order(market, int(order["orderId"]), gas=50 * 10**6)
+            print(await client.execution.cancel_order(market, int(order["orderId"]), gas=50 * 10**6))
         
         return
     
