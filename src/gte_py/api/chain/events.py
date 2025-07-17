@@ -514,6 +514,7 @@ def parse_order_canceled(event_data: EventData) -> OrderCanceledEvent:
     quote_token_refunded = cast(int, args.get("quoteTokenRefunded"))
     base_token_refunded = cast(int, args.get("baseTokenRefunded"))
     settlement = cast(int, args.get("settlement"))
+    nonce = cast(int, args.get("nonce", args.get("eventNonce", 0)))
 
     return OrderCanceledEvent(
         **base_info,
@@ -522,6 +523,7 @@ def parse_order_canceled(event_data: EventData) -> OrderCanceledEvent:
         quote_token_refunded=quote_token_refunded,
         base_token_refunded=base_token_refunded,            
         settlement=settlement,
+        nonce=nonce,
     )
 
 
@@ -1162,4 +1164,5 @@ def convert_event_data_to_typed_event(event_data: EventData) -> CLOBEvent:
         address=event_data.get("address"),
         event_name=event_name,
         raw_data=raw_data,
+        nonce=nonce,
     )
