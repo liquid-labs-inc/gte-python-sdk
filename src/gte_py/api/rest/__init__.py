@@ -141,7 +141,7 @@ class RestApi:
                         return {}
                     
                     try:
-                        parsed_json = json.loads(response_data, parse_float=Decimal, parse_int=Decimal)
+                        parsed_json = json.loads(response_data, parse_float=Decimal)
                         return parsed_json
                     except json.JSONDecodeError as e:
                         logger.error(f"Invalid JSON response: {response_data[:200]}...")
