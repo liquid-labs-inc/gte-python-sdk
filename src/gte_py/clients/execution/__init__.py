@@ -1,18 +1,19 @@
 """Order execution functionality for the GTE client."""
 
 import logging
-from typing import Optional, Tuple, Awaitable, Any, List
+from typing import Optional, Tuple, Any, List
 
 from eth_typing import ChecksumAddress
+from eth_account.signers.local import LocalAccount
 from typing_extensions import Unpack
 from web3 import AsyncWeb3
 from web3.types import TxParams
 
 from gte_py.api.chain.clob_client import CLOBClient
 from gte_py.api.chain.token_client import TokenClient
-from gte_py.api.chain.events import OrderCanceledEvent, FillOrderProcessedEvent, LimitOrderProcessedEvent
-from gte_py.api.chain.structs import OrderSide, Settlement, LimitOrderType, FillOrderType, OperatorRole
-from gte_py.api.chain.utils import TypedContractFunction
+from gte_py.api.chain.events import OrderAmendedEvent, OrderCanceledEvent, FillOrderProcessedEvent, LimitOrderProcessedEvent, parse_fill_order_processed, parse_limit_order_processed, parse_deposit, parse_order_canceled, parse_withdraw, parse_order_amended
+from gte_py.api.chain.structs import ICLOBAmendArgs, OrderSide, Settlement, LimitOrderType, FillOrderType, OperatorRole, ICLOBPostFillOrderArgs, ICLOBPostLimitOrderArgs, ICLOBCancelArgs
+from gte_py.api.chain.utils import TypedContractFunction, BoundedNonceTxScheduler
 from gte_py.models import Market, Order, OrderStatus, TimeInForce
 from gte_py.api.chain.erc20 import ERC20
 
@@ -25,9 +26,10 @@ class ExecutionClient:
     def __init__(
             self,
             web3: AsyncWeb3,
-            main_account: ChecksumAddress,
+            account: LocalAccount,
             gte_router_address: ChecksumAddress,
             weth_address: ChecksumAddress,
+            clob_manager_address: ChecksumAddress,
     ):
         """
         Initialize the execution client.
@@ -38,17 +40,33 @@ class ExecutionClient:
             gte_router_address: Address of the GTE router
         """
         self._web3 = web3
-        self.main_account = main_account
+        self._account = account
+        self.main_account = account.address
         self._gte_router_address = gte_router_address
         self._clob_client = CLOBClient(web3, gte_router_address)
         self._token_client = TokenClient(web3)
         self._weth_address = weth_address
         self._clob_factory = None
+        self._clob_manager_address = clob_manager_address
+        self._scheduler = BoundedNonceTxScheduler(
+            web3=self._web3,
+            account=self._account,
+        )
         
+        # Cache for approved tokens to avoid repeated approval checks
+        self._approved_tokens: set[ChecksumAddress] = set()
+        
+        # Maximum approval amount (2^256 - 1)
+        self._max_approval = 2**256 - 1
+        
+        # Cache for price limits to avoid repeated network calls
+        self._price_cache: dict[tuple[ChecksumAddress, OrderSide, float], tuple[int, float]] = {}
+
     async def init(self):
         """Initialize the CLOB client."""
         await self._clob_client.init()
         self._clob_factory = self._clob_client.get_factory_address()
+        await self._scheduler.start()
 
     # ================= DEPOSIT/WITHDRAW OPERATIONS =================
     
@@ -59,16 +77,20 @@ class ExecutionClient:
         **kwargs,
     ):
         """
-        Ensure the correct token is approved for the required amount. For market orders, calculates price limit using orderbook.
-        Returns the amount that was approved.
-        """
-        if not self._clob_factory:
-            await self.init()
-            assert self._clob_factory is not None, "CLOB factory should be initialized"
-            
-        allowance = await token.allowance(owner=self.main_account, spender=self._clob_factory)
-        if allowance < amount:
-            _ = await token.approve(spender=self._clob_factory, amount=amount, **kwargs).send_wait()
+        Ensure the correct token is approved for the required amount.
+        Uses infinite approvals (2^256 - 1) and caches approved tokens.
+        """ 
+        token_address = token.address
+        
+        # Check if we've already approved this token
+        if token_address in self._approved_tokens:
+            return
+        
+        # Need to approve - use infinite approval
+        _ = await self._scheduler.send_wait(token.approve(spender=self._clob_manager_address, amount=self._max_approval, **kwargs))
+        
+        # Cache the token as approved
+        self._approved_tokens.add(token_address)
 
     def _adjust_amount(self, market: Market, amount, amount_is_raw: bool, amount_is_base: bool) -> int:
         if amount_is_raw:
@@ -99,16 +121,17 @@ class ExecutionClient:
 
         token = self._token_client.get_erc20(token_address)
         
-        await token.approve(spender=self._clob_client.get_factory_address(), amount=amount, **kwargs).send_wait()
+        # time the approval
+        await self._ensure_approval(amount, token, **kwargs)
 
-        # Then deposit the tokens
-        return await clob_factory.deposit(
+        tx = clob_factory.deposit(
             account=self.main_account,
             token=token_address,
             amount=amount,
             from_operator=False,
             **kwargs,
-        ).send_wait()
+        ).with_event(clob_factory.contract.events.Deposit(), parse_deposit)
+        return await self._scheduler.send_wait(tx)
 
     async def withdraw(
             self, token_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
@@ -130,11 +153,12 @@ class ExecutionClient:
             clob_factory = self._clob_client.clob_factory
             assert clob_factory is not None, "CLOB factory should be initialized"
 
-        # Withdraw the tokens
-        return await clob_factory.withdraw(
+        tx = clob_factory.withdraw(
             account=self.main_account, token=token_address, amount=amount, to_operator=False, **kwargs
-        ).send_wait()
+        ).with_event(clob_factory.contract.events.Withdraw(), parse_withdraw)
         
+        return await self._scheduler.send_wait(tx)
+
     async def get_token_balance(self, token_address: ChecksumAddress) -> int:
         """
         Get the balance of a token in the wallet.
@@ -154,14 +178,15 @@ class ExecutionClient:
         Wrap ETH to WETH.
 
         Args:
-            weth_address: Address of the WETH contract
             amount: Amount of ETH to wrap
             **kwargs: Additional transaction parameters
 
         Returns:
             Transaction result from the wrap operation
         """
-        return await self._token_client.get_weth(self._weth_address).deposit_eth(amount, **kwargs).send_wait()
+        weth = self._token_client.get_weth(self._weth_address)
+        tx = weth.deposit_eth(amount, **kwargs).with_event(weth.contract.events.Deposit())
+        return await self._scheduler.send_wait(tx)
 
     async def unwrap_eth(
             self, amount: int, **kwargs: Unpack[TxParams]
@@ -170,14 +195,15 @@ class ExecutionClient:
         Unwrap WETH to ETH.
 
         Args:
-            weth_address: Address of the WETH contract
             amount: Amount of WETH to unwrap
             **kwargs: Additional transaction parameters
 
         Returns:
             Transaction result from the unwrap operation
         """
-        return await self._token_client.get_weth(self._weth_address).withdraw_eth(amount, **kwargs).send_wait()
+        weth = self._token_client.get_weth(self._weth_address)
+        tx = weth.withdraw_eth(amount, **kwargs).with_event(weth.contract.events.Withdrawal())
+        return await self._scheduler.send_wait(tx)
 
     # ================= APPROVE OPERATIONS =================
 
@@ -221,11 +247,11 @@ class ExecutionClient:
             clob_factory = self._clob_client.clob_factory
             assert clob_factory is not None, "CLOB factory should be initialized"
 
-        return await clob_factory.approve_operator(
+        return await self._scheduler.send_wait(clob_factory.approve_operator(
             operator=operator_address,
             roles=roles_int,
             **kwargs
-        ).send_wait()
+        ))
 
     async def disapprove_operator(self, operator_address: ChecksumAddress,
                                   roles: list[OperatorRole],
@@ -251,13 +277,15 @@ class ExecutionClient:
             clob_factory = self._clob_client.clob_factory
             assert clob_factory is not None, "CLOB factory should be initialized"
 
-        return await clob_factory.disapprove_operator(
+        return await self._scheduler.send_wait(clob_factory.disapprove_operator(
             operator=operator_address,
             roles=roles_int,
             **kwargs
-        ).send_wait()
+        ))
 
-    # ================= ORDER OPERATIONS =================
+    # ================= ROUTER-BASED ORDER OPERATIONS =================
+    # These methods use the router contract for consistency, but note that router calls
+    # don't emit events directly - they route to CLOB contracts which emit the events.
 
     def place_limit_order_tx(
             self,
@@ -271,10 +299,13 @@ class ExecutionClient:
             **kwargs,
     ) -> TypedContractFunction[Any]:
         """
-        Place a limit order on the CLOB.
+        Place a limit order using the router contract.
+        
+        Note: Router calls don't emit events directly, but route to CLOB contracts.
+        Use place_limit_order() if you need event-based order tracking.
 
         Args:
-            market: Market to place the order on
+            market_address: Address of the market/CLOB contract
             side: Order side (BUY or SELL)
             amount: Order amount in base tokens
             price: Order price
@@ -286,12 +317,10 @@ class ExecutionClient:
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
-        # Get the CLOB contract
+        router = self._clob_client.get_router()
         clob = self._clob_client.get_clob(market_address)
 
-        contract_side = side
-
-        # For IOC and FOK orders, we use the fill order API which has different behavior
+        # For IOC and FOK orders, we use the fill order API
         if time_in_force in [TimeInForce.IOC, TimeInForce.FOK]:
             if time_in_force == TimeInForce.IOC:
                 fill_order_type = FillOrderType.IMMEDIATE_OR_CANCEL
@@ -300,18 +329,18 @@ class ExecutionClient:
             else:
                 raise ValueError(f"Unknown time_in_force: {time_in_force}")
 
-            # Create post fill order args
-            args = clob.create_post_fill_order_args(
-                amount=amount,
-                price_limit=price,
-                side=contract_side,
-                amount_is_base=True,  # Since amount is in base tokens
-                fill_order_type=fill_order_type,
-                settlement=settlement,
+            # Create post fill order args using NamedTuple
+            args = ICLOBPostFillOrderArgs(
+                amount,
+                price,
+                side.value,
+                True,  # amountIsBase - since amount is in base tokens
+                fill_order_type.value,
+                settlement.value,
             )
 
-            # Return the transaction
-            return clob.post_fill_order(account=self.main_account, args=args, **kwargs)
+            # Return the router transaction
+            return router.clob_post_fill_order(clob=market_address, args=args, **kwargs).with_event(clob.contract.events.FillOrderProcessed(), parse_fill_order_processed)
         else:
             if time_in_force == TimeInForce.GTC:
                 tif = LimitOrderType.GOOD_TILL_CANCELLED
@@ -319,19 +348,20 @@ class ExecutionClient:
                 tif = LimitOrderType.POST_ONLY
             else:
                 raise ValueError(f"Unknown time_in_force: {time_in_force}")
-            # Create post limit order args
-            args = clob.create_post_limit_order_args(
-                amount_in_base=amount,
-                price=price,
-                side=contract_side,
-                cancel_timestamp=0,  # No expiration
-                client_order_id=client_order_id,
-                limit_order_type=tif,
-                settlement=settlement,
+            
+            # Create post limit order args using NamedTuple
+            args = ICLOBPostLimitOrderArgs(
+                amount,
+                price,
+                0,  # cancelTimestamp - no expiration
+                side.value,
+                client_order_id,
+                tif.value,
+                settlement.value,
             )
 
-            # Return the transaction
-            return clob.post_limit_order(account=self.main_account, args=args, **kwargs)
+            # Return the router transaction
+            return router.clob_post_limit_order(clob=market_address, args=args, **kwargs).with_event(clob.contract.events.LimitOrderProcessed(), parse_limit_order_processed)
 
     async def place_limit_order(
             self,
@@ -345,9 +375,12 @@ class ExecutionClient:
             client_order_id: int = 0,
             settlement: Settlement = Settlement.INSTANT,
             **kwargs: Unpack[TxParams],
-    ) -> Order:
+    ) -> LimitOrderProcessedEvent | FillOrderProcessedEvent:
         """
-        Place a limit order on the CLOB.
+        Place a limit order using the router contract.
+        
+        Note: This method returns a transaction receipt since router calls don't emit events.
+        Use place_limit_order_with_events() if you need event-based order tracking.
 
         Args:
             market: Market to place the order on
@@ -361,7 +394,7 @@ class ExecutionClient:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Order object representing the placed order
+            Transaction receipt of the placed order
         """
         amount = int(market.base.convert_quantity_to_amount(amount) if not amount_is_raw else amount)
         price = int(market.quote.convert_quantity_to_amount(price) if not price_is_raw else price)
@@ -373,6 +406,8 @@ class ExecutionClient:
             **kwargs,
         )
         
+        clob = self._clob_client.get_clob(market.address)
+        
         tx = self.place_limit_order_tx(
             market_address=market.address,
             side=side,
@@ -382,69 +417,48 @@ class ExecutionClient:
             client_order_id=client_order_id,
             settlement=settlement,
             **kwargs,
-        )
-        tx.send_nowait()
+        ).with_event(clob.contract.events.LimitOrderProcessed(), parse_limit_order_processed)
+        
+        # Send the transaction and return the receipt
+        return await self._scheduler.send_wait(tx)
 
-        async def task():
-            log = await tx.retrieve()
-            if isinstance(log, FillOrderProcessedEvent):
-                order = Order.from_clob_fill_order_processed(
-                    log, amount, side, price
-                )
-            elif isinstance(log, LimitOrderProcessedEvent):
-                order = Order.from_clob_limit_order_processed(
-                    log, amount, side, price
-                )
-            else:
-                if log is None:
-                    raise ValueError("Unexpected event: None")
-                raise ValueError(f"Unknown event type: {log.event_name}")
-            return order
-
-        return await task()
-
-    async def place_market_order_tx(
+    def place_market_order_tx(
             self,
             market: Market,
             side: OrderSide,
             amount: int,
             price_limit: int,
             amount_is_base: bool = True,
-            slippage: float = 0.01,
             **kwargs,
     ) -> TypedContractFunction[Any]:
         """
-        Place a market order on the CLOB.
+        Place a market order using the router contract.
 
         Args:
             market: Market to place the order on
             side: Order side (BUY or SELL)
             amount: Order amount in base tokens if amount_is_base is True, otherwise in quote tokens
             amount_is_base: Whether the amount is in base tokens
-            slippage: Slippage percentage for price limit
+            price_limit: Price limit for the order
             **kwargs: Additional transaction parameters
 
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
-        # Get the CLOB contract
-        clob = self._clob_client.get_clob(market.address)
+        router = self._clob_client.get_router()
 
-        # Convert model types to contract types
-        contract_side = OrderSide.BUY if side == OrderSide.BUY else OrderSide.SELL
-
-        # Create post fill order args
-        args = clob.create_post_fill_order_args(
-            amount=amount,
-            price_limit=price_limit,
-            side=contract_side,
-            amount_is_base=amount_is_base,
-            fill_order_type=FillOrderType.IMMEDIATE_OR_CANCEL,
-            settlement=Settlement.INSTANT,
+        # Create post fill order args using named tuple
+        args = ICLOBPostFillOrderArgs(
+            amount,
+            price_limit,
+            side.value,
+            amount_is_base,
+            FillOrderType.IMMEDIATE_OR_CANCEL.value,
+            Settlement.INSTANT.value,
         )
 
-        # Return the transaction
-        return clob.post_fill_order(account=self.main_account, args=args, **kwargs)
+        # Return the router transaction
+        return router.clob_post_fill_order(clob=market.address, args=args, **kwargs)
 
     async def _get_price_limit(self, market: Market, side: OrderSide, slippage: float = 0.01) -> int:
         """
@@ -468,25 +482,24 @@ class ExecutionClient:
             amount_is_base: bool,
             price_limit: int,
         ):
-            if side == OrderSide.BUY:
-                token = self._token_client.get_erc20(market.quote.address)
-                if amount_is_base:
-                    # amount is already in base tokens, so we approve the quote token for the amount * price limit
-                    required = amount * market.quote.convert_amount_to_quantity(price_limit)
-                else:
-                    # amount is in quote tokens, so we approve the quote token for the amount
-                    required = amount
+        if side == OrderSide.BUY:
+            token = self._token_client.get_erc20(market.quote.address)
+            if amount_is_base:
+                # amount is already in base tokens, so we approve the quote token for the amount * price limit
+                required = amount * market.quote.convert_amount_to_quantity(price_limit)
             else:
-                token = self._token_client.get_erc20(market.base.address)
-                if amount_is_base:
-                    # amount is in base tokens, so we approve the base token for the amount
-                    required = amount
-                else:
-                    # amount is in quote tokens, so we approve the base token for the amount / price limit
-                    required = amount // market.quote.convert_amount_to_quantity(price_limit)
-            return token, int(required)
+                # amount is in quote tokens, so we approve the quote token for the amount
+                required = amount
+        else:
+            token = self._token_client.get_erc20(market.base.address)
+            if amount_is_base:
+                # amount is in base tokens, so we approve the base token for the amount
+                required = amount
+            else:
+                # amount is in quote tokens, so we approve the base token for the amount / price limit
+                required = amount // market.quote.convert_amount_to_quantity(price_limit)
+        return token, int(required)
 
-    
     async def place_market_order(
             self,
             market: Market,
@@ -496,9 +509,9 @@ class ExecutionClient:
             amount_is_base: bool = True,
             slippage: float = 0.01,
             **kwargs,
-    ):
+    ) -> FillOrderProcessedEvent:
         """
-        Place a market order on the CLOB.
+        Place a market order using the router contract.
 
         Args:
             market: Market to place the order on
@@ -509,12 +522,10 @@ class ExecutionClient:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Order object representing the placed order
+            Transaction receipt of the placed order
         """
         amount = self._adjust_amount(market, amount, amount_is_raw, amount_is_base)
-        
         price_limit = await self._get_price_limit(market, side, slippage)
-        
         token, approval_amount = self._compute_approval_requirements(market, side, amount, amount_is_base, price_limit)
         
         await self._ensure_approval(
@@ -523,25 +534,66 @@ class ExecutionClient:
             **kwargs,
         )
         
-        tx = await self.place_market_order_tx(
+        clob = self._clob_client.get_clob(market.address)
+        
+        tx = self.place_market_order_tx(
             market=market,
             side=side,
             amount=amount,
             price_limit=price_limit,
             amount_is_base=amount_is_base,
-            slippage=slippage,
             **kwargs,
-        )
-        return await tx.send_wait()
+        ).with_event(clob.contract.events.FillOrderProcessed(), parse_fill_order_processed)
+        return await self._scheduler.send_wait(tx)
     
     async def amend_order_tx(
+            self,
+            market: Market,
+            order_id: int,
+            amount_in_base: int,
+            price_in_ticks: int,
+            side: OrderSide,
+            **kwargs,
+    ) -> TypedContractFunction[Any]:
+        """
+        Create an amend order transaction.
+
+        Args:
+            market: Market the order is on
+            order_id: ID of the order to amend
+            amount_in_base: New amount for the order in base tokens
+            price_in_ticks: New price for the order in ticks
+            side: Order side
+            **kwargs: Additional transaction parameters
+
+        Returns:
+            TypedContractFunction that can be used to execute the transaction
+        """
+        # Get the CLOB contract
+        clob = self._clob_client.get_clob(market.address)
+
+        # Create amend args
+        args = ICLOBAmendArgs(
+            orderId=order_id,
+            amountInBase=amount_in_base,
+            price=price_in_ticks,
+            cancelTimestamp=0,  # No expiration
+            side=side.value,
+            limitOrderType=LimitOrderType.POST_ONLY.value,
+            settlement=Settlement.INSTANT.value,
+        )
+
+        # Return the transaction
+        return clob.amend(account=self.main_account, args=args, **kwargs)
+
+    async def amend_order(
             self,
             market: Market,
             order_id: int,
             new_amount: Optional[int] = None,
             new_price: Optional[int] = None,
             **kwargs,
-    ) -> TypedContractFunction[Any]:
+    ) -> OrderAmendedEvent:
         """
         Amend an existing order.
 
@@ -553,7 +605,7 @@ class ExecutionClient:
             **kwargs: Additional transaction parameters
 
         Returns:
-            TypedContractFunction that can be used to execute the transaction
+            Transaction receipt from the amend operation
         """
         # Get the CLOB contract
         clob = self._clob_client.get_clob(market.address)
@@ -569,7 +621,7 @@ class ExecutionClient:
         amount_in_base = new_amount or current_amount
         price_in_ticks = new_price if new_price is not None else current_price
         
-        # ensure approval
+        # Ensure approval
         token, approval_amount = self._compute_approval_requirements(market, side, amount_in_base, True, price_in_ticks)
         await self._ensure_approval(
             amount=approval_amount,
@@ -577,51 +629,23 @@ class ExecutionClient:
             **kwargs,
         )
 
-        # Create amend args
-        args = clob.create_amend_args(
-            order_id=order_id,
-            amount_in_base=amount_in_base,
-            price=price_in_ticks,
-            side=side,
-            cancel_timestamp=0,  # No expiration
-            limit_order_type=LimitOrderType.POST_ONLY,
-            settlement=Settlement.INSTANT,
-        )
-
-        # Return the transaction
-        return clob.amend(account=self.main_account, args=args, **kwargs)
-
-    async def amend_order(
-            self,
-            market: Market,
-            order_id: int,
-            new_amount: Optional[int] = None,
-            new_price: Optional[int] = None,
-            **kwargs,
-    ):
-        """
-        Amend an existing order.
-
-        Args:
-            market: Market the order is on
-            order_id: ID of the order to amend
-            new_amount: New amount for the order (None to keep current)
-            new_price: New price for the order (None to keep current)
-            **kwargs: Additional transaction parameters
-
-        Returns:
-            Transaction result from the amend operation
-        """
+        # Create and execute transaction
         tx = await self.amend_order_tx(
-            market=market, order_id=order_id, new_amount=new_amount, new_price=new_price, **kwargs
+            market=market, 
+            order_id=order_id, 
+            amount_in_base=amount_in_base,
+            price_in_ticks=price_in_ticks,
+            side=side,
+            **kwargs
         )
-        return await tx.send_wait()
+        tx = tx.with_event(clob.contract.events.OrderAmended(), parse_order_amended)
+        return await self._scheduler.send_wait(tx)
 
-    async def cancel_order_tx(
+    def cancel_order_tx(
             self, market: Market, order_id: int, **kwargs
-    ) -> TypedContractFunction[OrderCanceledEvent]:
+    ) -> TypedContractFunction[Any]:
         """
-        Cancel an existing order.
+        Cancel an existing order using the router contract.
 
         Args:
             market: Market the order is on
@@ -631,18 +655,20 @@ class ExecutionClient:
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
-        # Get the CLOB contract
-        clob = self._clob_client.get_clob(market.address)
+        router = self._clob_client.get_router()
 
         # Create cancel args
-        args = clob.create_cancel_args(order_ids=[order_id], settlement=Settlement.INSTANT)
+        args = ICLOBCancelArgs(
+            [order_id], 
+            Settlement.INSTANT.value
+        )
 
-        # Return the transaction
-        return clob.cancel(account=self.main_account, args=args, **kwargs)
+        # Return the router transaction
+        return router.clob_cancel(clob=market.address, args=args, isUnwrapping=False, **kwargs)
 
-    async def cancel_order(self, market: Market, order_id: int, **kwargs):
+    async def cancel_order(self, market: Market, order_id: int, **kwargs) -> OrderCanceledEvent:
         """
-        Cancel an existing order.
+        Cancel an existing order using the router contract.
 
         Args:
             market: Market the order is on
@@ -650,24 +676,43 @@ class ExecutionClient:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction result from the cancel operation
+            Transaction receipt of the cancellation
         """
-        tx = await self.cancel_order_tx(market=market, order_id=order_id, **kwargs)
-        return await tx.send_wait()
+        clob = self._clob_client.get_clob(market.address)
+        tx = self.cancel_order_tx(market=market, order_id=order_id, **kwargs).with_event(clob.contract.events.OrderCanceled(), parse_order_canceled)
+        return await self._scheduler.send_wait(tx)
 
-    async def cancel_all_orders(self, market: Market, open_orders: List[Order], **kwargs):
+    async def cancel_all_orders(self, market: Market, open_orders: List[Order], **kwargs) -> List[OrderCanceledEvent]:
         """
-        Cancel all orders for the current user on a specific market.
+        Cancel all orders for the current user on a specific market using the router.
 
         Args:
             market: Market to cancel orders on
             open_orders: List of open orders to cancel
             **kwargs: Additional transaction parameters
+            
+        Returns:
+            List of transaction hashes
         """
+        cancelled_orders = []
         for order in open_orders:
-            if order.status != OrderStatus.OPEN:
-                continue
-            await self.cancel_order(market, order.order_id, **kwargs)
+            if order.status == OrderStatus.OPEN:
+                await self.cancel_order(market, order.order_id, **kwargs)
+            cancelled_orders.append(order)
+        return cancelled_orders
+
+    def clear_approval_cache(self):
+        """Clear the approval cache. Use this if you want to force re-checking approvals."""
+        self._approved_tokens.clear()
+        logger.info("Approval cache cleared")
+
+    def get_approved_tokens(self) -> set[ChecksumAddress]:
+        """Get the set of tokens that are cached as approved."""
+        return self._approved_tokens.copy()
+
+    def is_token_approved(self, token_address: ChecksumAddress) -> bool:
+        """Check if a token is in the approval cache."""
+        return token_address in self._approved_tokens
 
     # ================= UTILITY OPERATIONS =================
 
