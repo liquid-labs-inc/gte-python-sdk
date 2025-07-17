@@ -19,7 +19,7 @@ class CLOBEvent:
     block_number: int
     address: ChecksumAddress
     event_name: str
-    raw_data: Dict[str, Any]
+    raw_data: dict[str, Any]
     nonce: int
 
 
@@ -42,7 +42,6 @@ class LimitOrderProcessedEvent(CLOBEvent):
     quote_token_amount_traded: int
     base_token_amount_traded: int
     taker_fee: int
-    nonce: int
 
 
 @dataclass
@@ -63,7 +62,6 @@ class FillOrderProcessedEvent(CLOBEvent):
     quote_token_amount_traded: int
     base_token_amount_traded: int
     taker_fee: int
-    nonce: int  # Added missing nonce field
 
 
 @dataclass
@@ -233,8 +231,8 @@ class MarketCreatedEvent(CLOBManagerEvent):
     market: ChecksumAddress
     quote_decimals: int
     base_decimals: int
-    config: dict
-    settings: dict
+    config: dict[str, Any]
+    settings: dict[str, Any]
 
 
 @dataclass
@@ -486,7 +484,7 @@ def parse_order_amended(event_data: EventData) -> OrderAmendedEvent:
     amend_args = cast(ICLOBAmendArgs, args.get("args"))
     quote_token_delta = cast(int, args.get("quoteTokenDelta"))
     base_token_delta = cast(int, args.get("baseTokenDelta"))
-    nonce = cast(int, args.get("nonce"))
+    nonce = cast(int, args.get("eventNonce", 0))
 
     return OrderAmendedEvent(
         **base_info,
@@ -516,7 +514,6 @@ def parse_order_canceled(event_data: EventData) -> OrderCanceledEvent:
     quote_token_refunded = cast(int, args.get("quoteTokenRefunded"))
     base_token_refunded = cast(int, args.get("baseTokenRefunded"))
     settlement = cast(int, args.get("settlement"))
-    nonce = cast(int, args.get("nonce"))
 
     return OrderCanceledEvent(
         **base_info,
@@ -525,7 +522,6 @@ def parse_order_canceled(event_data: EventData) -> OrderCanceledEvent:
         quote_token_refunded=quote_token_refunded,
         base_token_refunded=base_token_refunded,            
         settlement=settlement,
-        nonce=nonce,
     )
 
 
@@ -654,7 +650,6 @@ def parse_initialized(event_data: EventData) -> InitializedEvent:
 
     version = cast(int, args.get("version"))
 
-    # Initialized events typically don't have a nonce field, so we set it to 0
     return InitializedEvent(
         **base_info,
         version=version,
@@ -678,7 +673,6 @@ def parse_ownership_transfer_started(event_data: EventData) -> OwnershipTransfer
     previous_owner = cast(ChecksumAddress, args.get("previousOwner"))
     new_owner = cast(ChecksumAddress, args.get("newOwner"))
 
-    # Ownership events typically don't have a nonce field, so we set it to 0
     return OwnershipTransferStartedEvent(
         **base_info,
         previous_owner=previous_owner,
@@ -702,7 +696,6 @@ def parse_ownership_handover_canceled(event_data: EventData) -> OwnershipHandove
     
     pending_owner = cast(ChecksumAddress, args.get("pendingOwner"))
 
-    # This event doesn't have a nonce in the standard Ownable contract
     return OwnershipHandoverCanceledEvent(
         **base_info,
         pending_owner=pending_owner,
@@ -750,10 +743,33 @@ def parse_ownership_transferred(event_data: EventData) -> ClobManagerOwnershipTr
     old_owner = cast(ChecksumAddress, args.get("oldOwner"))
     new_owner = cast(ChecksumAddress, args.get("newOwner"))
 
-    # This event doesn't have a nonce in the standard Ownable contract
     return ClobManagerOwnershipTransferredEvent(
         **base_info,
         old_owner=old_owner,
+        new_owner=new_owner,
+        nonce=0,
+    )
+
+
+def parse_clob_ownership_transferred(event_data: EventData) -> ClobOwnershipTransferredEvent:
+    """
+    Parse CLOB OwnershipTransferred event.
+
+    Args:
+        event_data: Raw event data from web3
+
+    Returns:
+        Typed ClobOwnershipTransferredEvent
+    """
+    args = event_data.get("args", {})
+    base_info = _create_base_event_info(event_data)
+    
+    previous_owner = cast(ChecksumAddress, args.get("previousOwner"))
+    new_owner = cast(ChecksumAddress, args.get("newOwner"))
+
+    return ClobOwnershipTransferredEvent(
+        **base_info,
+        previous_owner=previous_owner,
         new_owner=new_owner,
         nonce=0,
     )
@@ -924,8 +940,8 @@ def parse_market_created(event_data: EventData) -> MarketCreatedEvent:
     market = cast(ChecksumAddress, args.get("market"))
     quote_decimals = cast(int, args.get("quoteDecimals"))
     base_decimals = cast(int, args.get("baseDecimals"))
-    config = cast(dict, args.get("config"))
-    settings = cast(dict, args.get("settings"))
+    config = cast(dict[str, Any], args.get("config"))
+    settings = cast(dict[str, Any], args.get("settings"))
     nonce = cast(int, args.get("eventNonce", 0))
 
     return MarketCreatedEvent(
@@ -1112,7 +1128,7 @@ CLOB_MANAGER_EVENT_PARSERS = {
 }
 
 # Update the existing EVENT_PARSERS dictionary
-EVENT_PARSERS.update(CLOB_MANAGER_EVENT_PARSERS)
+EVENT_PARSERS.update(CLOB_MANAGER_EVENT_PARSERS)  # type: ignore[assignment]
 
 
 def convert_event_data_to_typed_event(event_data: EventData) -> CLOBEvent:
@@ -1131,13 +1147,13 @@ def convert_event_data_to_typed_event(event_data: EventData) -> CLOBEvent:
     parser_func = EVENT_PARSERS.get(event_name)
 
     if parser_func:
-        return parser_func(event_data)
+        return cast(CLOBEvent, parser_func(event_data))
 
     # Return base event for unknown event types
     args = event_data.get("args", {})
     nonce = args.get("nonce", args.get("eventNonce", 0))
 
-    raw_data = cast(Dict[str, Any], event_data)
+    raw_data = cast(dict[str, Any], cast(object, event_data))
 
     return CLOBEvent(
         tx_hash=event_data.get("transactionHash"),
@@ -1146,5 +1162,4 @@ def convert_event_data_to_typed_event(event_data: EventData) -> CLOBEvent:
         address=event_data.get("address"),
         event_name=event_name,
         raw_data=raw_data,
-        nonce=nonce,
     )
