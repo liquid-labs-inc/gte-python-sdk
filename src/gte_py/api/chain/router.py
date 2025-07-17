@@ -6,7 +6,7 @@ from typing_extensions import Unpack
 from web3 import AsyncWeb3
 from web3.types import TxParams
 
-from .structs import ICLOBCancelArgs, ICLOBPostLimitOrderArgs
+from .structs import ICLOBCancelArgs, ICLOBPostLimitOrderArgs, ICLOBPostFillOrderArgs
 from .utils import TypedContractFunction, load_abi
 
 
@@ -62,299 +62,281 @@ class Router:
     # ================= WRITE METHODS =================
 
     def clob_cancel(
-        self, clob_address: str, args: ICLOBCancelArgs, **kwargs: Unpack[TxParams]
+        self,
+        clob: str,
+        args: ICLOBCancelArgs,
+        isUnwrapping: bool,
+        **kwargs,
     ) -> TypedContractFunction[HexBytes]:
         """
         Cancel a CLOB order.
-
         Args:
-            clob_address: Address of the CLOB contract
-            args: CancelArgs struct from the CLOB interface
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
+            clob: Address of the CLOB contract
+            args: ICLOBCancelArgs NamedTuple with orderIds and settlement
+            isUnwrapping: Whether to unwrap WETH to ETH at the end
+            **kwargs: Additional transaction parameters
         Returns:
             TypedContractFunction that can be executed
         """
-        clob_address = self.web3.to_checksum_address(clob_address)
+        clob = self.web3.to_checksum_address(clob)
         tx_params = {**kwargs}
-
-        func = self.contract.functions.clobCancel(clob_address, args)
+        
+        # Convert NamedTuple to regular tuple for web3.py ABI encoding
+        func = self.contract.functions.clobCancel(clob, tuple(args), isUnwrapping)
         return TypedContractFunction(func, tx_params)
 
     def clob_deposit(
         self,
-        token_address: ChecksumAddress,
+        token: str,
         amount: int,
-        from_router: bool,
+        fromRouter: bool,
         **kwargs,
     ) -> TypedContractFunction[HexBytes]:
         """
         Deposit tokens into a CLOB.
-
         Args:
-            token_address: Address of the token to deposit
+            token: Address of the token to deposit
             amount: Amount of tokens to deposit
-            from_router: Whether the deposit is from the router
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
-        Returns:
-            TypedContractFunction that can be executed
-        """
-
-        tx_params = {**kwargs}
-
-        func = self.contract.functions.clobDeposit(token_address, amount, from_router)
-        return TypedContractFunction(func, tx_params)
-
-    def clob_post_limit_order(
-        self,
-        clob_address: str,
-        args: ICLOBPostLimitOrderArgs,
-        **kwargs,
-    ) -> TypedContractFunction[HexBytes]:
-        """
-        Post a limit order to a CLOB.
-
-        Args:
-            clob_address: Address of the CLOB contract
-            args: PostLimitOrderArgs struct from the CLOB interface
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
-        Returns:
-            TypedContractFunction that can be executed
-        """
-        clob_address = self.web3.to_checksum_address(clob_address)
-        tx_params = {**kwargs}
-
-        func = self.contract.functions.clobPostLimitOrder(clob_address, args)
-        return TypedContractFunction(func, tx_params)
-
-    def clob_withdraw(
-        self, token_address: str, amount: int, **kwargs
-    ) -> TypedContractFunction[HexBytes]:
-        """
-        Withdraw tokens from a CLOB.
-
-        Args:
-            token_address: Address of the token to withdraw
-            amount: Amount of tokens to withdraw
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
-        Returns:
-            TypedContractFunction that can be executed
-        """
-        token_address = self.web3.to_checksum_address(token_address)
-        tx_params = {**kwargs}
-
-        func = self.contract.functions.clobWithdraw(token_address, amount)
-        return TypedContractFunction(func, tx_params)
-
-    def clob_post_fill_order(
-        self, clob_address: str, args: dict[str, Any], **kwargs
-    ) -> TypedContractFunction[HexBytes]:
-        """
-        Execute a fill order on a CLOB.
-
-        Args:
-            clob_address: Address of the CLOB contract
-            args: PostFillOrderArgs struct from the CLOB interface
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
-        Returns:
-            TypedContractFunction that can be executed
-        """
-        clob_address = self.web3.to_checksum_address(clob_address)
-        tx_params = {**kwargs}
-        func = self.contract.functions.clobPostFillOrder(clob_address, args)
-        return TypedContractFunction(func, tx_params)
-
-    def execute_route(
-        self,
-        token_in: Address,
-        amount_in: int,
-        amount_out_min: int,
-        deadline: int,
-        is_unwrapping: bool,
-        settlement: int,
-        hops: list[bytes],
-        value: int = 0,
-        **kwargs,
-    ) -> TypedContractFunction[HexBytes]:
-        """
-        Execute a multi-hop route.
-
-        Args:
-            token_in: Address of the input token
-            amount_in: Amount of input tokens
-            amount_out_min: Minimum amount of output tokens expected
-            deadline: Transaction deadline timestamp
-            is_unwrapping: Whether to unwrap WETH to ETH at the end
-            settlement: Settlement type (NONE=0, WRAP=1, UNWRAP=2)
-            hops: Array of encoded hop data
-            value: ETH value to send with the transaction (for wrapping)
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
-        Returns:
-            TypedContractFunction that can be executed
-        """
-
-        tx_params = {"value": value, **kwargs}
-
-        func = self.contract.functions.executeRoute(
-            token_in, amount_in, amount_out_min, deadline, is_unwrapping, settlement, hops
-        )
-        return TypedContractFunction(func, tx_params)
-
-    def univ2_swap_exact_tokens_for_tokens(
-        self,
-        amount_in: int,
-        amount_out_min: int,
-        path: list[Address],
-        **kwargs,
-    ) -> TypedContractFunction[HexBytes]:
-        """
-        Execute a UniswapV2 swap.
-
-        Args:
-            amount_in: Amount of input tokens
-            amount_out_min: Minimum amount of output tokens expected
-            path: Array of token addresses in the swap path
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
-        Returns:
-            TypedContractFunction that can be executed
-        """
-        tx_params = {**kwargs}
-        func = self.contract.functions.uniV2SwapExactTokensForTokens(
-            amount_in, amount_out_min, path
-        )
-        return TypedContractFunction(func, tx_params)
-
-    def launchpad_buy(
-        self,
-        launch_token: Address,
-        amount_out_base: int,
-        quote_token: Address,
-        worst_amount_in_quote: int,
-        value: int = 0,
-        **kwargs,
-    ) -> TypedContractFunction[HexBytes]:
-        """
-        Buy tokens from a launchpad.
-
-        Args:
-            launch_token: Address of the launch token
-            amount_out_base: Amount of base tokens to receive
-            quote_token: Address of the quote token
-            worst_amount_in_quote: Maximum amount of quote tokens to spend
-            value: ETH value to send with the transaction (if using ETH)
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
-        Returns:
-            TypedContractFunction that can be executed
-        """
-        tx_params = {"value": value, **kwargs}
-
-        func = self.contract.functions.launchpadBuy(
-            launch_token, amount_out_base, quote_token, worst_amount_in_quote
-        )
-        return TypedContractFunction(func, tx_params)
-
-    def launchpad_buy_permit2(
-        self,
-        launch_token: Address,
-        amount_out_base: int,
-        quote_token: Address,
-        worst_amount_in_quote: int,
-        permit_single: dict[str, Any],
-        signature: bytes,
-        **kwargs,
-    ) -> TypedContractFunction[HexBytes]:
-        """
-        Buy tokens from a launchpad using Permit2.
-
-        Args:
-            launch_token: Address of the launch token
-            amount_out_base: Amount of base tokens to receive
-            quote_token: Address of the quote token
-            worst_amount_in_quote: Maximum amount of quote tokens to spend
-            permit_single: PermitSingle struct from the IAllowanceTransfer interface
-            signature: Signature bytes for the permit
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
-        Returns:
-            TypedContractFunction that can be executed
-        """
-
-        tx_params = {**kwargs}
-
-        func = self.contract.functions.launchpadBuyPermit2(
-            launch_token,
-            amount_out_base,
-            quote_token,
-            worst_amount_in_quote,
-            permit_single,
-            signature,
-        )
-        return TypedContractFunction(func, tx_params)
-
-    def launchpad_sell(
-        self,
-        launch_token: str,
-        amount_in_base: int,
-        worst_amount_out_quote: int,
-        unwrap_eth: bool,
-        **kwargs,
-    ) -> TypedContractFunction[HexBytes]:
-        """
-        Sell tokens on a launchpad.
-
-        Args:
-            launch_token: Address of the launch token
-            amount_in_base: Amount of base tokens to sell
-            worst_amount_out_quote: Minimum amount of quote tokens to receive
-            unwrap_eth: Whether to unwrap WETH to ETH
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
-        Returns:
-            TypedContractFunction that can be executed
-        """
-        launch_token = self.web3.to_checksum_address(launch_token)
-        tx_params = {**kwargs}
-
-        func = self.contract.functions.launchpadSell(
-            launch_token, amount_in_base, worst_amount_out_quote, unwrap_eth
-        )
-        return TypedContractFunction(func, tx_params)
-
-    def launchpad_sell_permit2(
-        self,
-        token: str,
-        amount_in_base: int,
-        worst_amount_out_quote: int,
-        unwrap_eth: bool,
-        permit_single: dict[str, Any],
-        signature: bytes,
-        **kwargs,
-    ) -> TypedContractFunction[HexBytes]:
-        """
-        Sell tokens on a launchpad using Permit2.
-
-        Args:
-            token: Address of the token to sell
-            amount_in_base: Amount of base tokens to sell
-            worst_amount_out_quote: Minimum amount of quote tokens to receive
-            unwrap_eth: Whether to unwrap WETH to ETH
-            permit_single: PermitSingle struct from the IAllowanceTransfer interface
-            signature: Signature bytes for the permit
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
+            fromRouter: Whether the deposit is from the router
+            **kwargs: Additional transaction parameters
         Returns:
             TypedContractFunction that can be executed
         """
         token = self.web3.to_checksum_address(token)
         tx_params = {**kwargs}
+        func = self.contract.functions.clobDeposit(token, amount, fromRouter)
+        return TypedContractFunction(func, tx_params)
+
+    def clob_post_limit_order(
+        self,
+        clob: str,
+        args: ICLOBPostLimitOrderArgs,
+        **kwargs,
+    ) -> TypedContractFunction[HexBytes]:
+        """
+        Post a limit order to a CLOB.
+        Args:
+            clob: Address of the CLOB contract
+            args: dict with keys matching PostLimitOrderArgs
+            **kwargs: Additional transaction parameters
+        Returns:
+            TypedContractFunction that can be executed
+        """
+        clob = self.web3.to_checksum_address(clob)
+        tx_params = {**kwargs}
+        func = self.contract.functions.clobPostLimitOrder(clob, tuple(args))
+        return TypedContractFunction(func, tx_params)
+
+    def clob_withdraw(
+        self,
+        token: str,
+        amount: int,
+        **kwargs,
+    ) -> TypedContractFunction[HexBytes]:
+        """
+        Withdraw tokens from a CLOB.
+        Args:
+            token: Address of the token to withdraw
+            amount: Amount of tokens to withdraw
+            **kwargs: Additional transaction parameters
+        Returns:
+            TypedContractFunction that can be executed
+        """
+        token = self.web3.to_checksum_address(token)
+        tx_params = {**kwargs}
+        func = self.contract.functions.clobWithdraw(token, amount)
+        return TypedContractFunction(func, tx_params)
+
+    def clob_post_fill_order(
+        self,
+        clob: str,
+        args: ICLOBPostFillOrderArgs,
+        **kwargs,
+    ) -> TypedContractFunction[HexBytes]:
+        """
+        Execute a fill order on a CLOB.
+        Args:
+            clob: Address of the CLOB contract
+            args: dict with keys matching PostFillOrderArgs
+            **kwargs: Additional transaction parameters
+        Returns:
+            TypedContractFunction that can be executed
+        """
+        clob = self.web3.to_checksum_address(clob)
+        tx_params = {**kwargs}
+        func = self.contract.functions.clobPostFillOrder(clob, tuple(args))
+        return TypedContractFunction(func, tx_params)
+
+    def execute_route(
+        self,
+        tokenIn: str,
+        amountIn: int,
+        amountOutMin: int,
+        deadline: int,
+        isUnwrapping: bool,
+        settlementIn: int,
+        hops: list[Any],
+        value: int = 0,
+        **kwargs,
+    ) -> TypedContractFunction[HexBytes]:
+        """
+        Execute a multi-hop route.
+        Args:
+            tokenIn: Address of the input token
+            amountIn: Amount of input tokens
+            amountOutMin: Minimum amount of output tokens expected
+            deadline: Transaction deadline timestamp
+            isUnwrapping: Whether to unwrap WETH to ETH at the end
+            settlementIn: Settlement type
+            hops: Array of encoded hop data
+            value: ETH value to send with the transaction (for wrapping)
+            **kwargs: Additional transaction parameters
+        Returns:
+            TypedContractFunction that can be executed
+        """
+        tokenIn = self.web3.to_checksum_address(tokenIn)
+        tx_params = {"value": value, **kwargs}
+        func = self.contract.functions.executeRoute(
+            tokenIn, amountIn, amountOutMin, deadline, isUnwrapping, settlementIn, hops
+        )
+        return TypedContractFunction(func, tx_params)
+
+    def univ2_swap_exact_tokens_for_tokens(
+        self,
+        amountIn: int,
+        amountOutMin: int,
+        path: list[str],
+        **kwargs,
+    ) -> TypedContractFunction[HexBytes]:
+        """
+        Execute a UniswapV2 swap.
+        Args:
+            amountIn: Amount of input tokens
+            amountOutMin: Minimum amount of output tokens expected
+            path: Array of token addresses in the swap path
+            **kwargs: Additional transaction parameters
+        Returns:
+            TypedContractFunction that can be executed
+        """
+        path = [self.web3.to_checksum_address(addr) for addr in path]
+        tx_params = {**kwargs}
+        func = self.contract.functions.uniV2SwapExactTokensForTokens(
+            amountIn, amountOutMin, path
+        )
+        return TypedContractFunction(func, tx_params)
+
+    def launchpad_buy(
+        self,
+        launchToken: str,
+        amountOutBase: int,
+        quoteToken: str,
+        worstAmountInQuote: int,
+        value: int = 0,
+        **kwargs,
+    ) -> TypedContractFunction[HexBytes]:
+        """
+        Buy tokens from a launchpad.
+        Args:
+            launchToken: Address of the launch token
+            amountOutBase: Amount of base tokens to receive
+            quoteToken: Address of the quote token
+            worstAmountInQuote: Maximum amount of quote tokens to spend
+            value: ETH value to send with the transaction (if using ETH)
+            **kwargs: Additional transaction parameters
+        Returns:
+            TypedContractFunction that can be executed
+        """
+        launchToken = self.web3.to_checksum_address(launchToken)
+        quoteToken = self.web3.to_checksum_address(quoteToken)
+        tx_params = {"value": value, **kwargs}
+        func = self.contract.functions.launchpadBuy(
+            launchToken, amountOutBase, quoteToken, worstAmountInQuote
+        )
+        return TypedContractFunction(func, tx_params)
+
+    def launchpad_buy_permit2(
+        self,
+        launchToken: str,
+        amountOutBase: int,
+        quoteToken: str,
+        worstAmountInQuote: int,
+        permitSingle: dict[str, Any],
+        signature: bytes,
+        **kwargs,
+    ) -> TypedContractFunction[HexBytes]:
+        """
+        Buy tokens from a launchpad using Permit2.
+        Args:
+            launchToken: Address of the launch token
+            amountOutBase: Amount of base tokens to receive
+            quoteToken: Address of the quote token
+            worstAmountInQuote: Maximum amount of quote tokens to spend
+            permitSingle: PermitSingle struct
+            signature: Signature bytes for the permit
+            **kwargs: Additional transaction parameters
+        Returns:
+            TypedContractFunction that can be executed
+        """
+        launchToken = self.web3.to_checksum_address(launchToken)
+        quoteToken = self.web3.to_checksum_address(quoteToken)
+        tx_params = {**kwargs}
+        func = self.contract.functions.launchpadBuyPermit2(
+            launchToken, amountOutBase, quoteToken, worstAmountInQuote, permitSingle, signature
+        )
+        return TypedContractFunction(func, tx_params)
+
+    def launchpad_sell(
+        self,
+        launchToken: str,
+        amountInBase: int,
+        worstAmountOutQuote: int,
+        unwrapEth: bool,
+        **kwargs,
+    ) -> TypedContractFunction[HexBytes]:
+        """
+        Sell tokens on a launchpad.
+        Args:
+            launchToken: Address of the launch token
+            amountInBase: Amount of base tokens to sell
+            worstAmountOutQuote: Minimum amount of quote tokens to receive
+            unwrapEth: Whether to unwrap WETH to ETH
+            **kwargs: Additional transaction parameters
+        Returns:
+            TypedContractFunction that can be executed
+        """
+        launchToken = self.web3.to_checksum_address(launchToken)
+        tx_params = {**kwargs}
+        func = self.contract.functions.launchpadSell(
+            launchToken, amountInBase, worstAmountOutQuote, unwrapEth
+        )
+        return TypedContractFunction(func, tx_params)
+
+    def launchpad_sell_permit2(
+        self,
+        launchToken: str,
+        amountInBase: int,
+        worstAmountOutQuote: int,
+        unwrapEth: bool,
+        permitSingle: dict[str, Any],
+        signature: bytes,
+        **kwargs,
+    ) -> TypedContractFunction[HexBytes]:
+        """
+        Sell tokens on a launchpad using Permit2.
+        Args:
+            launchToken: Address of the token to sell
+            amountInBase: Amount of base tokens to sell
+            worstAmountOutQuote: Minimum amount of quote tokens to receive
+            unwrapEth: Whether to unwrap WETH to ETH
+            permitSingle: PermitSingle struct
+            signature: Signature bytes for the permit
+            **kwargs: Additional transaction parameters
+        Returns:
+            TypedContractFunction that can be executed
+        """
+        launchToken = self.web3.to_checksum_address(launchToken)
+        tx_params = {**kwargs}
         func = self.contract.functions.launchpadSellPermit2(
-            token, amount_in_base, worst_amount_out_quote, unwrap_eth, permit_single, signature
+            launchToken, amountInBase, worstAmountOutQuote, unwrapEth, permitSingle, signature
         )
         return TypedContractFunction(func, tx_params)

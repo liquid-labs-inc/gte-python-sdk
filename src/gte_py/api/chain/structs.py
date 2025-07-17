@@ -2,7 +2,7 @@
 import enum
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import TypedDict
+from typing import TypedDict, NamedTuple
 
 from eth_typing import ChecksumAddress
 
@@ -21,6 +21,9 @@ class OrderSide(IntEnum):
             return cls.SELL
         else:
             raise ValueError(f"Invalid side: {side_str}. Must be 'buy' or 'sell'.")
+    
+    def __str__(self) -> str:
+        return self.name.lower()
 
 
 class Settlement(IntEnum):
@@ -96,7 +99,7 @@ class CancelArgs(TypedDict):
 
 
 # CLOB specific structures
-class ICLOBPostLimitOrderArgs(TypedDict):
+class ICLOBPostLimitOrderArgs(NamedTuple):
     """Arguments for posting a limit order."""
 
     amountInBase: int
@@ -119,7 +122,7 @@ class ICLOBPostLimitOrderResult(TypedDict):
     takerFee: int
 
 
-class ICLOBPostFillOrderArgs(TypedDict):
+class ICLOBPostFillOrderArgs(NamedTuple):
     """Arguments for posting a fill order."""
 
     amount: int
@@ -140,7 +143,7 @@ class ICLOBPostFillOrderResult(TypedDict):
     takerFee: int
 
 
-class ICLOBAmendArgs(TypedDict):
+class ICLOBAmendArgs(NamedTuple):
     """Arguments for amending an order."""
 
     orderId: int
@@ -152,7 +155,7 @@ class ICLOBAmendArgs(TypedDict):
     settlement: int
 
 
-class ICLOBCancelArgs(TypedDict):
+class ICLOBCancelArgs(NamedTuple):
     """Arguments for canceling orders."""
 
     orderIds: list[int]

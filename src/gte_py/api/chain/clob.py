@@ -6,16 +6,36 @@ from web3 import AsyncWeb3
 from web3.types import TxParams
 from .event_source import EventSource, EventStream
 from .events import (
+    LimitOrderSubmittedEvent,
     LimitOrderProcessedEvent,
+    FillOrderSubmittedEvent,
     FillOrderProcessedEvent,
     OrderAmendedEvent,
     OrderCanceledEvent,
     OrderMatchedEvent,
+    TickSizeUpdatedEvent,
+    MinLimitOrderAmountInBaseUpdatedEvent,
+    MaxLimitOrdersPerTxUpdatedEvent,
+    MaxLimitOrdersAllowlistedEvent,
+    CancelFailedEvent,
+    InitializedEvent,
+    OwnershipTransferStartedEvent,
+    ClobOwnershipTransferredEvent,
+    parse_limit_order_submitted,
     parse_limit_order_processed,
+    parse_fill_order_submitted,
     parse_fill_order_processed,
     parse_order_amended,
     parse_order_canceled,
     parse_order_matched,
+    parse_tick_size_updated,
+    parse_min_limit_order_amount_in_base_updated,
+    parse_max_limit_orders_per_tx_updated,
+    parse_max_limit_orders_allowlisted,
+    parse_cancel_failed,
+    parse_initialized,
+    parse_ownership_transfer_started,
+    parse_clob_ownership_transferred,
 )
 from .structs import (
     FillOrderType,
@@ -65,10 +85,22 @@ class ICLOB:
         self.contract = self.web3.eth.contract(address=self.address, abi=loaded_abi)
 
         # Initialize event sources
+        self._limit_order_submitted_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.LimitOrderSubmitted,
+            parser=parse_limit_order_submitted
+        )
+
         self._limit_order_processed_event_source = EventSource(
             web3=self.web3,
             event=self.contract.events.LimitOrderProcessed,
             parser=parse_limit_order_processed
+        )
+
+        self._fill_order_submitted_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.FillOrderSubmitted,
+            parser=parse_fill_order_submitted
         )
 
         self._fill_order_processed_event_source = EventSource(
@@ -95,7 +127,59 @@ class ICLOB:
             parser=parse_order_matched
         )
 
+        self._tick_size_updated_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.TickSizeUpdated,
+            parser=parse_tick_size_updated
+        )
+
+        self._min_limit_order_amount_in_base_updated_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.MinLimitOrderAmountInBaseUpdated,
+            parser=parse_min_limit_order_amount_in_base_updated
+        )
+
+        self._max_limit_orders_per_tx_updated_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.MaxLimitOrdersPerTxUpdated,
+            parser=parse_max_limit_orders_per_tx_updated
+        )
+
+        self._max_limit_orders_allowlisted_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.MaxLimitOrdersAllowlisted,
+            parser=parse_max_limit_orders_allowlisted
+        )
+
+        self._cancel_failed_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.CancelFailed,
+            parser=parse_cancel_failed
+        )
+
+        self._initialized_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.Initialized,
+            parser=parse_initialized
+        )
+
+        self._ownership_transfer_started_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.OwnershipTransferStarted,
+            parser=parse_ownership_transfer_started
+        )
+
+        self._ownership_transferred_event_source = EventSource(
+            web3=self.web3,
+            event=self.contract.events.OwnershipTransferred,
+            parser=parse_clob_ownership_transferred
+        )
+
     # ================= READ METHODS =================
+
+    async def abi_version(self) -> int:
+        """Get the ABI version of the contract."""
+        return await self.contract.functions.ABI_VERSION().call()
 
     async def get_quote_token(self) -> ChecksumAddress:
         """Get the quote token used in the CLOB."""
@@ -282,6 +366,26 @@ class ICLOB:
 
     # ================= WRITE METHODS =================
 
+    def initialize(
+            self, market_config: Dict[str, Any], market_settings: Dict[str, Any], initial_owner: ChecksumAddress,
+            **kwargs: Unpack[TxParams]
+    ) -> TypedContractFunction[None]:
+        """
+        Initialize the CLOB contract.
+
+        Args:
+            market_config: Market configuration parameters
+            market_settings: Market settings parameters
+            initial_owner: The initial owner address
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+
+        Returns:
+            TypedContractFunction that can be used to execute the transaction
+        """
+        func = self.contract.functions.initialize(market_config, market_settings, initial_owner)
+        params = {**kwargs}
+        return TypedContractFunction(func, params)
+
     def post_limit_order(
             self, account: ChecksumAddress, args: ICLOBPostLimitOrderArgs, **kwargs: Unpack[TxParams]
     ) -> TypedContractFunction[LimitOrderProcessedEvent]:
@@ -289,14 +393,16 @@ class ICLOB:
         Post a limit order to the CLOB.
 
         Args:
-            account: Address of the account to post the order for
+            account: Address to use as the 'account' parameter in the ABI. This must be:
+                - The router contract's address if called from the router
+                - The user's address if called directly
             args: PostLimitOrderArgs struct with order details
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
-        func = self.contract.functions.postLimitOrder(account, args)
+        func = self.contract.functions.postLimitOrder(account, tuple(args))
         params = {**kwargs}
         return TypedContractFunction(func, params).with_event(
             self.contract.events.LimitOrderProcessed, parse_limit_order_processed
@@ -309,14 +415,16 @@ class ICLOB:
         Post a fill order to the CLOB.
 
         Args:
-            account: Address of the account to post the order for
+            account: Address to use as the 'account' parameter in the ABI. This must be:
+                - The router contract's address if called from the router
+                - The user's address if called directly
             args: PostFillOrderArgs struct with order details
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
-        func = self.contract.functions.postFillOrder(account, args)
+        func = self.contract.functions.postFillOrder(account, tuple(args))
         params = {**kwargs}
         return TypedContractFunction(func, params).with_event(
             self.contract.events.FillOrderProcessed, parse_fill_order_processed
@@ -329,20 +437,20 @@ class ICLOB:
         Amend an existing order.
 
         Args:
-            account: Address of the account that owns the order
+            account: Address to use as the 'account' parameter in the ABI. This must be:
+                - The router contract's address if called from the router
+                - The user's address if called directly
             args: AmendArgs struct with order details
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
-        func = self.contract.functions.amend(account, args)
+        func = self.contract.functions.amend(account, tuple(args))
         params = {
             **kwargs,
         }
-        return TypedContractFunction(func, params).with_event(
-            self.contract.events.OrderAmended, parse_order_amended
-        )
+        return TypedContractFunction(func, params)
 
     def cancel(
             self, account: ChecksumAddress, args: ICLOBCancelArgs, **kwargs
@@ -351,14 +459,16 @@ class ICLOB:
         Cancel one or more orders.
 
         Args:
-            account: Address of the account that owns the orders
+            account: Address to use as the 'account' parameter in the ABI. This must be:
+                - The router contract's address if called from the router
+                - The user's address if called directly
             args: CancelArgs struct with order IDs and settlement type
             **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
 
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
-        func = self.contract.functions.cancel(account, args)
+        func = self.contract.functions.cancel(account, tuple(args))
         params = {
             **kwargs,
         }
@@ -492,6 +602,42 @@ class ICLOB:
 
     # ================= EVENT METHODS =================
 
+    async def get_limit_order_submitted_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[LimitOrderSubmittedEvent]:
+        """
+        Get historical LimitOrderSubmitted events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of LimitOrderSubmitted events
+        """
+        return await self._limit_order_submitted_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_limit_order_submitted_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[LimitOrderSubmittedEvent]:
+        """
+        Stream LimitOrderSubmitted events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of LimitOrderSubmitted events
+        """
+        return self._limit_order_submitted_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+
     async def get_limit_order_processed_events(
             self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
     ) -> List[LimitOrderProcessedEvent]:
@@ -525,6 +671,42 @@ class ICLOB:
             EventStream of LimitOrderProcessed events
         """
         return self._limit_order_processed_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+
+    async def get_fill_order_submitted_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[FillOrderSubmittedEvent]:
+        """
+        Get historical FillOrderSubmitted events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of FillOrderSubmitted events
+        """
+        return await self._fill_order_submitted_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_fill_order_submitted_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[FillOrderSubmittedEvent]:
+        """
+        Stream FillOrderSubmitted events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of FillOrderSubmitted events
+        """
+        return self._fill_order_submitted_event_source.get_streaming(
             from_block=from_block, poll_interval=poll_interval, **filter_params
         )
 
@@ -672,6 +854,294 @@ class ICLOB:
             from_block=from_block, poll_interval=poll_interval, **filter_params
         )
 
+    async def get_tick_size_updated_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[TickSizeUpdatedEvent]:
+        """
+        Get historical TickSizeUpdated events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of TickSizeUpdated events
+        """
+        return await self._tick_size_updated_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_tick_size_updated_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[TickSizeUpdatedEvent]:
+        """
+        Stream TickSizeUpdated events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of TickSizeUpdated events
+        """
+        return self._tick_size_updated_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+
+    async def get_min_limit_order_amount_in_base_updated_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[MinLimitOrderAmountInBaseUpdatedEvent]:
+        """
+        Get historical MinLimitOrderAmountInBaseUpdated events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of MinLimitOrderAmountInBaseUpdated events
+        """
+        return await self._min_limit_order_amount_in_base_updated_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_min_limit_order_amount_in_base_updated_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[MinLimitOrderAmountInBaseUpdatedEvent]:
+        """
+        Stream MinLimitOrderAmountInBaseUpdated events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of MinLimitOrderAmountInBaseUpdated events
+        """
+        return self._min_limit_order_amount_in_base_updated_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+
+    async def get_max_limit_orders_per_tx_updated_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[MaxLimitOrdersPerTxUpdatedEvent]:
+        """
+        Get historical MaxLimitOrdersPerTxUpdated events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of MaxLimitOrdersPerTxUpdated events
+        """
+        return await self._max_limit_orders_per_tx_updated_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_max_limit_orders_per_tx_updated_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[MaxLimitOrdersPerTxUpdatedEvent]:
+        """
+        Stream MaxLimitOrdersPerTxUpdated events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of MaxLimitOrdersPerTxUpdated events
+        """
+        return self._max_limit_orders_per_tx_updated_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+
+    async def get_max_limit_orders_allowlisted_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[MaxLimitOrdersAllowlistedEvent]:
+        """
+        Get historical MaxLimitOrdersAllowlisted events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of MaxLimitOrdersAllowlisted events
+        """
+        return await self._max_limit_orders_allowlisted_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_max_limit_orders_allowlisted_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[MaxLimitOrdersAllowlistedEvent]:
+        """
+        Stream MaxLimitOrdersAllowlisted events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of MaxLimitOrdersAllowlisted events
+        """
+        return self._max_limit_orders_allowlisted_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+
+    async def get_cancel_failed_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[CancelFailedEvent]:
+        """
+        Get historical CancelFailed events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of CancelFailed events
+        """
+        return await self._cancel_failed_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_cancel_failed_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[CancelFailedEvent]:
+        """
+        Stream CancelFailed events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of CancelFailed events
+        """
+        return self._cancel_failed_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+
+    async def get_initialized_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[InitializedEvent]:
+        """
+        Get historical Initialized events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of Initialized events
+        """
+        return await self._initialized_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_initialized_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[InitializedEvent]:
+        """
+        Stream Initialized events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of Initialized events
+        """
+        return self._initialized_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+
+    async def get_ownership_transfer_started_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[OwnershipTransferStartedEvent]:
+        """
+        Get historical OwnershipTransferStarted events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of OwnershipTransferStarted events
+        """
+        return await self._ownership_transfer_started_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_ownership_transfer_started_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[OwnershipTransferStartedEvent]:
+        """
+        Stream OwnershipTransferStarted events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of OwnershipTransferStarted events
+        """
+        return self._ownership_transfer_started_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+
+    async def get_ownership_transferred_events(
+            self, from_block: int, to_block: Union[int, str] = "latest", **filter_params
+    ) -> List[ClobOwnershipTransferredEvent]:
+        """
+        Get historical OwnershipTransferred events.
+        
+        Args:
+            from_block: Starting block number
+            to_block: Ending block number or 'latest'
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            List of OwnershipTransferred events
+        """
+        return await self._ownership_transferred_event_source.get_historical(
+            from_block=from_block, to_block=to_block, **filter_params
+        )
+
+    def stream_ownership_transferred_events(
+            self, from_block: Union[int, str] = "latest", poll_interval: float = 2.0, **filter_params
+    ) -> EventStream[ClobOwnershipTransferredEvent]:
+        """
+        Stream OwnershipTransferred events asynchronously.
+        
+        Args:
+            from_block: Starting block number or 'latest'
+            poll_interval: Interval between polls in seconds
+            **filter_params: Additional filter parameters
+            
+        Returns:
+            EventStream of OwnershipTransferred events
+        """
+        return self._ownership_transferred_event_source.get_streaming(
+            from_block=from_block, poll_interval=poll_interval, **filter_params
+        )
+
     # ================= HELPER METHODS =================
 
     def create_post_limit_order_args(
@@ -790,3 +1260,11 @@ class ICLOB:
             CancelArgs struct
         """
         return {"orderIds": order_ids, "settlement": settlement}
+
+    def contract_address(self) -> ChecksumAddress:
+        """
+        Helper to get the contract's own address (useful for router context).
+        Returns:
+            The address of this CLOB contract instance.
+        """
+        return self.address

@@ -4,7 +4,7 @@ sys.path.append(".")
 import asyncio
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
-
+import time
 from examples.utils import WALLET_PRIVATE_KEY
 from gte_py.clients import GTEClient
 from gte_py.api.chain.structs import OrderSide
@@ -33,8 +33,8 @@ async def main():
         
         # wrap the eth
         weth_balance = await client.execution.get_weth_balance()
-        if weth_balance < 10 ** 16:
-            await client.execution.wrap_eth(amount=10 ** 16 - weth_balance, gas=50 * 10**6)
+        if weth_balance < eth_amount_wei*2:
+            await client.execution.wrap_eth(amount=eth_amount_wei*2 - weth_balance, gas=50 * 10**6)
         
         # buy eth
         # if you want to use quote units, you can set amount_is_base=False

@@ -35,6 +35,12 @@ class CLOBClient:
         self.clob_factory = CLOBFactory(
             web3=self._web3, contract_address=self._clob_factory_address
         )
+    
+    def get_router(self) -> Router:
+        """
+        Get the router contract instance.
+        """
+        return self._router
 
     def get_factory_address(self) -> ChecksumAddress:
         """

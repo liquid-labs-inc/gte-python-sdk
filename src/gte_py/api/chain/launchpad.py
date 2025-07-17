@@ -1,3 +1,4 @@
+from typing import Dict, Any
 from typing_extensions import Unpack
 
 from eth_typing import ChecksumAddress
@@ -43,25 +44,25 @@ class Launchpad:
 
     # ================= READ METHODS =================
 
-    async def get_base_scaling(self) -> int:
-        """Get the base token scaling factor."""
-        return await self.contract.functions.BASE_SCALING().call()
+    async def abi_version(self) -> int:
+        """Get the ABI version of the contract."""
+        return await self.contract.functions.ABI_VERSION().call()
 
     async def get_bonding_supply(self) -> int:
         """Get the bonding curve supply."""
         return await self.contract.functions.BONDING_SUPPLY().call()
 
-    async def get_launch_fee(self) -> int:
-        """Get the launch fee."""
-        return await self.contract.functions.LAUNCH_FEE().call()
-
-    async def get_quote_scaling(self) -> int:
-        """Get the quote token scaling factor."""
-        return await self.contract.functions.QUOTE_SCALING().call()
-
     async def get_total_supply(self) -> int:
         """Get the total supply."""
         return await self.contract.functions.TOTAL_SUPPLY().call()
+
+    async def get_unallocated_slot_0(self) -> int:
+        """Get the unallocated slot 0 value."""
+        return await self.contract.functions.__unallocated_slot_0().call()
+
+    async def get_unallocated_slot_1(self) -> int:
+        """Get the unallocated slot 1 value."""
+        return await self.contract.functions.__unallocated_slot_1().call()
 
     async def get_bonding_curve(self) -> ChecksumAddress:
         """Get the bonding curve address."""
@@ -75,7 +76,11 @@ class Launchpad:
         """Get the GTE Router address."""
         return await self.contract.functions.gteRouter().call()
 
-    async def get_launches(self, launch_token: str) -> dict:
+    async def get_launch_fee(self) -> int:
+        """Get the launch fee."""
+        return await self.contract.functions.launchFee().call()
+
+    async def get_launches(self, launch_token: str) -> Dict[str, Any]:
         """
         Get launch details for a token.
 
@@ -86,7 +91,7 @@ class Launchpad:
             Dictionary containing launch details
         """
         launch_token = self.web3.to_checksum_address(launch_token)
-        active, bonding_curve, quote, quote_scaling, base_scaling, base_sold, quote_bought = (
+        active, bonding_curve, quote, unallocated_field_0, unallocated_field_1, base_sold, quote_bought = (
             await self.contract.functions.launches(launch_token).call()
         )
 
@@ -94,8 +99,8 @@ class Launchpad:
             "active": active,
             "bonding_curve": bonding_curve,
             "quote": quote,
-            "quote_scaling": quote_scaling,
-            "base_scaling": base_scaling,
+            "unallocated_field_0": unallocated_field_0,
+            "unallocated_field_1": unallocated_field_1,
             "base_sold_from_curve": base_sold,
             "quote_bought_by_curve": quote_bought,
         }
@@ -142,7 +147,7 @@ class Launchpad:
 
     async def quote_quote_for_base(self, token: str, base_amount: int, is_buy: bool) -> int:
         """
-        Quote  amount for a given base amount.
+        Quote quote amount for a given base amount.
 
         Args:
             token: Address of the token
@@ -159,16 +164,18 @@ class Launchpad:
 
     def buy(
         self,
+        account: str,
         token: str,
         recipient: str,
         amount_out_base: int,
         max_amount_in_quote: int,
         **kwargs: Unpack[TxParams],
-    ) -> TypedContractFunction[HexBytes]:
+    ) -> TypedContractFunction[tuple[int, int]]:
         """
         Buy base tokens with quote tokens.
 
         Args:
+            account: Address of the account making the purchase
             token: Address of the token
             recipient: Address to receive the tokens
             amount_out_base: Amount of base tokens to buy
@@ -178,10 +185,11 @@ class Launchpad:
         Returns:
             TypedContractFunction with the transaction
         """
+        account = self.web3.to_checksum_address(account)
         token = self.web3.to_checksum_address(token)
         recipient = self.web3.to_checksum_address(recipient)
 
-        func = self.contract.functions.buy(token, recipient, amount_out_base, max_amount_in_quote)
+        func = self.contract.functions.buy(account, token, recipient, amount_out_base, max_amount_in_quote)
 
         params = {
             **kwargs,
@@ -189,7 +197,7 @@ class Launchpad:
 
         return TypedContractFunction(func, params)
 
-    def cancel_ownership_handover(self, **kwargs) -> TypedContractFunction[HexBytes]:
+    def cancel_ownership_handover(self, **kwargs) -> TypedContractFunction[None]:
         """
         Cancel an ownership handover request.
 
@@ -209,7 +217,7 @@ class Launchpad:
 
     def complete_ownership_handover(
         self, pending_owner: str, **kwargs
-    ) -> TypedContractFunction[HexBytes]:
+    ) -> TypedContractFunction[None]:
         """
         Complete an ownership handover.
 
@@ -229,19 +237,34 @@ class Launchpad:
 
         return TypedContractFunction(func, params)
 
-    def initialize(self, owner: str, **kwargs) -> TypedContractFunction[HexBytes]:
+    def initialize(
+        self, 
+        owner: str, 
+        quote_asset: str, 
+        bonding_curve: str, 
+        virtual_base: int, 
+        virtual_quote: int, 
+        **kwargs
+    ) -> TypedContractFunction[None]:
         """
-        Initialize the contract with an owner.
+        Initialize the contract with parameters.
 
         Args:
             owner: Address of the owner
+            quote_asset: Address of the quote asset
+            bonding_curve: Address of the bonding curve
+            virtual_base: Virtual base reserves
+            virtual_quote: Virtual quote reserves
             **kwargs: Additional transaction parameters
 
         Returns:
             TypedContractFunction with the transaction
         """
         owner = self.web3.to_checksum_address(owner)
-        func = self.contract.functions.initialize(owner)
+        quote_asset = self.web3.to_checksum_address(quote_asset)
+        bonding_curve = self.web3.to_checksum_address(bonding_curve)
+        
+        func = self.contract.functions.initialize(owner, quote_asset, bonding_curve, virtual_base, virtual_quote)
 
         params = {
             **kwargs,
@@ -255,7 +278,7 @@ class Launchpad:
         symbol: str,
         media_uri: str,
         **kwargs: Unpack[TxParams]
-    ) -> TypedContractFunction[HexBytes]:
+    ) -> TypedContractFunction[ChecksumAddress]:
         """
         Launch a new token.
 
@@ -277,8 +300,7 @@ class Launchpad:
 
         return TypedContractFunction(func, params)
 
-
-    def pull_fees(self, **kwargs) -> TypedContractFunction[HexBytes]:
+    def pull_fees(self, **kwargs) -> TypedContractFunction[None]:
         """
         Pull accumulated fees.
 
@@ -296,7 +318,7 @@ class Launchpad:
 
         return TypedContractFunction(func, params)
 
-    def renounce_ownership(self, **kwargs) -> TypedContractFunction[HexBytes]:
+    def renounce_ownership(self, **kwargs) -> TypedContractFunction[None]:
         """
         Renounce ownership of the contract.
 
@@ -314,7 +336,7 @@ class Launchpad:
 
         return TypedContractFunction(func, params)
 
-    def request_ownership_handover(self, **kwargs) -> TypedContractFunction[HexBytes]:
+    def request_ownership_handover(self, **kwargs) -> TypedContractFunction[None]:
         """
         Request an ownership handover.
 
@@ -334,16 +356,18 @@ class Launchpad:
 
     def sell(
         self,
+        account: str,
         token: str,
         recipient: str,
         amount_in_base: int,
         min_amount_out_quote: int,
         **kwargs: Unpack[TxParams],
-    ) -> TypedContractFunction[HexBytes]:
+    ) -> TypedContractFunction[tuple[int, int]]:
         """
         Sell base tokens for quote tokens.
 
         Args:
+            account: Address of the account making the sale
             token: Address of the token
             recipient: Address to receive the quote tokens
             amount_in_base: Amount of base tokens to sell
@@ -353,10 +377,11 @@ class Launchpad:
         Returns:
             TypedContractFunction with the transaction
         """
+        account = self.web3.to_checksum_address(account)
         token = self.web3.to_checksum_address(token)
         recipient = self.web3.to_checksum_address(recipient)
 
-        func = self.contract.functions.sell(token, recipient, amount_in_base, min_amount_out_quote)
+        func = self.contract.functions.sell(account, token, recipient, amount_in_base, min_amount_out_quote)
 
         params = {
             **kwargs,
@@ -366,7 +391,7 @@ class Launchpad:
 
     def set_virtual_reserves(
         self, virtual_base: int, virtual_quote: int, **kwargs
-    ) -> TypedContractFunction[HexBytes]:
+    ) -> TypedContractFunction[None]:
         """
         Set virtual reserves for the bonding curve.
 
@@ -386,7 +411,7 @@ class Launchpad:
 
         return TypedContractFunction(func, params)
 
-    def transfer_ownership(self, new_owner: str, **kwargs) -> TypedContractFunction[HexBytes]:
+    def transfer_ownership(self, new_owner: str, **kwargs) -> TypedContractFunction[None]:
         """
         Transfer ownership of the contract.
 
@@ -408,7 +433,7 @@ class Launchpad:
 
     def update_bonding_curve(
         self, new_bonding_curve: str, **kwargs
-    ) -> TypedContractFunction[HexBytes]:
+    ) -> TypedContractFunction[None]:
         """
         Update the bonding curve address.
 
@@ -428,7 +453,7 @@ class Launchpad:
 
         return TypedContractFunction(func, params)
 
-    def update_init_code_hash(self, new_hash: bytes, **kwargs) -> TypedContractFunction[HexBytes]:
+    def update_init_code_hash(self, new_hash: bytes, **kwargs) -> TypedContractFunction[None]:
         """
         Update the init code hash.
 
@@ -447,9 +472,28 @@ class Launchpad:
 
         return TypedContractFunction(func, params)
 
+    def update_launch_fee(self, new_launch_fee: int, **kwargs) -> TypedContractFunction[None]:
+        """
+        Update the launch fee.
+
+        Args:
+            new_launch_fee: New launch fee amount
+            **kwargs: Additional transaction parameters
+
+        Returns:
+            TypedContractFunction with the transaction
+        """
+        func = self.contract.functions.updateLaunchFee(new_launch_fee)
+
+        params = {
+            **kwargs,
+        }
+
+        return TypedContractFunction(func, params)
+
     def update_quote_asset(
         self, new_quote_asset: str, **kwargs
-    ) -> TypedContractFunction[HexBytes]:
+    ) -> TypedContractFunction[None]:
         """
         Update the quote asset address.
 
