@@ -49,8 +49,7 @@ def patched_clients():
          patch("gte_py.clients.RestApi") as rest, \
          patch("gte_py.clients.WebSocketApi") as ws, \
          patch("gte_py.clients.InfoClient") as info, \
-         patch("gte_py.clients.ExecutionClient") as execution_class, \
-         patch("gte_py.clients.Web3RequestManager.ensure_instance", new_callable=AsyncMock) as ensure_instance:
+         patch("gte_py.clients.ExecutionClient") as execution_class:
         
         execution_instance = MagicMock()
         execution_instance.init = AsyncMock()
@@ -63,7 +62,6 @@ def patched_clients():
             "info": info,
             "execution_class": execution_class,
             "execution": execution_instance,
-            "ensure_instance": ensure_instance,
         }
 
 
@@ -96,9 +94,10 @@ def test_execution_client_initialization_parameters(config, private_key, patched
     # Verify ExecutionClient was called with correct parameters
     patched_clients["execution_class"].assert_called_once_with(
         web3=client._web3,
-        main_account=client._account.address,
+        account=client._account,
         gte_router_address=config.router_address,
         weth_address=config.weth_address,
+        clob_manager_address=config.clob_manager_address,
     )
 
 
@@ -166,7 +165,6 @@ async def test_connect_and_disconnect(config, private_key, patched_clients):
     assert client.connected is True
     rest.connect.assert_awaited_once()
     ws.connect.assert_awaited_once()
-    patched_clients["ensure_instance"].assert_awaited_once()
     patched_clients["execution"].init.assert_awaited_once()
 
     await client.disconnect()
