@@ -430,15 +430,18 @@ class BoundedNonceTxScheduler:
             self.last_sent += 1
         
         try:
+            if self.chain_id is None:
+                raise ValueError("Chain ID is not set")
+            
             # Build transaction with required parameters
             tx_params: TransactionDictType = {
-                "chainId": self.chain_id or 6342,
+                "chainId": self.chain_id,
                 "from": self.from_address,
                 "nonce": Nonce(nonce),
                 "to": contract_func.func_call.address,
                 "data": contract_func.func_call._encode_transaction_data(),
-                "gas": contract_func.params.get("gas", 1_000_000_000),
-                "maxFeePerGas": contract_func.params.get("maxFeePerGas", 5_000_000_000),
+                "gas": contract_func.params.get("gas", 1_000_000_000), # max gas (1 giga gas)
+                "maxFeePerGas": contract_func.params.get("maxFeePerGas", 2_500_000), # 0.0025 gwei
                 "maxPriorityFeePerGas": contract_func.params.get("maxPriorityFeePerGas", 0),
                 "value": contract_func.params.get("value", 0),
             }
