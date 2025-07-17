@@ -41,7 +41,6 @@ class ExecutionClient:
         """
         self._web3 = web3
         self._account = account
-        self.main_account = account.address
         self._gte_router_address = gte_router_address
         self._clob_client = CLOBClient(web3, gte_router_address)
         self._token_client = TokenClient(web3)
@@ -125,7 +124,7 @@ class ExecutionClient:
         await self._ensure_approval(amount, token, **kwargs)
 
         tx = clob_factory.deposit(
-            account=self.main_account,
+            account=self._account.address,
             token=token_address,
             amount=amount,
             from_operator=False,
@@ -154,7 +153,7 @@ class ExecutionClient:
             assert clob_factory is not None, "CLOB factory should be initialized"
 
         tx = clob_factory.withdraw(
-            account=self.main_account, token=token_address, amount=amount, to_operator=False, **kwargs
+            account=self._account.address, token=token_address, amount=amount, to_operator=False, **kwargs
         ).with_event(clob_factory.contract.events.Withdraw(), parse_withdraw)
         
         return await self._scheduler.send_wait(tx)
@@ -163,7 +162,7 @@ class ExecutionClient:
         """
         Get the balance of a token in the wallet.
         """
-        return await self._token_client.get_erc20(token_address).balance_of(self.main_account)
+        return await self._token_client.get_erc20(token_address).balance_of(self._account.address)
     
     async def get_weth_balance(self) -> int:
         """
@@ -238,7 +237,7 @@ class ExecutionClient:
             raise ValueError("Unsafe launchpad fill must be enabled to approve launchpad fill role")
         
         roles_int = self._encode_rules(roles)
-        logger.info(f"Approving operator {operator_address} for account {self.main_account} with roles {roles}")
+        logger.info(f"Approving operator {operator_address} for account {self._account.address} with roles {roles}")
 
         # The clob_factory is actually the clob_manager
         clob_factory = self._clob_client.clob_factory
@@ -268,7 +267,7 @@ class ExecutionClient:
             Transaction result from the disapprove_operator operation
         """
         roles_int = self._encode_rules(roles)
-        logger.info(f"Disapproving operator {operator_address} for account {self.main_account} with roles {roles}")
+        logger.info(f"Disapproving operator {operator_address} for account {self._account.address} with roles {roles}")
         
         # The clob_factory is actually the clob_manager
         clob_factory = self._clob_client.clob_factory
@@ -584,7 +583,7 @@ class ExecutionClient:
         )
 
         # Return the transaction
-        return clob.amend(account=self.main_account, args=args, **kwargs)
+        return clob.amend(account=self._account.address, args=args, **kwargs)
 
     async def amend_order(
             self,
@@ -729,7 +728,7 @@ class ExecutionClient:
         Returns:
             Tuple of (wallet_balance, exchange_balance) in human-readable format
         """
-        account = account if account else self.main_account
+        account = account if account else self._account.address
         token = self._token_client.get_erc20(token_address)
 
         # Get wallet balance
