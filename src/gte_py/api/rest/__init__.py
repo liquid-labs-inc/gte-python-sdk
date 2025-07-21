@@ -5,6 +5,7 @@ import json
 import logging
 import time
 from typing import Any, cast
+from decimal import Decimal
 from urllib.parse import urljoin
 
 import aiohttp
@@ -140,7 +141,7 @@ class RestApi:
                         return {}
                     
                     try:
-                        parsed_json = json.loads(response_data)
+                        parsed_json = json.loads(response_data, parse_float=Decimal)
                         return parsed_json
                     except json.JSONDecodeError as e:
                         logger.error(f"Invalid JSON response: {response_data[:200]}...")

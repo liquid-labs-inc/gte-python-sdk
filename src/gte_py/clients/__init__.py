@@ -1,11 +1,12 @@
 """High-level GTE client."""
 
 import logging
+from decimal import getcontext
 
 from eth_typing import ChecksumAddress
 from eth_account.types import PrivateKeyType
 
-from ..api.chain.utils import make_web3, Web3RequestManager
+from ..api.chain.utils import make_web3
 from ..api.rest import RestApi
 from ..api.ws import WebSocketApi
 from ..configs import NetworkConfig
@@ -35,6 +36,7 @@ class GTEClient:
             wallet_address: Optional user wallet address.
             wallet_private_key: Optional wallet private key for signing transactions.
         """
+        getcontext().prec = 40
         self.config = config
         
         # Initialize Web3 and account
@@ -49,15 +51,15 @@ class GTEClient:
         
         # Initialize core clients
         self.info = InfoClient(self.rest, self.websocket)
-        
         self._execution: ExecutionClient | None = None
         
         if self._account:
             self._execution = ExecutionClient(
                 web3=self._web3,
-                main_account=self._account.address,
+                account=self._account,
                 gte_router_address=config.router_address,
                 weth_address=config.weth_address,
+                clob_manager_address=config.clob_manager_address,
             )
         
         self.connected = False
@@ -65,9 +67,6 @@ class GTEClient:
     async def connect(self):
         if self.connected:
             return
-        
-        if self._account:
-            await Web3RequestManager.ensure_instance(self._web3, self._account)
         
         await self.rest.connect()
         await self.websocket.connect()

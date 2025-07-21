@@ -1,5 +1,5 @@
 from enum import IntEnum
-from typing import TypeVar, Union, List
+from typing import TypeVar, Union, List, Any
 
 from eth_typing import ChecksumAddress
 from typing_extensions import Unpack
@@ -187,18 +187,9 @@ class ICLOBManager:
 
     # ================= READ METHODS =================
 
-    async def approved_operators(self, account: ChecksumAddress, operator: ChecksumAddress) -> bool:
-        """
-        Check if an operator is approved for an account.
-
-        Args:
-            account: The account address
-            operator: The operator address
-
-        Returns:
-            True if the operator is approved, False otherwise
-        """
-        return await self.contract.functions.approvedOperators(account, operator).call()
+    async def abi_version(self) -> int:
+        """Get the ABI version of the contract."""
+        return await self.contract.functions.ABI_VERSION().call()
 
     async def beacon(self) -> ChecksumAddress:
         """Get the address of the beacon used for market proxy deployments."""
@@ -399,6 +390,28 @@ class ICLOBManager:
         func = self.contract.functions.completeOwnershipHandover(pending_owner)
         params = {**kwargs}
         return TypedContractFunction(func, params)
+
+    def create_market(
+            self, base_token: ChecksumAddress, quote_token: ChecksumAddress, settings: dict[str, Any],
+            **kwargs: Unpack[TxParams]
+    ) -> TypedContractFunction[MarketCreatedEvent]:
+        """
+        Create a new market for a token pair.
+
+        Args:
+            base_token: The base token address
+            quote_token: The quote token address
+            settings: Market settings parameters
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+
+        Returns:
+            TypedContractFunction that can be used to execute the transaction
+        """
+        func = self.contract.functions.createMarket(base_token, quote_token, settings)
+        params = {**kwargs}
+        return TypedContractFunction(func, params).with_event(
+            self.contract.events.MarketCreated, parse_market_created
+        )
 
     def credit_account(
             self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
@@ -605,6 +618,23 @@ class ICLOBManager:
         return TypedContractFunction(func, params).with_event(
             self.contract.events.FeeRecipientSet, parse_fee_recipient_set
         )
+
+    def settle_incoming_order(
+            self, params: dict[str, Any], **kwargs: Unpack[TxParams]
+    ) -> TypedContractFunction[int]:
+        """
+        Settle an incoming order.
+
+        Args:
+            params: Settlement parameters
+            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+
+        Returns:
+            TypedContractFunction that can be used to execute the transaction
+        """
+        func = self.contract.functions.settleIncomingOrder(params)
+        params_dict = {**kwargs}
+        return TypedContractFunction(func, params_dict)
 
     def transfer_ownership(
             self, new_owner: ChecksumAddress, **kwargs: Unpack[TxParams]

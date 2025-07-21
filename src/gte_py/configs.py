@@ -18,11 +18,13 @@ Block Time	10ms for mini blocks
 """
 
 import os
+from dotenv import load_dotenv
 from dataclasses import dataclass
 
 from eth_typing import ChecksumAddress
 from eth_utils.address import to_checksum_address
 
+load_dotenv()
 
 @dataclass
 class NetworkConfig:

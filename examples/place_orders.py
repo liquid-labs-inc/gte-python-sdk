@@ -6,8 +6,9 @@ from eth_utils.address import to_checksum_address
 
 from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
-from gte_py.models import Market, OrderSide, TimeInForce
+from gte_py.models import OrderSide, TimeInForce
 from examples.utils import WALLET_PRIVATE_KEY
+
 
 MARKET_ADDRESS = to_checksum_address("0x0F3642714B9516e3d17a936bAced4de47A6FFa5F")
 
