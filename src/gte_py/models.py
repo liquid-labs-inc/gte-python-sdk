@@ -1,6 +1,7 @@
 """Data models for GTE API."""
 
 from datetime import datetime
+from decimal import Decimal
 from pydantic import BaseModel
 from enum import Enum
 from math import floor, log10
@@ -12,7 +13,7 @@ from hexbytes import HexBytes
 from web3 import AsyncWeb3
 
 from gte_py.api.chain.events import LimitOrderProcessedEvent, FillOrderProcessedEvent
-from gte_py.api.chain.structs import OrderSide as ContractOrderSide, CLOBOrder
+from gte_py.api.chain.structs import OrderSide as ContractOrderSide, Order as CLOBOrder
 from gte_py.api.chain.utils import get_current_timestamp
 
 
@@ -70,7 +71,7 @@ class OrderStatus(str, Enum):
     REJECTED = "rejected"
 
 
-def round_decimals_int(n: float, sig: int) -> int:
+def round_decimals_int(n: Decimal, sig: int) -> int:
     """Round a number to a specified number of significant digits."""
     n_int = round(n)
     if n_int == 0:
@@ -78,11 +79,6 @@ def round_decimals_int(n: float, sig: int) -> int:
     else:
         d = sig - int(floor(log10(abs(n_int)))) - 1
         return round(n_int, d)
-
-def round_to_tick_size(n: float) -> int:
-    """Round a number to the nearest tick size (10^15)."""
-    tick_size = 10 ** 15
-    return round(n / tick_size) * tick_size
 
 
 class Token(BaseModel):
@@ -92,7 +88,7 @@ class Token(BaseModel):
     decimals: int
     name: str
     symbol: str
-    total_supply: float | None = None
+    total_supply: Decimal | None = None
     
     def __getitem__(self, key: str):
         return getattr(self, key)
@@ -100,17 +96,15 @@ class Token(BaseModel):
     def get(self, key: str, default: Any = None) -> Any:
         return getattr(self, key, default)
 
-    def convert_amount_to_quantity(self, amount: int) -> float:
+    def convert_amount_to_quantity(self, amount: int) -> Decimal:
         """Convert amount in atomic units to base units."""
         assert isinstance(amount, int), f"amount {amount} is not an integer"
-        return amount / (10 ** self.decimals)
+        return Decimal(amount) / Decimal(10 ** self.decimals)
 
-    def convert_quantity_to_amount(self, quantity: float | int) -> int:
+    def convert_quantity_to_amount(self, quantity: Decimal) -> int:
         """Convert amount in base units to atomic units."""
         scaled = quantity * (10 ** self.decimals)
-        # Round to nearest tick size (10^15) to ensure valid contract prices
-        rounded = round_to_tick_size(scaled)
-        return rounded
+        return int(scaled)
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Token":
@@ -133,8 +127,8 @@ class Market(BaseModel):
     market_type: MarketType
     base: Token
     quote: Token
-    price: float | None = None
-    volume_24hr_usd: float | None = None
+    price: Decimal | None = None
+    volume_24hr_usd: Decimal | None = None
     
     def __getitem__(self, key: str):
         return getattr(self, key)
@@ -170,11 +164,11 @@ class Candle(BaseModel):
     """Candlestick model."""
 
     timestamp: int
-    open: float
-    high: float
-    low: float
-    close: float
-    volume: float
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: Decimal
     market_address: str | None = None
     interval: str | None = None
     num_trades: int | None = None
@@ -195,11 +189,11 @@ class Candle(BaseModel):
         """Create a Candle object from API response data."""
         return cls(
             timestamp=data.get("timestamp") or data.get("t", 0),
-            open=float(data.get("open") or data.get("o", 0)),
-            high=float(data.get("high") or data.get("h", 0)),
-            low=float(data.get("low") or data.get("l", 0)),
-            close=float(data.get("close") or data.get("c", 0)),
-            volume=float(data.get("volume") or data.get("v", 0)),
+            open=Decimal(data.get("open") or data.get("o", 0)),
+            high=Decimal(data.get("high") or data.get("h", 0)),
+            low=Decimal(data.get("low") or data.get("l", 0)),
+            close=Decimal(data.get("close") or data.get("c", 0)),
+            volume=Decimal(data.get("volume") or data.get("v", 0)),
             market_address=data.get("m"),
             interval=data.get("i"),
             num_trades=data.get("n"),
@@ -213,8 +207,8 @@ class Trade(BaseModel):
 
     market_address: ChecksumAddress
     timestamp: int  # e.g. 1748406437000
-    price: float
-    size: float
+    price: Decimal
+    size: Decimal
     side: str
     tx_hash: HexBytes | None = None  # Transaction hash is an Ethereum address
     maker: ChecksumAddress | None = None
@@ -248,8 +242,8 @@ class Trade(BaseModel):
         return cls(
             market_address=to_checksum_address(data['marketAddress']),
             timestamp=data["timestamp"],
-            price=float(data["price"]),
-            size=float(data["size"]),
+            price=Decimal(data["price"]),
+            size=Decimal(data["size"]),
             side=side,
             tx_hash=tx_hash,
             maker=maker,
@@ -263,10 +257,10 @@ class Position(BaseModel):
 
     market: Market
     user: ChecksumAddress
-    share_of_pool: float
-    apr: float
-    token0_amount: float
-    token1_amount: float
+    share_of_pool: Decimal
+    apr: Decimal
+    token0_amount: Decimal
+    token1_amount: Decimal
 
     def __getitem__(self, key: str):
         return getattr(self, key)
@@ -296,8 +290,8 @@ class Position(BaseModel):
 class PriceLevel(BaseModel):
     """Price level in orderbook."""
 
-    price: int
-    size: int
+    price: Decimal
+    size: Decimal
     count: int
 
     def __getitem__(self, key: str):
@@ -336,18 +330,18 @@ class OrderbookUpdate(BaseModel):
         return min(self.asks, key=lambda x: x.price)
 
     @property
-    def spread(self) -> float | None:
+    def spread(self) -> Decimal | None:
         """Get the bid-ask spread."""
         if not self.best_bid or not self.best_ask:
             return None
-        return self.best_ask.price - self.best_bid.price
+        return Decimal(self.best_ask.price - self.best_bid.price)
 
     @property
-    def mid_price(self) -> float | None:
+    def mid_price(self) -> Decimal | None:
         """Get the mid price."""
         if not self.best_bid or not self.best_ask:
             return None
-        return (self.best_ask.price + self.best_bid.price) / 2
+        return Decimal((self.best_ask.price + self.best_bid.price) / 2)
 
     @property
     def datetime(self) -> datetime:
@@ -362,7 +356,7 @@ class Order(BaseModel):
 
     order_id: int
     market_address: str
-    side: str
+    side: OrderSide
     order_type: OrderType
     price: int | None
     time_in_force: TimeInForce
@@ -387,6 +381,10 @@ class Order(BaseModel):
         if self.placed_at is None:
             return None
         return datetime.fromtimestamp(self.placed_at / 1000)
+    
+    @classmethod
+    def from_tuple(cls, order, market):
+        pass
 
     @classmethod
     def from_clob_order(cls, clob: CLOBOrder, market: Market) -> "Order":
@@ -394,15 +392,15 @@ class Order(BaseModel):
         if clob.amount == 0:
             status = OrderStatus.FILLED
         elif (
-                clob.cancelTimestamp > 0 and clob.cancelTimestamp < get_current_timestamp()
+                clob.cancel_timestamp > 0 and clob.cancel_timestamp < get_current_timestamp()
         ):
             status = OrderStatus.EXPIRED
 
         # Create Order model
         return cls(
-            order_id=clob.id,
+            order_id=clob.id_,
             market_address=market.address,
-            side=clob.side,
+            side=OrderSide(clob.side),
             order_type=OrderType.LIMIT,
             remaining_amount=clob.amount,
             price=clob.price,
@@ -424,7 +422,7 @@ class Order(BaseModel):
         # Create Order model
         return cls(
             order_id=event.order_id,
-            market_address=event.address,
+            market_address=event.account, # ?
             side=side,
             order_type=OrderType.LIMIT,
             remaining_amount=amount,
@@ -462,8 +460,8 @@ class Order(BaseModel):
 class OrderBookSnapshot(BaseModel):
     """Snapshot of the orderbook at a point in time."""
 
-    bids: list[dict[str, float | int]]  # (price, size, count)
-    asks: list[dict[str, float | int]]  # (price, size, count)
+    bids: list[dict[str, Decimal | int]]  # (price, size, count)
+    asks: list[dict[str, Decimal | int]]  # (price, size, count)
     timestamp: int
     market_address: str | None = None
 
