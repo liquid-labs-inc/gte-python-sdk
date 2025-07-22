@@ -1,0 +1,75 @@
+{
+    "OrderSide": {
+        "type": "IntEnum",
+        "values": [
+            {
+                "name": "BUY",
+                "value": 0
+            },
+            {
+                "name": "SELL",
+                "value": 1
+            }
+        ]
+    },
+    "Settlement": {
+        "type": "IntEnum",
+        "values": [
+            {
+                "name": "INSTANT",
+                "value": 0
+            },
+            {
+                "name": "ACCOUNT",
+                "value": 1
+            }
+        ]
+    },
+    "LimitOrderType": {
+        "type": "IntEnum",
+        "values": [
+            {
+                "name": "GOOD_TILL_CANCELLED",
+                "value": 0
+            },
+            {
+                "name": "POST_ONLY",
+                "value": 1
+            }
+        ]
+    },
+    "FillOrderType": {
+        "type": "IntEnum",
+        "values": [
+            {
+                "name": "IMMEDIATE_OR_CANCEL",
+                "value": 0
+            },
+            {
+                "name": "FILL_OR_KILL",
+                "value": 1
+            }
+        ]
+    },
+    "OperatorRole": {
+        "type": "IntEnum",
+        "values": [
+            {
+                "name": "ADMIN",
+                "value": 1
+            },
+            {
+                "name": "DEPOSIT",
+                "value": 2
+            },
+            {
+                "name": "WITHDRAW",
+                "value": 4
+            },
+            {
+                "name": "LAUNCHPAD_FILL",
+                "value": 8
+            }
+        ]
+    }
+}

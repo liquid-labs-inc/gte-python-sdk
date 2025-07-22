@@ -1,125 +1,77 @@
-
-from typing import Optional
-
-
-class GTEError(Exception):
-    """Base exception class for all GTE protocol errors."""
-
-    error_code: str = ""
-
-    def __init__(self, message: Optional[str] = None):
-        self.message = message or self.__class__.__doc__
-        super().__init__(self.message)
-
-    def __str__(self):
-        return f"{self.__class__.__name__} ({self.error_code}): {self.message}"
-
-
-class InsufficientBalance(GTEError):
-    """Insufficient balance for the requested operation."""
-
-    error_code = "0xf4d678b8"
-
-
-class NotFactory(GTEError):
-    """Operation can only be performed by the factory."""
-
-    error_code = "0x32cc7236"
-
-
-class FOKNotFilled(GTEError):
-    """Fill-or-kill order could not be completely filled."""
-
-    error_code = "0x87e393a7"
-
-
-class UnauthorizedAmend(GTEError):
-    """Unauthorized attempt to amend an order."""
-
-    error_code = "0x60ab4840"
-
-
-class UnauthorizedCancel(GTEError):
-    """Unauthorized attempt to cancel an order."""
-
-    error_code = "0x45bb6073"
-
-
-class InvalidAmend(GTEError):
-    """Invalid amendment to an order."""
-
-    error_code = "0x4b22649a"
-
-
-class OrderAlreadyExpired(GTEError):
-    """The order has already expired."""
-
-    error_code = "0x3154078e"
-
-
-class InvalidAccountOrOperator(GTEError):
-    """Invalid account or operator for the requested operation."""
-
-    error_code = "0x3d104567"
-
-
-class PostOnlyOrderWouldBeFilled(GTEError):
-    """Post-only order would be immediately filled."""
-
-    error_code = "0x52409ba3"
-
-
-class MaxOrdersInBookPostNotCompetitive(GTEError):
-    """Maximum orders in book reached and post is not competitive."""
-
-    error_code = "0x315ff5e5"
-
-
-class NonPostOnlyAmend(GTEError):
-    """Non-post-only amendment is not allowed."""
-
-    error_code = "0xc1008f10"
-
-
-class ZeroCostTrade(GTEError):
-    """Trade with zero cost is not allowed."""
-
-    error_code = "0xd8a00083"
-
-
-class ZeroTrade(GTEError):
-    """Trade with zero quantity is not allowed."""
-
-    error_code = "0x4ef36a18"
-
-
-class ZeroOrder(GTEError):
-    """Order with zero quantity is not allowed."""
-
-    error_code = "0xb82df155"
-
-
-class TransferFromFailed(GTEError):
-    """Transfer from operation failed."""
-
-    error_code = "0x7939f424"
-
-
-
-ERROR_EXCEPTIONS = {
-    "0xf4d678b8": InsufficientBalance,
-    "0x32cc7236": NotFactory,
-    "0x87e393a7": FOKNotFilled,
-    "0x60ab4840": UnauthorizedAmend,
-    "0x45bb6073": UnauthorizedCancel,
-    "0x4b22649a": InvalidAmend,
-    "0x3154078e": OrderAlreadyExpired,
-    "0x3d104567": InvalidAccountOrOperator,
-    "0x52409ba3": PostOnlyOrderWouldBeFilled,
-    "0x315ff5e5": MaxOrdersInBookPostNotCompetitive,
-    "0xc1008f10": NonPostOnlyAmend,  # Fixed: changed from string to exception class
-    "0xd8a00083": ZeroCostTrade,
-    "0x4ef36a18": ZeroTrade,
-    "0xb82df155": ZeroOrder,
-    "0x7939f424": TransferFromFailed,
+# This file is auto-generated. Do not edit manually.
+# Error selector to signature mapping
+ERROR_SELECTORS = {
+    "0x0313b285": "MarketAlreadyExists()",
+    "0x08498ba1": "TooManyFeeTiers()",
+    "0x0dc149f0": "AlreadyInitialized()",
+    "0x118cdaa7": "OwnableUnauthorizedAccount(address)",
+    "0x19ae8c78": "CLOBBeaconMustHaveRouter()",
+    "0x1d33d88c": "InvalidQuoteAsset()",
+    "0x1e4f7d8c": "InvalidPair()",
+    "0x1e4fbdf7": "OwnableInvalidOwner(address)",
+    "0x1e8b8441": "UnsupportedSelector()",
+    "0x1eb00b06": "InvalidTokenAddress()",
+    "0x1ede9b2e": "UnauthorizedMarket()",
+    "0x28a4c12a": "InvalidMaxLimitsPerTx()",
+    "0x2fe7552a": "InvalidCurve()",
+    "0x305bf79f": "InvalidSettlementForWrap()",
+    "0x3154078e": "OrderAlreadyExpired()",
+    "0x315ff5e5": "MaxOrdersInBookPostNotCompetitive()",
+    "0x32cc7236": "NotFactory()",
+    "0x3830cade": "InvalidUnwrapAndSettlementPreference()",
+    "0x38422dcd": "UnmatchingArrayLengths()",
+    "0x39b4a257": "InvalidCLOBAmountSide()",
+    "0x3d104567": "InvalidAccountOrOperator()",
+    "0x4233ebcb": "DustAttackInvalid()",
+    "0x4337d5d8": "InvalidMinLimitOrderAmountInBase()",
+    "0x45bb6073": "UnauthorizedCancel()",
+    "0x4b22649a": "InvalidAmend()",
+    "0x4e23d035": "IndexOutOfBounds()",
+    "0x4ef36a18": "ZeroTrade()",
+    "0x504dc462": "NoOrdersAtLimit()",
+    "0x52409ba3": "PostOnlyOrderWouldBeFilled()",
+    "0x52654a3d": "LimitPriceOutOfBounds()",
+    "0x559895a3": "DeadlineExceeded()",
+    "0x60ab4840": "UnauthorizedAmend()",
+    "0x6728a9f6": "SlippageToleranceExceeded()",
+    "0x6d303053": "LimitOrderAmountOutOfBounds()",
+    "0x6f156a5e": "UninitializedCurve()",
+    "0x6f5e8818": "NoHandoverRequest()",
+    "0x6fbe54bd": "InvalidBeaconAddress()",
+    "0x732ea322": "OperatorDoesNotHaveRole()",
+    "0x7448fbae": "NewOwnerIsZeroAddress()",
+    "0x747a60fb": "InvalidTickSize()",
+    "0x768dc598": "InvalidFeeRecipient()",
+    "0x82b42900": "Unauthorized()",
+    "0x87e393a7": "FOKNotFilled()",
+    "0x9b480a76": "InvalidQuoteScaling()",
+    "0x9c8d2cd2": "InvalidRecipient()",
+    "0x9efab874": "BondingInactive()",
+    "0xa1d718af": "InsufficientBaseSold()",
+    "0xa2c1d73f": "BadLaunchFee()",
+    "0xa3265e40": "UninitializedQuote()",
+    "0xab143c06": "Reentrancy()",
+    "0xb0cfa447": "MarketDoesNotExist()",
+    "0xb113638a": "ValueDoesNotExist()",
+    "0xb12d13eb": "ETHTransferFailed()",
+    "0xb3a23067": "OrderIdInUse()",
+    "0xb59a6c28": "Permit2TransferAmountTooLarge()",
+    "0xb5d44816": "LimitsPlacedExceedsMaxThisTx()",
+    "0xb82df155": "ZeroOrder()",
+    "0xbbf38157": "InvalidCLOBAddress()",
+    "0xc1008f10": "NonPostOnlyAmend()",
+    "0xc7022a01": "MissingCredits()",
+    "0xc9bdcc53": "InvalidTokenRoute()",
+    "0xccd6ad13": "InvalidWrapAmount()",
+    "0xd36d8965": "OrderNotFound()",
+    "0xd7e6bcf8": "NotInitializing()",
+    "0xd8a00083": "ZeroCostTrade()",
+    "0xe591f33d": "InvalidSettings()",
+    "0xe8c0e013": "EthRefundFailed(bytes)",
+    "0xf4391be9": "ValueSentWithoutWrap()",
+    "0xf4d678b8": "InsufficientBalance()",
+    "0xf92ee8a9": "InvalidInitialization()",
+    "0xfa67344e": "InvalidTierLength_ReduceFeeTierEnumSize()",
+    "0xfa7b1ec8": "InvalidCLOBSide()",
+    "0xfb6a0297": "UnwrapWethOnly()",
 }

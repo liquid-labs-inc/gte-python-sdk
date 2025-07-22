@@ -1,101 +1,59 @@
-"""Python wrapper for WETH (Wrapped Ether) token contracts."""
-
-from typing import TypeVar
-
+# This file is auto-generated. Do not edit manually.
+from typing import Any
+from .utils import TypedContractFunction, load_abi
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
-
-from .erc20 import ERC20
-from .utils import TypedContractFunction, load_abi
-
-T = TypeVar("T")
+from hexbytes import HexBytes
+from .events import ApprovalEvent, DepositEvent, TransferEvent, WithdrawalEvent
 
 
-class WETH(ERC20):
-    """
-    Python wrapper for WETH (Wrapped Ether) token contracts.
-    Extends the ERC20 wrapper to add WETH-specific functionality:
-    - deposit: Convert ETH to WETH
-    - withdraw: Convert WETH back to ETH
-    """
-
-    def __init__(
-        self,
-        web3: AsyncWeb3,
-        contract_address: ChecksumAddress,
-    ):
-        """
-        Initialize the WETH wrapper.
-
-        Args:
-            web3: AsyncWeb3 instance connected to a provider
-            contract_address: Address of the WETH token contract
-        """
-        super().__init__(web3, contract_address)
-
-        # Override the ABI with WETH-specific ABI
+class Weth:
+    def __init__(self, web3: AsyncWeb3, address: ChecksumAddress):
+        self.web3 = web3
+        self.address = address
         loaded_abi = load_abi("weth")
-        self.contract = self.web3.eth.contract(address=self.address, abi=loaded_abi)
+        self.contract = web3.eth.contract(address=address, abi=loaded_abi)
 
-    def deposit(self, amount: int, **kwargs) -> TypedContractFunction[None]:
-        """
-        Deposit ETH to get WETH.
+    async def name(self) -> str:
+        func = self.contract.functions.name()
+        return await func.call()
 
-        Args:
-            amount: Amount of ETH to wrap (in wei)
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
+    def approve(self, spender: ChecksumAddress, value: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.approve(spender, value)
+        return TypedContractFunction(func, params={**kwargs})
 
-        Returns:
-            TypedContractFunction that can be used to execute the transaction
-        """
+    async def total_supply(self) -> int:
+        func = self.contract.functions.totalSupply()
+        return await func.call()
+
+    def transfer_from(self, from_: ChecksumAddress, to: ChecksumAddress, value: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.transferFrom(from_, to, value)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def withdraw(self, value_: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.withdraw(value_)
+        return TypedContractFunction(func, params={**kwargs})
+
+    async def decimals(self) -> int:
+        func = self.contract.functions.decimals()
+        return await func.call()
+
+    async def balance_of(self, owner: ChecksumAddress) -> int:
+        func = self.contract.functions.balanceOf(owner)
+        return await func.call()
+
+    async def symbol(self) -> str:
+        func = self.contract.functions.symbol()
+        return await func.call()
+
+    def transfer(self, to: ChecksumAddress, value: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.transfer(to, value)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def deposit(self, value: int, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.deposit()
-        params = {
-            "value": amount,
-            **kwargs,
-        }
-        return TypedContractFunction(func, params)
+        return TypedContractFunction(func, params={"value": value, **kwargs})
 
-    def withdraw(self, amount: int, **kwargs) -> TypedContractFunction[None]:
-        """
-        Withdraw ETH by unwrapping WETH.
-
-        Args:
-            amount: Amount of WETH to unwrap (in wei)
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
-        Returns:
-            TypedContractFunction that can be used to execute the transaction
-        """
-        func = self.contract.functions.withdraw(amount)
-
-        params = {
-            **kwargs,
-        }
-        return TypedContractFunction(func, params)
-
-    def deposit_eth(self, amount: int, **kwargs) -> TypedContractFunction[None]:
-        """
-        Deposit ETH to get WETH, using wei amount as int.
-
-        Args:
-            amount: Amount of ETH to wrap (in wei)
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
-        Returns:
-            TypedContractFunction that can be used to execute the transaction
-        """
-        return self.deposit(amount, **kwargs)
-
-    def withdraw_eth(self, amount: int, **kwargs) -> TypedContractFunction[None]:
-        """
-        Withdraw ETH by unwrapping WETH, using ETH amount as float.
-
-        Args:
-            amount: Amount of ETH to unwrap (in wei)
-            **kwargs: Additional transaction parameters (gas, gasPrice, etc.)
-
-        Returns:
-            TypedContractFunction that can be used to execute the transaction
-        """
-        # Convert ETH amount to wei
-        return self.withdraw(amount, **kwargs)
+    async def allowance(self, owner: ChecksumAddress, spender: ChecksumAddress) -> int:
+        func = self.contract.functions.allowance(owner, spender)
+        return await func.call()
