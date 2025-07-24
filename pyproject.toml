@@ -26,6 +26,15 @@ requires-python = ">=3.10"
 [project.scripts]
 gte-py = "gte_py.main:run"
 
+[tool.uv_build]
+packages = [{ include = "gte_py", from = "src" }]
+include = ["README.md"]
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version_files = ["pyproject.toml"]
+tag_format = "v$version"
+
 [tool.uv]
 
 [tool.setuptools]
@@ -139,4 +148,6 @@ dev = [
     "ruff>=0.9",
     "pytest-cov>=6.0",
     "fawltydeps>=0.19.0",
+    "commitizen>=4.0.0",
+    "twine>=6.0.0"
 ]
