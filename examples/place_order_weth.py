@@ -2,9 +2,10 @@
 import sys
 sys.path.append(".")
 import asyncio
+from decimal import Decimal
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
-import time
+
 from examples.utils import WALLET_PRIVATE_KEY
 from gte_py.clients import GTEClient
 from gte_py.api.chain.structs import OrderSide
@@ -25,43 +26,33 @@ async def main():
 
         market = await client.info.get_market(MARKET_ADDRESS)
         print(market)
+        print('-' * 50)
         
         eth_amount = 0.001
-        eth_amount_wei = market.base.convert_quantity_to_amount(eth_amount)
         
         # if using an eth clob market you have to wrap before selling eth and unwrap after buying eth
-        
-        # wrap the eth
-        weth_balance = await client.execution.get_weth_balance()
-        if weth_balance < eth_amount_wei*2:
-            await client.execution.wrap_eth(amount=eth_amount_wei*2 - weth_balance, gas=50 * 10**6)
-        
-        # buy eth
-        # if you want to use quote units, you can set amount_is_base=False
-        # amount is accepted in raw units (atoms, wei, etc.) unless you set amount_is_raw=False
-        order = await client.execution.place_market_order(  # type: ignore
+        order = await client.execution.place_market_order(
             market=market,
             side=OrderSide.BUY,
-            amount=eth_amount_wei,
+            amount=Decimal(eth_amount),
             slippage=0.05,
-            gas=50 * 10**6
         )
         
         print(f"Order posted: {order}")
         print('-' * 50)
         
         # or if you want to use amount in base units
-        order = await client.execution.place_market_order(  # type: ignore
+        order = await client.execution.place_market_order(
             market=market,
             side=OrderSide.BUY,
-            amount=eth_amount,
-            amount_is_raw=False,
+            amount=Decimal(eth_amount),
             slippage=0.05,
-            gas=50 * 10**6
         )
         
+        # unwrap weth
         weth_balance = await client.execution.get_weth_balance()
-        await client.execution.unwrap_eth(amount=weth_balance, gas=50 * 10**6)
+        if weth_balance > 0:
+            _ = await client.execution.unwrap_eth(amount=weth_balance)
 
         print(f"Order posted: {order}")
         
