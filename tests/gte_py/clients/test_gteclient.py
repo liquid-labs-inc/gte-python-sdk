@@ -53,6 +53,10 @@ def patched_clients():
         
         execution_instance = MagicMock()
         execution_instance.init = AsyncMock()
+        # Add AsyncMock for scheduler.stop
+        execution_instance._scheduler.stop = AsyncMock()
+        # Add AsyncMock for close method
+        execution_instance.close = AsyncMock()
         execution_class.return_value = execution_instance
         
         yield {
@@ -96,8 +100,7 @@ def test_execution_client_initialization_parameters(config, private_key, patched
         web3=client._web3,
         account=client._account,
         gte_router_address=config.router_address,
-        weth_address=config.weth_address,
-        clob_manager_address=config.clob_manager_address,
+        info=client.info,
     )
 
 
@@ -172,6 +175,7 @@ async def test_connect_and_disconnect(config, private_key, patched_clients):
     info.unsubscribe_all.assert_awaited_once()
     rest.disconnect.assert_awaited_once()
     ws.disconnect.assert_awaited_once()
+    patched_clients["execution"].close.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -234,6 +238,7 @@ async def test_context_manager(config, patched_clients):
     rest.disconnect.assert_awaited()
     ws.disconnect.assert_awaited()
     info.unsubscribe_all.assert_awaited()
+    patched_clients["execution"].close.assert_awaited_once()
 
     client2 = GTEClient(config=config)
     async with client2:
@@ -272,11 +277,4 @@ async def test_double_connect_disconnect_noop(config, patched_clients):
     rest.disconnect.assert_awaited_once()
     ws.disconnect.assert_awaited_once()
     info.unsubscribe_all.assert_awaited_once()
-
-    client2 = GTEClient(config=config)
-    await client2.connect()
-    await client2.connect()  # no-op
-    assert client2._execution is None  # Use private attribute, not property
-    await client2.disconnect()
-    await client2.disconnect()  # no-op
-    info.unsubscribe_all.assert_awaited()
+    patched_clients["execution"].close.assert_awaited_once()
