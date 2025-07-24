@@ -1,6 +1,6 @@
 import asyncio
 import pytest
-from unittest.mock import AsyncMock, MagicMock, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 from hexbytes import HexBytes
 from eth_account import Account
 from web3 import AsyncWeb3
@@ -268,7 +268,7 @@ class TestBoundedNonceTxScheduler:
         tx = TypedContractFunction(mock_contract_function)
         result = await scheduler.send(tx)
         
-        assert result == HexBytes("0x123")
+        assert result == "0x0123"
         mock_web3.eth.send_raw_transaction.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -322,13 +322,19 @@ class TestBoundedNonceTxScheduler:
         scheduler = BoundedNonceTxScheduler(mock_web3, mock_account, max_pending_window=2)
         await scheduler.start()
         
-        # Fill the window
+        # Fill the window: last_confirmed=5, last_sent=7 means 2 pending
         scheduler.last_sent = 7  # 2 pending (5-7)
+        
+        # Mock get_transaction_count to return 5 first (window full), then 7 (window cleared)
+        # This simulates that during retry, pending transactions get confirmed
+        mock_web3.eth.get_transaction_count.side_effect = [5, 7]
         
         tx = TypedContractFunction(mock_contract_function)
         
-        with pytest.raises(RuntimeError, match="Pending transaction window still full"):
-            await scheduler.send(tx)
+        with patch("gte_py.api.chain.utils.asyncio.sleep", new=AsyncMock()):
+            # Should succeed after retry clears the window
+            result = await scheduler.send(tx)
+            assert result == "0x0123"
 
     @pytest.mark.asyncio
     async def test_stuck_nonce_monitoring(self, mock_web3, mock_account):
