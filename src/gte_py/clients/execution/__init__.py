@@ -60,6 +60,10 @@ class ExecutionClient:
         # Cache for approved launchpad tokens
         self._approved_launchpad_tokens: set[ChecksumAddress] = set()
         
+        # TOB cache for market order optimization
+        self._tob_cache: dict[ChecksumAddress, tuple[Decimal, Decimal]] = {}  # market -> (bid, ask)
+        self._tob_subscriptions: set[ChecksumAddress] = set()
+        
         # Maximum approval amount (2^256 - 1)
         self._max_approval = 2**256 - 1
 
@@ -67,6 +71,25 @@ class ExecutionClient:
         """Initialize the chain client."""
         await self._chain_client.init()
         await self._scheduler.start()
+
+    async def close(self):
+        """Clean up resources and unsubscribe from all WebSocket subscriptions."""
+        # Unsubscribe from all TOB subscriptions
+        for market_address in list(self._tob_subscriptions):
+            try:
+                await self._info.unsubscribe_orderbook(market_address, limit=1)
+                logger.debug(f"Unsubscribed from TOB updates for {market_address}")
+            except Exception as e:
+                logger.warning(f"Error unsubscribing from {market_address}: {e}")
+        
+        # Stop the transaction scheduler
+        await self._scheduler.stop()
+        
+        # Clear caches
+        self._tob_cache.clear()
+        self._tob_subscriptions.clear()
+        
+        logger.info("ExecutionClient cleanup completed")
 
     # ================= DEPOSIT/WITHDRAW OPERATIONS =================
     
@@ -969,19 +992,62 @@ class ExecutionClient:
         # Return the router transaction
         return self._chain_client.router.clob_post_fill_order(clob=market.address, args=args, **kwargs)
 
+    async def _ensure_tob_subscription(self, market: Market):
+        """Ensure we have a live TOB subscription for this market."""
+        if market.address in self._tob_subscriptions:
+            return  # Already subscribed
+        
+        def tob_callback(data):
+            """Callback runs in the same event loop - no threading issues."""
+            try:
+                bids = data.get("b", [])
+                asks = data.get("a", [])
+                
+                best_bid = Decimal(bids[0]["px"]) if bids else Decimal('0')
+                best_ask = Decimal(asks[0]["px"]) if asks else Decimal('0')
+                
+                # This is thread-safe because it's all in the same event loop
+                self._tob_cache[market.address] = (best_bid, best_ask)
+                
+                logger.debug(f"TOB updated for {market.address}: {best_bid}/{best_ask}")
+            except Exception as e:
+                logger.warning(f"Error processing TOB update for {market.address}: {e}")
+        
+        # This uses the existing WebSocket connection - no new threads
+        await self._info.subscribe_orderbook(market.address, tob_callback, limit=1)
+        self._tob_subscriptions.add(market.address)
+        
+        logger.info(f"Subscribed to TOB updates for {market.address}")
+
+    async def _get_cached_tob(self, market: Market) -> tuple[Decimal, Decimal]:
+        """Get TOB from cache or fallback to RPC."""
+        # Ensure subscription exists (this is async but runs in same event loop)
+        await self._ensure_tob_subscription(market)
+        
+        # Check cache
+        if market.address in self._tob_cache:
+            bid, ask = self._tob_cache[market.address]
+            logger.debug(f"Using cached TOB for {market.address}")
+            return bid, ask
+        
+        # Cache miss/stale - fallback to RPC
+        logger.debug(f"TOB cache miss for {market.address}, using RPC fallback")
+        return await self.get_tob(market)
+
     async def _get_price_limit(self, market: Market, side: OrderSide, slippage: float = 0.01) -> int:
         """
         Get the price limit for a market order with slippage applied.
+        Uses cached WebSocket TOB data for better performance.
         """
-        clob = self._chain_client.get_clob(market.address)
-        highest_bid, lowest_ask = await clob.get_tob()
+        # Use cached TOB data (fast) with RPC fallback
+        best_bid, best_ask = await self._get_cached_tob(market)
         
         if side == OrderSide.BUY:
             # For BUY orders, use lowest ask with positive slippage
-            return int(lowest_ask * (1 + slippage))
+            return int(market.quote.convert_quantity_to_amount(best_ask * Decimal(str(1 + slippage))))
         else:
             # For SELL orders, use highest bid with negative slippage
-            return int(highest_bid * (1 - slippage))
+            return int(market.quote.convert_quantity_to_amount(best_bid * Decimal(str(1 - slippage))))
 
     async def place_market_order(
             self,
@@ -1182,6 +1248,22 @@ class ExecutionClient:
         self._approved_swap_tokens.clear()
         self._approved_launchpad_tokens.clear()
         logger.info("Approval cache cleared")
+
+    def clear_tob_cache(self):
+        """Clear TOB cache - useful for testing or if stale data is suspected."""
+        self._tob_cache.clear()
+        logger.info("TOB cache cleared")
+
+    async def unsubscribe_tob(self, market: Market):
+        """Unsubscribe from TOB updates for a specific market."""
+        if market.address in self._tob_subscriptions:
+            try:
+                await self._info.unsubscribe_orderbook(market.address, limit=1)
+                self._tob_subscriptions.remove(market.address)
+                self._tob_cache.pop(market.address, None)
+                logger.info(f"Unsubscribed from TOB updates for {market.address}")
+            except Exception as e:
+                logger.warning(f"Error unsubscribing from {market.address}: {e}")
 
     # ================= UTILITY OPERATIONS =================
 
