@@ -80,7 +80,7 @@ class GTEClient:
             return
         
         if self._execution:
-            await self._execution._scheduler.stop()
+            await self._execution.close()
         
         await self.info.unsubscribe_all()
         await self.rest.disconnect()
