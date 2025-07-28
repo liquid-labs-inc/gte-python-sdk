@@ -281,77 +281,13 @@ class OperatorRole(enum.IntEnum):
     WITHDRAW = 1 << 2
     LAUNCHPAD_FILL = 1 << 3
 
+@dataclass
+class Position:
+    """Position structure for derivatives."""
 
-# below are from PerpManager
-
-class AccountLiquidatedEvent(TypedDict):
-    """Event emitted when an account is liquidated."""
-    account: ChecksumAddress
-    subaccount: int
-    rpnl: int
-    fee: int
-    badDebt: int
-    bookType: int
-    nonce: int
-
-class FeeTierUpdatedEvent(TypedDict):
-    """Event emitted when a fee tier is updated for an account."""
-    account: ChecksumAddress
-    feeTier: int
-    nonce: int
-
-class FundingIntervalUpdatedEvent(TypedDict):
-    """Event emitted when the funding interval is updated for an asset."""
-    asset: str
-    fundingInterval: int
-    nonce: int
-
-class FundingPaymentRealizedEvent(TypedDict):
-    """Event emitted when a funding payment is realized for an account/subaccount."""
-    account: ChecksumAddress
-    subaccount: int
-    fundingPayment: int
-    nonce: int
-
-class FundingSettledEvent(TypedDict):
-    """Event emitted when funding is settled for an asset."""
-    asset: str
-    funding: int
-    cumulativeFunding: int
-    nonce: int
-
-class InsuranceFundDepositEvent(TypedDict):
-    """Event emitted when a deposit is made to the insurance fund."""
-    account: ChecksumAddress
+    is_long: bool
     amount: int
+    open_notional: int
+    margin: int
+    last_cumulative_funding: int
 
-class InsuranceFundWithdrawalEvent(TypedDict):
-    """Event emitted when a withdrawal is made from the insurance fund."""
-    account: ChecksumAddress
-    amount: int
-
-class PerpDepositEvent(TypedDict):
-    """Event emitted when collateral is deposited to a perp account."""
-    account: ChecksumAddress
-    amount: int
-
-class PerpWithdrawCollateralEvent(TypedDict):
-    """Event emitted when collateral is withdrawn from a perp account."""
-    account: ChecksumAddress
-    amount: int
-
-class PerpCrossMarginEnabledEvent(TypedDict):
-    """Event emitted when cross margin is enabled for an asset."""
-    asset: str
-    nonce: int
-
-class PerpCrossMarginDisabledEvent(TypedDict):
-    """Event emitted when cross margin is disabled for an asset."""
-    asset: str
-    nonce: int
-
-class DivergenceCapUpdatedEvent(TypedDict):
-    """Event emitted when the divergence cap is updated for an asset."""
-    asset: str
-    divergenceCap: int
-    nonce: int

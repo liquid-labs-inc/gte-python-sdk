@@ -1,16 +1,15 @@
+from eth_typing import ChecksumAddress
+from web3 import AsyncWeb3
 
-from typing import List, Union
 from .structs import (
     PostLimitOrderArgs,
     PostFillOrderArgs,
-    CancelArgs,
     MarketConfig,
-    MarketSettings,
+    Position
 )
-from eth_typing import ChecksumAddress
-from web3 import AsyncWeb3
-from .utils import load_abi, TxParams, TypedContractFunction
-from .event_source import EventSource
+from .utils import load_abi, TypedContractFunction
+
+
 # from .events import parse_withdraw_collateral  # To be implemented
 
 
@@ -176,8 +175,15 @@ class PerpManager:
         return await self.contract.functions.getPartialLiquidationThreshold(asset).call()
 
 
-    async def get_position(self, asset: str, account: ChecksumAddress, subaccount: int) -> dict:
-        return await self.contract.functions.getPosition(asset, account, subaccount).call()
+    async def get_position(self, asset: str, account: ChecksumAddress, subaccount: int) -> Position:
+        tpl = await self.contract.functions.getPosition(asset, account, subaccount).call()
+        return Position(
+            is_long=tpl[0],
+            amount=tpl[1],
+            open_notional=tpl[2],
+            margin=tpl[3],
+            last_cumulative_funding=tpl[4],
+        )
 
     async def get_positions(self, account: ChecksumAddress, subaccount: int) -> list:
         return await self.contract.functions.getPositions(account, subaccount).call()
