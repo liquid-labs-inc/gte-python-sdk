@@ -12,6 +12,10 @@ from examples.utils import (
     WALLET_PRIVATE_KEY
 )
 
+from examples.constants import BTC_USD_CLOB
+
+MARKET_ADDRESS = BTC_USD_CLOB
+
 
 async def cancel_transaction(client: GTEClient, tx_hash: str, gas_price_increase: float = 1.5) -> str:
     """

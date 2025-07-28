@@ -58,8 +58,7 @@ class GTEClient:
                 web3=self._web3,
                 account=self._account,
                 gte_router_address=config.router_address,
-                weth_address=config.weth_address,
-                clob_manager_address=config.clob_manager_address,
+                info=self.info,
             )
         
         self.connected = False
@@ -79,6 +78,9 @@ class GTEClient:
     async def disconnect(self):
         if not self.connected:
             return
+        
+        if self._execution:
+            await self._execution._scheduler.stop()
         
         await self.info.unsubscribe_all()
         await self.rest.disconnect()

@@ -13,8 +13,10 @@ from rich.console import Console
 from rich.table import Table
 from web3 import AsyncWeb3
 
+from examples.constants import BTC_USD_CLOB
+
 # BTC/USD CLOB
-MARKET_ADDRESS = "0x0F3642714B9516e3d17a936bAced4de47A6FFa5F"
+MARKET_ADDRESS = BTC_USD_CLOB
 
 # Initialize console for rich text output
 console = Console()

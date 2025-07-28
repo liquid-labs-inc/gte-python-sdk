@@ -2,14 +2,12 @@
 import sys
 sys.path.append(".")
 import asyncio
-from eth_typing import ChecksumAddress
-from eth_utils.address import to_checksum_address
 
 from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
 from examples.utils import WALLET_ADDRESS, WALLET_PRIVATE_KEY
 
-BTC_ADDRESS: ChecksumAddress = to_checksum_address("0x7f11aa697e05b75600354ac9acf8bb209225e932")
+from examples.constants import BTC_ADDRESS
 
 def print_separator(title: str) -> None:
     """Print a section separator."""
