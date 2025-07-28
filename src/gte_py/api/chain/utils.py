@@ -26,7 +26,7 @@ from web3 import AsyncWeb3
 from web3.contract.async_contract import AsyncContractFunction, AsyncContractEvent
 from web3.exceptions import ContractCustomError, Web3Exception
 from web3.types import TxParams, EventData, Nonce, Wei, TxReceipt
-from gte_py.api.chain.errors import ERROR_EXCEPTIONS
+from gte_py.api.chain.errors import ERROR_SELECTORS
 
 logger = logging.getLogger(__name__)
 
@@ -87,9 +87,8 @@ def convert_web3_error(error: ContractCustomError, cause: str) -> Exception:
         A custom GTE exception
     """
     error_code = error.message
-    if error_code in ERROR_EXCEPTIONS:
-        exception_class = ERROR_EXCEPTIONS[error_code]
-        return exception_class(cause)
+    if error_code in ERROR_SELECTORS:
+        return Exception(ERROR_SELECTORS[error_code])
     return Exception(f"Web3 error: {error_code} in {cause}. ")
 
 
@@ -459,7 +458,7 @@ class BoundedNonceTxScheduler:
             self.logger.error(f"Failed to sign transaction with nonce {nonce}: {e}")
             raise
 
-    async def send(self, contract_func: "TypedContractFunction[Any]") -> HexBytes:
+    async def send(self, contract_func: "TypedContractFunction[Any]") -> str:
         """
         Send transaction with optimistic acknowledgment.
         
@@ -484,7 +483,7 @@ class BoundedNonceTxScheduler:
             # Optimistic send - treat success as nonce consumption
             tx_hash = await self.web3.eth.send_raw_transaction(signed.raw_transaction)
             self.logger.debug(f"Sent transaction: {tx_hash.hex()}")
-            return tx_hash
+            return tx_hash.to_0x_hex()
             
         except Exception as e:
             # Failure rewind already handled in _sign_transaction
