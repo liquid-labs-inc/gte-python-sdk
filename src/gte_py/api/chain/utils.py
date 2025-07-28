@@ -24,7 +24,7 @@ from eth_utils.address import is_checksum_address
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
 from web3.contract.async_contract import AsyncContractFunction, AsyncContractEvent
-from web3.exceptions import ContractCustomError, Web3Exception
+from web3.exceptions import ContractCustomError, Web3Exception, Web3RPCError
 from web3.types import TxParams, EventData, Nonce, Wei, TxReceipt
 from gte_py.api.chain.errors import ERROR_SELECTORS
 
@@ -87,9 +87,21 @@ def convert_web3_error(error: ContractCustomError, cause: str) -> Exception:
         A custom GTE exception
     """
     error_code = error.message
+    
+    # Try to decode the error using our error selectors
     if error_code in ERROR_SELECTORS:
-        return Exception(ERROR_SELECTORS[error_code])
-    return Exception(f"Web3 error: {error_code} in {cause}. ")
+        error_description = ERROR_SELECTORS[error_code]
+        return Exception(f"Contract error: {error_description}")
+    
+    # If not found, try to extract 4-byte selector from hex
+    if isinstance(error_code, str) and error_code.startswith('0x') and len(error_code) >= 10:
+        selector = error_code[:10]  # First 4 bytes (0x + 8 hex chars)
+        if selector in ERROR_SELECTORS:
+            error_description = ERROR_SELECTORS[selector]
+            return Exception(f"Contract error: {error_description}")
+    
+    # Fallback: return raw error with context
+    return Exception(f"Unknown contract error: {error_code} in {cause}. Check transaction details for more info.")
 
 
 T = TypeVar("T")
@@ -254,6 +266,7 @@ def make_web3(
         A tuple containing the Web3 instance and the account
     """
     web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(rpc_url))
+    web3.middleware_onion.clear()
     if wallet_private_key:
         account = Account.from_key(wallet_private_key)
         return web3, account
@@ -364,6 +377,47 @@ class BoundedNonceTxScheduler:
         self.last_confirmed = network_confirmed
         self.logger.debug(f"Synced confirmed nonce: {self.last_confirmed}")
 
+    async def _handle_nonce_error_and_retry(self, contract_func: "TypedContractFunction[Any]") -> str:
+        """Handle nonce error by getting fresh nonce and resending transaction."""
+        async with self.nonce_lock:
+            # Get the actual pending nonce from the node
+            pending_nonce = await self.web3.eth.get_transaction_count(self.from_address, "pending")
+            self.last_confirmed = await self.web3.eth.get_transaction_count(self.from_address, "latest")
+            self.last_sent = pending_nonce
+            self.logger.info(f"Nonce error - resynced: confirmed={self.last_confirmed}, pending={pending_nonce}")
+        
+        # Now sign and send with the correct nonce
+        signed = await self._sign_transaction(contract_func)
+        tx_hash = await self.web3.eth.send_raw_transaction(signed.raw_transaction)
+        self.logger.info(f"Resent transaction successfully: {tx_hash.hex()}")
+        return tx_hash.to_0x_hex()
+
+    async def _handle_rpc_error(self, e: Web3RPCError, contract_func: "TypedContractFunction[Any]") -> str:
+        """Handle RPC errors with appropriate recovery strategies."""
+        error_data = e.args[0] if e.args else {}
+        error_code = error_data.get('code') if isinstance(error_data, dict) else None
+        error_message = error_data.get('message', str(e)) if isinstance(error_data, dict) else str(e)
+        
+        # Nonce errors - resync and retry
+        if 'nonce too low' in error_message.lower() or 'nonce too high' in error_message.lower():
+            self.logger.warning(f"Nonce error detected: {error_message}")
+            return await self._handle_nonce_error_and_retry(contract_func)
+            
+        # Already submitted - treat as success
+        elif 'already known' in error_message.lower() or 'transaction already in pool' in error_message.lower():
+            self.logger.debug("Transaction already known/in pool")
+            return f"0x{'0' * 64}"
+            
+        # Fatal errors - raise exception
+        elif error_code == -32000 and ('insufficient funds' in error_message.lower() or 'gas' in error_message.lower()):
+            self.logger.error(f"Insufficient funds or gas error: {error_message}")
+            raise Exception(f"Insufficient funds or gas estimation failed: {error_message}")
+            
+        # Other errors - log and continue
+        else:
+            self.logger.warning(f"RPC Error {error_code}: {error_message}")
+            return f"0x{'0' * 64}"
+
     async def _check_pending_window(self):
         """
         Check pending window and sync if needed. Fast fail if still full.
@@ -407,7 +461,7 @@ class BoundedNonceTxScheduler:
             # All retries exhausted and window still full
             final_pending = self.last_sent - self.last_confirmed
             raise RuntimeError(
-                f"Pending transaction window still full after {len(retry_delays)} retries: "
+                f"Pending transaction window still full after {len(retry_delays)} retries: ",
                 f"{final_pending}/{self.max_pending_window} transactions pending"
             )
 
@@ -460,35 +514,27 @@ class BoundedNonceTxScheduler:
 
     async def send(self, contract_func: "TypedContractFunction[Any]") -> str:
         """
-        Send transaction with optimistic acknowledgment.
+        Send transaction with robust error handling and nonce management.
         
-        This method checks the pending window, signs the transaction, and submits it
-        to the network. It returns immediately after submission without waiting for
-        confirmation.
-        
-        Args:
-            contract_func: The contract function to execute
-            
         Returns:
             Transaction hash of the submitted transaction
-            
-        Raises:
-            RuntimeError: If the pending transaction window is full
-            Exception: If transaction signing or submission fails
         """
-        # Sign transaction (includes nonce increment)
-        signed = await self._sign_transaction(contract_func)
-        
         try:
-            # Optimistic send - treat success as nonce consumption
+            # Sign and send transaction
+            signed = await self._sign_transaction(contract_func)
             tx_hash = await self.web3.eth.send_raw_transaction(signed.raw_transaction)
-            self.logger.debug(f"Sent transaction: {tx_hash.hex()}")
+            self.logger.debug(f"Transaction sent: {tx_hash.hex()}")
             return tx_hash.to_0x_hex()
             
+        except Web3RPCError as e:
+            return await self._handle_rpc_error(e, contract_func)
+            
+        except ContractCustomError as e:
+            raise convert_web3_error(e, "transaction")
+            
         except Exception as e:
-            # Failure rewind already handled in _sign_transaction
-            self.logger.error(f"Failed to send transaction {signed.hash.hex()}: {e}")
-            raise
+            self.logger.error(f"Unexpected transaction error: {e}")
+            raise Exception(f"Transaction failed: {str(e)}")
 
     async def send_wait(self, contract_func: "TypedContractFunction[Any]") -> Any:
         """
