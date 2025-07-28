@@ -62,7 +62,6 @@ class ExecutionClient:
         
         # TOB cache for market order optimization
         self._tob_cache: dict[ChecksumAddress, tuple[Decimal, Decimal]] = {}  # market -> (bid, ask)
-        self._tob_subscriptions: set[ChecksumAddress] = set()
         
         # Maximum approval amount (2^256 - 1)
         self._max_approval = 2**256 - 1
@@ -75,7 +74,7 @@ class ExecutionClient:
     async def close(self):
         """Clean up resources and unsubscribe from all WebSocket subscriptions."""
         # Unsubscribe from all TOB subscriptions
-        for market_address in list(self._tob_subscriptions):
+        for market_address in list(self._tob_cache.keys()):
             try:
                 await self._info.unsubscribe_orderbook(market_address, limit=1)
                 logger.debug(f"Unsubscribed from TOB updates for {market_address}")
@@ -87,7 +86,6 @@ class ExecutionClient:
         
         # Clear caches
         self._tob_cache.clear()
-        self._tob_subscriptions.clear()
         
         logger.info("ExecutionClient cleanup completed")
 
@@ -994,7 +992,7 @@ class ExecutionClient:
 
     async def _ensure_tob_subscription(self, market: Market):
         """Ensure we have a live TOB subscription for this market."""
-        if market.address in self._tob_subscriptions:
+        if market.address in self._tob_cache:
             return  # Already subscribed
         
         def tob_callback(data):
@@ -1015,7 +1013,6 @@ class ExecutionClient:
         
         # This uses the existing WebSocket connection - no new threads
         await self._info.subscribe_orderbook(market.address, tob_callback, limit=1)
-        self._tob_subscriptions.add(market.address)
         
         logger.info(f"Subscribed to TOB updates for {market.address}")
 
@@ -1250,16 +1247,16 @@ class ExecutionClient:
         logger.info("Approval cache cleared")
 
     def clear_tob_cache(self):
-        """Clear TOB cache - useful for testing or if stale data is suspected."""
+        """Clear TOB cache - useful for testing or if stale data is suspected.
+        Note: This also clears subscription tracking, so new subscriptions will be created as needed."""
         self._tob_cache.clear()
         logger.info("TOB cache cleared")
 
     async def unsubscribe_tob(self, market: Market):
         """Unsubscribe from TOB updates for a specific market."""
-        if market.address in self._tob_subscriptions:
+        if market.address in self._tob_cache:
             try:
                 await self._info.unsubscribe_orderbook(market.address, limit=1)
-                self._tob_subscriptions.remove(market.address)
                 self._tob_cache.pop(market.address, None)
                 logger.info(f"Unsubscribed from TOB updates for {market.address}")
             except Exception as e:
