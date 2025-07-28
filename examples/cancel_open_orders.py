@@ -2,16 +2,14 @@
 import sys
 sys.path.append(".")
 import asyncio
-from eth_typing import ChecksumAddress
-from web3 import AsyncWeb3
 
 from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
 from examples.utils import WALLET_PRIVATE_KEY, WALLET_ADDRESS
 
-MARKET_ADDRESS: ChecksumAddress = AsyncWeb3.to_checksum_address("0x0F3642714B9516e3d17a936bAced4de47A6FFa5F")
-# BTC CLOB: 0x0F3642714B9516e3d17a936bAced4de47A6FFa5F
-# ETH CLOB: 0x5ca9f32d4ce7cc0f782213c446c2ae14b754a623
+from examples.constants import BTC_USD_CLOB
+
+MARKET_ADDRESS = BTC_USD_CLOB
 
 
 async def main():

@@ -3,14 +3,14 @@ from decimal import Decimal
 import sys
 sys.path.append(".")
 import asyncio
-from eth_utils.address import to_checksum_address
 
 from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
 from examples.utils import WALLET_PRIVATE_KEY
+from examples.constants import BTC_ETH_AMM
 
 # BTC/ETH AMM
-MARKET_ADDRESS = to_checksum_address("0x6bba3ff4b359392decd0b77239b7e795269fb550")
+MARKET_ADDRESS = BTC_ETH_AMM
 
 async def main():
     config = TESTNET_CONFIG

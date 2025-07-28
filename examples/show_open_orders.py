@@ -9,8 +9,9 @@ from eth_utils.address import to_checksum_address
 from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
 from gte_py.models import Market
+from examples.constants import BTC_USD_CLOB
 
-MARKET_ADDRESS = to_checksum_address("0x0F3642714B9516e3d17a936bAced4de47A6FFa5F")
+MARKET_ADDRESS = BTC_USD_CLOB
 
 
 async def display_market_info(client: GTEClient, market_address: ChecksumAddress) -> Market:

@@ -9,8 +9,7 @@ from web3 import AsyncWeb3
 from examples.utils import WALLET_PRIVATE_KEY
 from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
-
-LAUNCHPAD_TOKEN_ADDRESS: ChecksumAddress = AsyncWeb3.to_checksum_address("0x1fb2dAD77F45b62a6016E2c13c753FE965d90D0d")
+from examples.constants import LAUNCHPAD_TOKEN_ADDRESS
 
 async def main():
     config = TESTNET_CONFIG
