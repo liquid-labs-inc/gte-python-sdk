@@ -993,7 +993,7 @@ class ExecutionClient:
     async def _ensure_tob_subscription(self, market: Market):
         """Ensure we have a live TOB subscription for this market."""
         if market.address in self._tob_cache:
-            return  # Already subscribed
+            return  # Already subscribed and cached
         
         def tob_callback(data):
             """Callback runs in the same event loop - no threading issues."""
@@ -1011,10 +1011,14 @@ class ExecutionClient:
             except Exception as e:
                 logger.warning(f"Error processing TOB update for {market.address}: {e}")
         
-        # This uses the existing WebSocket connection - no new threads
+        # Subscribe to WebSocket for future updates
         await self._info.subscribe_orderbook(market.address, tob_callback, limit=1)
         
-        logger.info(f"Subscribed to TOB updates for {market.address}")
+        # Immediately populate cache with current RPC data to avoid race condition
+        initial_bid, initial_ask = await self.get_tob(market)
+        self._tob_cache[market.address] = (initial_bid, initial_ask)
+        
+        logger.info(f"Subscribed to TOB updates for {market.address} and populated initial cache")
 
     async def _get_cached_tob(self, market: Market) -> tuple[Decimal, Decimal]:
         """Get TOB from cache or fallback to RPC."""
