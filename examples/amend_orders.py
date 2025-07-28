@@ -9,9 +9,9 @@ from gte_py.configs import TESTNET_CONFIG
 from gte_py.models import OrderSide, TimeInForce
 
 from examples.utils import WALLET_PRIVATE_KEY
+from examples.constants import BTC_USD_CLOB
 
-# BTC CLOB
-MARKET_ADDRESS = "0x0F3642714B9516e3d17a936bAced4de47A6FFa5F"
+MARKET_ADDRESS = BTC_USD_CLOB
 
 
 async def main() -> None:

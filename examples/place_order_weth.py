@@ -3,17 +3,12 @@ import sys
 sys.path.append(".")
 import asyncio
 from decimal import Decimal
-from eth_typing import ChecksumAddress
-from web3 import AsyncWeb3
 
 from examples.utils import WALLET_PRIVATE_KEY
+from examples.constants import ETH_USD_CLOB
 from gte_py.clients import GTEClient
 from gte_py.api.chain.structs import OrderSide
 from gte_py.configs import TESTNET_CONFIG
-
-MARKET_ADDRESS: ChecksumAddress = AsyncWeb3.to_checksum_address("0x5ca9f32d4ce7cc0f782213c446c2ae14b754a623")
-# BTC CLOB: 0x0F3642714B9516e3d17a936bAced4de47A6FFa5F
-# ETH CLOB: 0x5ca9f32d4ce7cc0f782213c446c2ae14b754a623
 
 
 async def main():
@@ -24,7 +19,7 @@ async def main():
         
     async with GTEClient(config=config, wallet_private_key=WALLET_PRIVATE_KEY) as client:
 
-        market = await client.info.get_market(MARKET_ADDRESS)
+        market = await client.info.get_market(ETH_USD_CLOB)
         print(market)
         print('-' * 50)
         

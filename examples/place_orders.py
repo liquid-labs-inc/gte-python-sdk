@@ -3,15 +3,12 @@ from decimal import Decimal
 import sys
 sys.path.append(".")
 import asyncio
-from eth_utils.address import to_checksum_address
 
 from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
 from gte_py.models import OrderSide, TimeInForce
 from examples.utils import WALLET_PRIVATE_KEY, print_separator
-
-# BTC CLOB
-MARKET_ADDRESS = to_checksum_address("0x0F3642714B9516e3d17a936bAced4de47A6FFa5F")
+from examples.constants import BTC_USD_CLOB
 
 async def main():
     config = TESTNET_CONFIG
@@ -21,7 +18,7 @@ async def main():
         side = OrderSide.BUY
         size = Decimal('0.01')
         
-        market = await client.info.get_market(MARKET_ADDRESS)
+        market = await client.info.get_market(BTC_USD_CLOB)
         
         # Place a market order
         order = await client.execution.place_market_order(market, side, size, slippage=0.05)
