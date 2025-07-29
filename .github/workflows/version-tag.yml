@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   version:
     runs-on: ubuntu-22.04
@@ -26,5 +30,5 @@ jobs:
         run: |
           git config user.name github-actions[bot]
           git config user.email github-actions[bot]@users.noreply.github.com
-          cz bump --yes --changelog
+          uv run cz bump --yes --changelog
           git push --follow-tags
