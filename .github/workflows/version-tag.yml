@@ -18,6 +18,7 @@ jobs:
       - name: Install uv and sync dev dependencies
         run: |
           curl --proto '=https' --tlsv1.2 -LsSf https://github.com/astral-sh/uv/releases/latest/download/uv-installer.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
           uv sync --extra dev
       - name: Bump version and tag using commitizen
         env:
