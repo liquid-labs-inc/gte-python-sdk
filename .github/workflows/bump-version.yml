@@ -16,18 +16,26 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
+
       - name: Install uv and sync dev dependencies
         run: |
           curl --proto '=https' --tlsv1.2 -LsSf https://github.com/astral-sh/uv/releases/latest/download/uv-installer.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           uv sync --extra dev
 
+      - name: Reset to latest origin/main
+        run: |
+          git fetch origin
+          git reset --hard origin/main
+
       - name: Create version-bump branch
         run: |
           git checkout -b bump-version-${{ github.run_number }}
+
       - name: Bump version and tag using commitizen
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -35,6 +43,11 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email github-actions[bot]@users.noreply.github.com
           uv run cz bump --yes --changelog
+
+      - name: Push bump branch
+        run: |
+          git push origin bump-version-${{ github.run_number }} --follow-tags
+
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
         with:
