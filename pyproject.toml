@@ -32,7 +32,7 @@ include = ["README.md"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version_files = ["pyproject.toml"]
+version_files = ["pyproject.toml:version"]
 tag_format = "v$version"
 
 [tool.uv]
