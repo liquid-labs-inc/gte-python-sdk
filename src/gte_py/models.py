@@ -12,7 +12,7 @@ from eth_utils.address import to_checksum_address
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
 
-from gte_py.api.chain.events import LimitOrderProcessedEvent, FillOrderProcessedEvent
+from gte_py.api.chain.events import LimitOrderProcessedEvent, FillOrderProcessedEvent, OrderCanceledEvent, OrderAmendedEvent
 from gte_py.api.chain.structs import OrderSide as ContractOrderSide, Order as CLOBOrder
 from gte_py.api.chain.utils import get_current_timestamp
 
@@ -435,9 +435,9 @@ class Order(BaseModel):
 
     @classmethod
     def from_clob_fill_order_processed(
-            cls, event: FillOrderProcessedEvent, amount: int, side: OrderSide, price: int
+            cls, event: FillOrderProcessedEvent, amount: int, side: OrderSide, price: int, market_address: ChecksumAddress
     ) -> "Order":
-        """Create an Order object from a CLOB limit order."""
+        """Create an Order object from a CLOB fill order event."""
         status = OrderStatus.OPEN
         if event.base_token_amount_traded == amount:
             status = OrderStatus.FILLED
@@ -445,15 +445,191 @@ class Order(BaseModel):
         # Create Order model
         return cls(
             order_id=event.order_id,
-            market_address=event.address,
+            market_address=market_address,
             side=side,
-            order_type=OrderType.LIMIT,
-            remaining_amount=amount,
+            order_type=OrderType.MARKET,  # Fill orders are typically market orders
+            remaining_amount=amount - event.base_token_amount_traded,
             price=price,
-            time_in_force=TimeInForce.GTC,  # Default
+            time_in_force=TimeInForce.IOC,  # Fill orders are typically IOC
             status=status,
             owner=event.account,
             placed_at=0,  # Need to be retrieved from event timestamp
+        )
+
+
+class OrderResult(BaseModel):
+    """Result of placing an order, populated from blockchain events."""
+    
+    model_config = {"arbitrary_types_allowed": True}
+
+    order_id: int
+    transaction_hash: HexBytes
+    status: OrderStatus
+    side: OrderSide
+    order_type: OrderType
+    
+    # Amounts (in atomic units)
+    requested_amount: int  # Original amount requested
+    filled_amount: int     # Amount filled immediately  
+    remaining_amount: int  # Amount remaining on books
+    
+    # Price and trading details
+    price: int | None = None  # Order price (for limit orders)
+    quote_amount_traded: int = 0  # Quote tokens traded
+    taker_fee: int = 0  # Fees paid
+    
+    # Metadata
+    owner: ChecksumAddress
+    market_address: ChecksumAddress
+    nonce: int
+
+    @classmethod
+    def from_limit_order_event(
+        cls, 
+        event: LimitOrderProcessedEvent, 
+        requested_amount: int,
+        price: int,
+        side: OrderSide,
+        market_address: ChecksumAddress,
+        transaction_hash: HexBytes
+    ) -> "OrderResult":
+        """Create OrderResult from LimitOrderProcessedEvent."""
+        # Determine status based on how much was filled
+        if event.amount_posted_in_base == 0:
+            status = OrderStatus.FILLED
+        elif event.base_token_amount_traded > 0:
+            status = OrderStatus.OPEN  # Partially filled, rest on books
+        else:
+            status = OrderStatus.OPEN  # Nothing filled, all on books
+            
+        return cls(
+            order_id=event.order_id,
+            transaction_hash=transaction_hash,
+            status=status,
+            side=side,
+            order_type=OrderType.LIMIT,
+            requested_amount=requested_amount,
+            filled_amount=event.base_token_amount_traded,
+            remaining_amount=event.amount_posted_in_base,
+            price=price,
+            quote_amount_traded=event.quote_token_amount_traded,
+            taker_fee=event.taker_fee,
+            owner=event.account,
+            market_address=market_address,
+            nonce=event.nonce,
+        )
+
+    @classmethod
+    def from_fill_order_event(
+        cls,
+        event: FillOrderProcessedEvent,
+        requested_amount: int,
+        side: OrderSide,
+        market_address: ChecksumAddress,
+        transaction_hash: HexBytes
+    ) -> "OrderResult":
+        """Create OrderResult from FillOrderProcessedEvent (market orders)."""
+        # Fill orders are typically fully filled or not executed
+        status = OrderStatus.FILLED if event.base_token_amount_traded > 0 else OrderStatus.REJECTED
+        
+        return cls(
+            order_id=event.order_id,
+            transaction_hash=transaction_hash,
+            status=status,
+            side=side,
+            order_type=OrderType.MARKET,
+            requested_amount=requested_amount,
+            filled_amount=event.base_token_amount_traded,
+            remaining_amount=0,  # Market orders don't remain on books
+            price=None,  # Market orders don't have a fixed price
+            quote_amount_traded=event.quote_token_amount_traded,
+            taker_fee=event.taker_fee,
+            owner=event.account,
+            market_address=market_address,
+            nonce=event.nonce,
+        )
+
+
+class AmendResult(BaseModel):
+    """Result of amending an order, populated from blockchain events."""
+    
+    model_config = {"arbitrary_types_allowed": True}
+
+    order_id: int
+    transaction_hash: HexBytes
+    
+    # Before amendment (from pre_amend Order)
+    old_amount: int
+    old_price: int
+    
+    # After amendment (derived from deltas)
+    new_amount: int
+    new_price: int
+    
+    # Changes made
+    quote_token_delta: int  # Change in quote token requirements
+    base_token_delta: int   # Change in base token amounts
+    
+    # Current state
+    owner: ChecksumAddress
+    nonce: int
+
+    @classmethod
+    def from_amend_event(
+        cls,
+        event: OrderAmendedEvent,
+        transaction_hash: HexBytes
+    ) -> "AmendResult":
+        """Create AmendResult from OrderAmendedEvent."""
+        return cls(
+            order_id=event.pre_amend.id_,
+            transaction_hash=transaction_hash,
+            old_amount=event.pre_amend.amount,
+            old_price=event.pre_amend.price,
+            new_amount=event.args.amount_in_base,
+            new_price=event.args.price,
+            quote_token_delta=event.quote_token_delta,
+            base_token_delta=event.base_token_delta,
+            owner=event.pre_amend.owner,
+            nonce=event.event_nonce,
+        )
+
+
+class CancelResult(BaseModel):
+    """Result of canceling an order, populated from blockchain events."""
+    
+    model_config = {"arbitrary_types_allowed": True}
+
+    order_id: int
+    transaction_hash: HexBytes
+    
+    # Refunded amounts (what was returned to user)
+    quote_token_refunded: int
+    base_token_refunded: int
+    
+    # Final state
+    status: OrderStatus = OrderStatus.CANCELLED
+    settlement: int  # Settlement method used
+    
+    # Metadata
+    owner: ChecksumAddress
+    nonce: int
+
+    @classmethod
+    def from_cancel_event(
+        cls,
+        event: OrderCanceledEvent,
+        transaction_hash: HexBytes
+    ) -> "CancelResult":
+        """Create CancelResult from OrderCanceledEvent."""
+        return cls(
+            order_id=event.order_id,
+            transaction_hash=transaction_hash,
+            quote_token_refunded=event.quote_token_refunded,
+            base_token_refunded=event.base_token_refunded,
+            settlement=event.settlement,
+            owner=event.owner,
+            nonce=event.nonce,
         )
 
 
