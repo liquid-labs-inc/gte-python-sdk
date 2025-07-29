@@ -1,7 +1,7 @@
 name: Version and Tag
 
 on:
-  pull_request:
+  push:
     branches: [main]
 
 jobs:
