@@ -26,5 +26,5 @@ jobs:
         run: |
           git config user.name github-actions[bot]
           git config user.email github-actions[bot]@users.noreply.github.com
-          cz bump --yes --changelog
+          uv run cz bump --yes --changelog
           git push --follow-tags
