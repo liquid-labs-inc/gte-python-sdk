@@ -101,24 +101,24 @@ class UniswapRouter:
         func = self.contract.functions.swapETHForExactTokens(amount_out, path, to, deadline)
         return TypedContractFunction(func, params={**kwargs})
 
-    def swap_exact_eth_for_tokens(self, amount_out_min: int, path: list[ChecksumAddress], to_: ChecksumAddress, deadline: int, value: int, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.swapExactETHForTokens(amount_out_min, path, to_, deadline)
-        return TypedContractFunction(func, params={"value": value, **kwargs})
+    def swap_exact_eth_for_tokens(self, amount_out_min: int, path: list[ChecksumAddress], to: ChecksumAddress, deadline: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.swapExactETHForTokens(amount_out_min, path, to, deadline)
+        return TypedContractFunction(func, params={**kwargs})
 
     def swap_exact_eth_for_tokens_supporting_fee_on_transfer_tokens(self, amount_out_min: int, path: list[ChecksumAddress], to: ChecksumAddress, deadline: int, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.swapExactETHForTokensSupportingFeeOnTransferTokens(amount_out_min, path, to, deadline)
         return TypedContractFunction(func, params={**kwargs})
 
-    def swap_exact_tokens_for_eth(self, amount_in: int, amount_out_min: int, path: list[ChecksumAddress], to_: ChecksumAddress, deadline: int, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.swapExactTokensForETH(amount_in, amount_out_min, path, to_, deadline)
+    def swap_exact_tokens_for_eth(self, amount_in: int, amount_out_min: int, path: list[ChecksumAddress], to: ChecksumAddress, deadline: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.swapExactTokensForETH(amount_in, amount_out_min, path, to, deadline)
         return TypedContractFunction(func, params={**kwargs})
 
     def swap_exact_tokens_for_eth_supporting_fee_on_transfer_tokens(self, amount_in: int, amount_out_min: int, path: list[ChecksumAddress], to: ChecksumAddress, deadline: int, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.swapExactTokensForETHSupportingFeeOnTransferTokens(amount_in, amount_out_min, path, to, deadline)
         return TypedContractFunction(func, params={**kwargs})
 
-    def swap_exact_tokens_for_tokens(self, amount_in: int, amount_out_min: int, path: list[ChecksumAddress], to_: ChecksumAddress, deadline: int, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.swapExactTokensForTokens(amount_in, amount_out_min, path, to_, deadline)
+    def swap_exact_tokens_for_tokens(self, amount_in: int, amount_out_min: int, path: list[ChecksumAddress], to: ChecksumAddress, deadline: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.swapExactTokensForTokens(amount_in, amount_out_min, path, to, deadline)
         return TypedContractFunction(func, params={**kwargs})
 
     def swap_exact_tokens_for_tokens_supporting_fee_on_transfer_tokens(self, amount_in: int, amount_out_min: int, path: list[ChecksumAddress], to: ChecksumAddress, deadline: int, **kwargs) -> TypedContractFunction[Any]:

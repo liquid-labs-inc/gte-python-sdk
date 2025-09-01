@@ -57,7 +57,7 @@ class GTEClient:
         self._execution = ExecutionClient(
             web3=self._web3,
             account=self._account,
-            gte_router_address=config.router_address,
+            config=config,
             info=self.info,
         )
         

@@ -4,8 +4,8 @@ from .utils import TypedContractFunction, load_abi
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 from hexbytes import HexBytes
-from .structs import AmendArgs, CancelArgs, Limit, MarketConfig, MarketSettings, Order, PostFillOrderArgs, PostFillOrderResult, PostLimitOrderArgs, PostLimitOrderResult
-from .events import CancelFailedEvent, FillOrderProcessedEvent, FillOrderSubmittedEvent, InitializedEvent, LimitOrderProcessedEvent, LimitOrderSubmittedEvent, MaxLimitOrdersAllowlistedEvent, MaxLimitOrdersPerTxUpdatedEvent, MinLimitOrderAmountInBaseUpdatedEvent, OrderAmendedEvent, OrderCanceledEvent, OrderMatchedEvent, OwnershipTransferStartedEvent, OwnershipTransferredEvent, TickSizeUpdatedEvent
+from .structs import AmendArgs, CancelArgs, Limit, MarketConfig, MarketSettings, Order, PlaceOrderArgs, PlaceOrderResult
+from .events import CancelFailedEvent, InitializedEvent, LimitOrderCreatedEvent, LotSizeInBaseUpdatedEvent, MaxLimitOrdersPerTxUpdatedEvent, MinLimitOrderAmountInBaseUpdatedEvent, OrderAmendedEvent, OrderCanceledEvent, OrderProcessedEvent, OwnershipTransferStartedEvent, OwnershipTransferredEvent, TickSizeUpdatedEvent
 
 
 class Clob:
@@ -21,6 +21,14 @@ class Clob:
 
     def accept_ownership(self, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.acceptOwnership()
+        return TypedContractFunction(func, params={**kwargs})
+
+    async def account_manager(self) -> ChecksumAddress:
+        func = self.contract.functions.accountManager()
+        return await func.call()
+
+    def admin_cancel_expired_orders(self, ids: list[int], side: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.adminCancelExpiredOrders(ids, side)
         return TypedContractFunction(func, params={**kwargs})
 
     def amend(self, account: ChecksumAddress, args: AmendArgs, **kwargs) -> TypedContractFunction[Any]:
@@ -39,6 +47,14 @@ class Clob:
         func = self.contract.functions.cancel(account, tuple(args))
         return TypedContractFunction(func, params={**kwargs})
 
+    async def factory(self) -> ChecksumAddress:
+        func = self.contract.functions.factory()
+        return await func.call()
+
+    async def get_base_quanta(self) -> int:
+        func = self.contract.functions.getBaseQuanta()
+        return await func.call()
+
     async def get_base_token(self) -> ChecksumAddress:
         func = self.contract.functions.getBaseToken()
         return await func.call()
@@ -51,24 +67,20 @@ class Clob:
         func = self.contract.functions.getEventNonce()
         return await func.call()
 
-    async def get_factory(self) -> ChecksumAddress:
-        func = self.contract.functions.getFactory()
-        return await func.call()
-
-    async def get_limit(self, price: int, side: int) -> Any:
+    async def get_limit(self, price: int, side: int) -> Limit:
         func = self.contract.functions.getLimit(price, side)
         return await func.call()
 
-    async def get_market_config(self) -> Any:
+    async def get_lot_size_in_base(self) -> int:
+        func = self.contract.functions.getLotSizeInBase()
+        return await func.call()
+
+    async def get_market_config(self) -> MarketConfig:
         func = self.contract.functions.getMarketConfig()
         return await func.call()
 
-    async def get_market_settings(self) -> Any:
+    async def get_market_settings(self) -> MarketSettings:
         func = self.contract.functions.getMarketSettings()
-        return await func.call()
-
-    async def get_max_limit_exempt(self, account: ChecksumAddress) -> bool:
-        func = self.contract.functions.getMaxLimitExempt(account)
         return await func.call()
 
     async def get_next_biggest_price(self, price: int, side: int) -> int:
@@ -103,8 +115,24 @@ class Clob:
         func = self.contract.functions.getOpenInterest()
         return await func.call()
 
-    async def get_order(self, order_id: int) -> Any:
+    async def get_order(self, order_id: int) -> Order:
         func = self.contract.functions.getOrder(order_id)
+        return await func.call()
+
+    async def get_orders_paginated(self, start_order_id: int, page_size: int) -> tuple[Any, Order]:
+        """
+        Returns:
+            tuple: (result, next_order)
+        """
+        func = self.contract.functions.getOrdersPaginated(start_order_id, page_size)
+        return await func.call()
+
+    async def get_orders_paginated(self, start_price: int, side: int, page_size: int) -> tuple[Any, Order]:
+        """
+        Returns:
+            tuple: (result, next_order)
+        """
+        func = self.contract.functions.getOrdersPaginated(start_price, side, page_size)
         return await func.call()
 
     async def get_quote_token(self) -> ChecksumAddress:
@@ -135,6 +163,14 @@ class Clob:
         func = self.contract.functions.initialize(tuple(market_config), tuple(market_settings), initial_owner)
         return TypedContractFunction(func, params={**kwargs})
 
+    async def max_num_orders_per_side(self) -> int:
+        func = self.contract.functions.maxNumOrdersPerSide()
+        return await func.call()
+
+    async def operator(self) -> ChecksumAddress:
+        func = self.contract.functions.operator()
+        return await func.call()
+
     async def owner(self) -> ChecksumAddress:
         func = self.contract.functions.owner()
         return await func.call()
@@ -143,20 +179,16 @@ class Clob:
         func = self.contract.functions.pendingOwner()
         return await func.call()
 
-    def post_fill_order(self, account: ChecksumAddress, args: PostFillOrderArgs, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.postFillOrder(account, tuple(args))
-        return TypedContractFunction(func, params={**kwargs})
-
-    def post_limit_order(self, account: ChecksumAddress, args: PostLimitOrderArgs, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.postLimitOrder(account, tuple(args))
+    def place_order(self, account: ChecksumAddress, args: PlaceOrderArgs, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.placeOrder(account, tuple(args))
         return TypedContractFunction(func, params={**kwargs})
 
     def renounce_ownership(self, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.renounceOwnership()
         return TypedContractFunction(func, params={**kwargs})
 
-    def set_max_limits_exempt(self, account: ChecksumAddress, toggle: bool, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.setMaxLimitsExempt(account, toggle)
+    def set_lot_size_in_base(self, new_lot_size_in_base: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.setLotSizeInBase(new_lot_size_in_base)
         return TypedContractFunction(func, params={**kwargs})
 
     def set_max_limits_per_tx(self, new_max_limits: int, **kwargs) -> TypedContractFunction[Any]:

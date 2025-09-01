@@ -49,6 +49,9 @@ class NetworkConfig:
     router_address: ChecksumAddress
     launchpad_address: ChecksumAddress
     clob_manager_address: ChecksumAddress
+    perp_manager_address: ChecksumAddress
+    account_manager_address: ChecksumAddress
+    operator_address: ChecksumAddress
     weth_address: ChecksumAddress
 
 
@@ -69,6 +72,9 @@ TESTNET_CONFIG = NetworkConfig(
     block_time="10ms for mini blocks, 1s for EVM blocks",
     router_address=to_checksum_address("0x86470efcEa37e50F94E74649463b737C87ada367"),
     launchpad_address=to_checksum_address("0x0B6cD1DefCe3189Df60A210326E315383fbC14Ed"),
-    clob_manager_address=to_checksum_address("0xD7310f8A0D569Dd0803D28BB29f4E0A471fA84F6"),
+    clob_manager_address=to_checksum_address("0x4Bcbe9e05f41438d6aD422CDe9e8392144dC6ec4"),
+    perp_manager_address=to_checksum_address("0x051421E4a454FAEb699d440205A3aB5CCCE76681"),
+    account_manager_address=to_checksum_address("0xf8E8eD209A8AFCcCe32Dd4A1Dcc5D2d4839a2B21"),
+    operator_address=to_checksum_address("0x5D97eF4f1Ac9B4A53B86bb7321A30Ed53e9002be"),
     weth_address=to_checksum_address("0x776401b9BC8aAe31A685731B7147D4445fD9FB19"),
 )

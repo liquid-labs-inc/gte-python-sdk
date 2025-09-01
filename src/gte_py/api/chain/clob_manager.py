@@ -4,8 +4,8 @@ from .utils import TypedContractFunction, load_abi
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 from hexbytes import HexBytes
-from .structs import ConfigParams, SettingsParams, SettleParams
-from .events import AccountCreditedEvent, AccountDebitedEvent, AccountFeeTierUpdatedEvent, DepositEvent, FeeCollectedEvent, FeeRecipientSetEvent, InitializedEvent, MarketCreatedEvent, OperatorApprovedEvent, OperatorDisapprovedEvent, OwnershipHandoverCanceledEvent, OwnershipHandoverRequestedEvent, OwnershipTransferredEvent, RolesApprovedEvent, RolesDisapprovedEvent, WithdrawEvent
+from .structs import ConfigParams, SettingsParams
+from .events import InitializedEvent, MarketCreatedEvent, OwnershipHandoverCanceledEvent, OwnershipHandoverRequestedEvent, OwnershipTransferredEvent, RolesUpdatedEvent
 
 
 class ClobManager:
@@ -19,8 +19,28 @@ class ClobManager:
         func = self.contract.functions.ABI_VERSION()
         return await func.call()
 
-    def approve_operator(self, operator: ChecksumAddress, roles: int, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.approveOperator(operator, roles)
+    async def expired_order_clearer(self) -> int:
+        func = self.contract.functions.EXPIRED_ORDER_CLEARER()
+        return await func.call()
+
+    async def fee_tier_setter(self) -> int:
+        func = self.contract.functions.FEE_TIER_SETTER()
+        return await func.call()
+
+    async def market_manager(self) -> int:
+        func = self.contract.functions.MARKET_MANAGER()
+        return await func.call()
+
+    async def max_limit_whitelister(self) -> int:
+        func = self.contract.functions.MAX_LIMIT_WHITELISTER()
+        return await func.call()
+
+    async def account_manager(self) -> ChecksumAddress:
+        func = self.contract.functions.accountManager()
+        return await func.call()
+
+    def admin_cancel_expired_orders(self, market: ChecksumAddress, ids: list[int], side: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.adminCancelExpiredOrders(market, ids, side)
         return TypedContractFunction(func, params={**kwargs})
 
     async def beacon(self) -> ChecksumAddress:
@@ -31,10 +51,6 @@ class ClobManager:
         func = self.contract.functions.cancelOwnershipHandover()
         return TypedContractFunction(func, params={**kwargs})
 
-    def collect_fees(self, token: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.collectFees(token)
-        return TypedContractFunction(func, params={**kwargs})
-
     def complete_ownership_handover(self, pending_owner: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.completeOwnershipHandover(pending_owner)
         return TypedContractFunction(func, params={**kwargs})
@@ -43,72 +59,36 @@ class ClobManager:
         func = self.contract.functions.createMarket(base_token, quote_token, tuple(settings))
         return TypedContractFunction(func, params={**kwargs})
 
-    def credit_account(self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.creditAccount(account, token, amount)
-        return TypedContractFunction(func, params={**kwargs})
-
-    def debit_account(self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.debitAccount(account, token, amount)
-        return TypedContractFunction(func, params={**kwargs})
-
-    def deposit(self, account: ChecksumAddress, token: ChecksumAddress, amount: int, from_operator: bool, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.deposit(account, token, amount, from_operator)
-        return TypedContractFunction(func, params={**kwargs})
-
-    def disapprove_operator(self, operator: ChecksumAddress, roles: int, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.disapproveOperator(operator, roles)
-        return TypedContractFunction(func, params={**kwargs})
-
-    async def get_account_balance(self, account: ChecksumAddress, token: ChecksumAddress) -> int:
-        func = self.contract.functions.getAccountBalance(account, token)
-        return await func.call()
-
     async def get_event_nonce(self) -> int:
         func = self.contract.functions.getEventNonce()
         return await func.call()
 
-    async def get_fee_recipient(self) -> ChecksumAddress:
-        func = self.contract.functions.getFeeRecipient()
+    async def get_market_address(self, token_a: ChecksumAddress, token_b: ChecksumAddress) -> ChecksumAddress:
+        func = self.contract.functions.getMarketAddress(token_a, token_b)
         return await func.call()
 
-    async def get_fee_tier(self, account: ChecksumAddress) -> int:
-        func = self.contract.functions.getFeeTier(account)
+    async def get_max_limit_exempt(self, account: ChecksumAddress) -> bool:
+        func = self.contract.functions.getMaxLimitExempt(account)
         return await func.call()
 
-    async def get_maker_fee_rate(self, fee_tier: int) -> Any:
-        func = self.contract.functions.getMakerFeeRate(fee_tier)
+    def grant_roles(self, user: ChecksumAddress, roles: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.grantRoles(user, roles)
+        return TypedContractFunction(func, params={**kwargs})
+
+    async def has_all_roles(self, user: ChecksumAddress, roles: int) -> bool:
+        func = self.contract.functions.hasAllRoles(user, roles)
         return await func.call()
 
-    async def get_market_address(self, quote_token: ChecksumAddress, base_token: ChecksumAddress) -> ChecksumAddress:
-        func = self.contract.functions.getMarketAddress(quote_token, base_token)
+    async def has_any_role(self, user: ChecksumAddress, roles: int) -> bool:
+        func = self.contract.functions.hasAnyRole(user, roles)
         return await func.call()
 
-    async def get_operator_role_approvals(self, account: ChecksumAddress, operator: ChecksumAddress) -> int:
-        func = self.contract.functions.getOperatorRoleApprovals(account, operator)
-        return await func.call()
-
-    async def get_taker_fee_rate(self, fee_tier: int) -> Any:
-        func = self.contract.functions.getTakerFeeRate(fee_tier)
-        return await func.call()
-
-    async def gte_router(self) -> ChecksumAddress:
-        func = self.contract.functions.gteRouter()
-        return await func.call()
-
-    def initialize(self, owner: ChecksumAddress, fee_recipient: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.initialize(owner, fee_recipient)
+    def initialize(self, owner: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.initialize(owner)
         return TypedContractFunction(func, params={**kwargs})
 
     async def is_market(self, market: ChecksumAddress) -> bool:
         func = self.contract.functions.isMarket(market)
-        return await func.call()
-
-    async def maker_fees(self) -> int:
-        func = self.contract.functions.makerFees()
-        return await func.call()
-
-    async def max_num_orders(self) -> int:
-        func = self.contract.functions.maxNumOrders()
         return await func.call()
 
     async def owner(self) -> ChecksumAddress:
@@ -119,42 +99,50 @@ class ClobManager:
         func = self.contract.functions.ownershipHandoverExpiresAt(pending_owner)
         return await func.call()
 
-    def pull_from_account(self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.pullFromAccount(account, token, amount)
-        return TypedContractFunction(func, params={**kwargs})
-
-    def push_to_account(self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.pushToAccount(account, token, amount)
-        return TypedContractFunction(func, params={**kwargs})
-
     def renounce_ownership(self, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.renounceOwnership()
+        return TypedContractFunction(func, params={**kwargs})
+
+    def renounce_roles(self, roles: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.renounceRoles(roles)
         return TypedContractFunction(func, params={**kwargs})
 
     def request_ownership_handover(self, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.requestOwnershipHandover()
         return TypedContractFunction(func, params={**kwargs})
 
+    def revoke_roles(self, user: ChecksumAddress, roles: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.revokeRoles(user, roles)
+        return TypedContractFunction(func, params={**kwargs})
+
+    async def roles_of(self, user: ChecksumAddress) -> int:
+        func = self.contract.functions.rolesOf(user)
+        return await func.call()
+
     def set_account_fee_tiers(self, accounts: list[ChecksumAddress], fee_tiers: list[int], **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.setAccountFeeTiers(accounts, fee_tiers)
         return TypedContractFunction(func, params={**kwargs})
 
-    def set_fee_recipient(self, new_fee_recipient: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.setFeeRecipient(new_fee_recipient)
+    def set_lot_size_in_base(self, market: ChecksumAddress, new_lot_size: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.setLotSizeInBase(market, new_lot_size)
         return TypedContractFunction(func, params={**kwargs})
 
-    def settle_incoming_order(self, params: SettleParams, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.settleIncomingOrder(tuple(params))
+    def set_max_limits_exempt(self, accounts: list[ChecksumAddress], toggles: list[bool], **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.setMaxLimitsExempt(accounts, toggles)
         return TypedContractFunction(func, params={**kwargs})
 
-    async def taker_fees(self) -> int:
-        func = self.contract.functions.takerFees()
-        return await func.call()
+    def set_max_limits_per_tx(self, market: ChecksumAddress, new_max_limits: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.setMaxLimitsPerTx(market, new_max_limits)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def set_min_limit_order_amount_in_base(self, market: ChecksumAddress, new_min_limit_order_amount_in_base: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.setMinLimitOrderAmountInBase(market, new_min_limit_order_amount_in_base)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def set_tick_size(self, market: ChecksumAddress, new_tick_size: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.setTickSize(market, new_tick_size)
+        return TypedContractFunction(func, params={**kwargs})
 
     def transfer_ownership(self, new_owner: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.transferOwnership(new_owner)
-        return TypedContractFunction(func, params={**kwargs})
-
-    def withdraw(self, account: ChecksumAddress, token: ChecksumAddress, amount: int, to_operator: bool, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.withdraw(account, token, amount, to_operator)
         return TypedContractFunction(func, params={**kwargs})
