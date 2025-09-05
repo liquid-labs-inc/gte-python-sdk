@@ -3,6 +3,7 @@
 import logging
 from typing import Any, Callable
 from eth_typing import ChecksumAddress
+import requests
 
 from gte_py.api.rest import RestApi
 from gte_py.api.ws import WebSocketApi
@@ -356,6 +357,83 @@ class InfoClient:
         response = await self._rest._request("GET", f"/users/{user_address}/order_history", params=params)
         return response
 
+    def get_perp_markets(self) -> dict[str, Any]:
+        """Get perps markets.
+        
+        Returns:
+            List of Markets
+        """
+        response = requests.get("https://perps-api.gte.xyz/v1/perps/markets")
+        return response.json()
+    
+    def get_perp_book(self, market_id: str) -> dict[str, Any]:
+        """Get perps book for a market.
+        
+        Args:
+            market_id: Market ID
+        """
+        response = requests.get(f"https://perps-api.gte.xyz/v1/perps/{market_id}/book")
+        return response.json()
+    
+    def get_perp_open_orders(self, market_id: str, account_address: ChecksumAddress) -> dict[str, Any]:
+        """Get perps open orders for a market.
+        
+        Args:
+            market_id: Market ID
+            account_address: Account address
+        """
+        response = requests.get(f"https://perps-api.gte.xyz/v1/perps/orders/{account_address}/open_orders")
+        return response.json()
+    
+    def get_perp_position(self, account_address: ChecksumAddress) -> dict[str, Any]:
+        """Get perps position for a market.
+        
+        Args:
+            market_id: Market ID (optional)
+            account_address: Account address
+        """
+        response = requests.get(f"https://perps-api.gte.xyz/v1/perps/orders/{account_address}/positions")
+        return response.json()
+    
+    def get_perp_order_history(self, account_address: ChecksumAddress) -> dict[str, Any]:
+        """Get perps order history for a market.
+        
+        Args:
+            account_address: Account address
+        """
+        response = requests.get(f"https://perps-api.gte.xyz/v1/perps/orders/{account_address}/order_history")
+        return response.json()
+    
+    def get_perp_funding_history(self, account_address: ChecksumAddress) -> dict[str, Any]:
+        """Get perps funding history for a market.
+        
+        Args:
+            account_address: Account address
+        """
+        response = requests.get(f"https://perps-api.gte.xyz/v1/perps/orders/{account_address}/funding_history")
+        return response.json()
+    
+    def get_perp_trades(self, market_id: str) -> dict[str, Any]:
+        """Get perps trades for a market.
+        
+        Args:
+            market_id: Market ID
+        """
+        response = requests.get(f"https://perps-api.gte.xyz/v1/perps/{market_id}/trades")
+        return response.json()
+    
+    def get_perp_candles(self, market_id: str, from_time: int, to_time: int, interval: str) -> dict[str, Any]:
+        """Get perps candles for a market.
+        
+        Args:
+            market_id: Market ID
+            from_time: From time
+            to_time: To time
+            interval: Interval
+        """
+        response = requests.get(f"https://perps-api.gte.xyz/v1/perps/{market_id}/candles?from={from_time}&to={to_time}&interval={interval}")
+        return response.json()
+        
     # ================= WEBSOCKET API METHODS =================
 
     async def subscribe_trades(self, market: ChecksumAddress, callback: Callable[[dict[str, Any]], Any]):

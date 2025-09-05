@@ -593,6 +593,46 @@ class BoundedNonceTxScheduler:
         except Exception as realtime_error:
             self.logger.debug(f"Realtime transaction failed: {realtime_error}")
             raise
+        
+        # if status is 0, get error
+        if receipt.get("status") == 0:
+            try:
+                if not self.chain_id:
+                    raise ValueError("Chain ID is not set")
+                
+                # Simulate the transaction to get the revert reason
+                await self.web3.eth.call(
+                        {
+                        "chainId": self.chain_id,
+                        "from": self.from_address,
+                        "nonce": Nonce(self.last_sent - 1),
+                        "to": contract_func.func_call.address,
+                        "data": contract_func.func_call._encode_transaction_data(),
+                        "gas": contract_func.params.get("gas", 1_000_000_000), # max gas (1 giga gas)
+                        "maxFeePerGas": contract_func.params.get("maxFeePerGas", 2_500_000), # 0.0025 gwei
+                        "maxPriorityFeePerGas": contract_func.params.get("maxPriorityFeePerGas", 0),
+                        "value": contract_func.params.get("value", 0),
+                    },
+                    receipt['blockNumber'] - 1
+                )
+            except Exception as call_error:
+                # Extract revert data and check against known errors
+                from .errors import ERROR_SELECTORS
+                
+                # Handle tuple format like ('0xe285a9fd', '0xe285a9fd')
+                if isinstance(call_error.args, tuple) and len(call_error.args) > 0:
+                    selector = call_error.args[0]
+                else:
+                    selector = str(call_error)
+                
+                # parse error
+                error_name = ERROR_SELECTORS.get(selector)
+                
+                if error_name:
+                    raise Exception(f"Transaction failed: {error_name}")
+                else:
+                    raise Exception(f"Transaction failed with unknown error: {selector}")
+            
 
         # Parse and return event if specified, else return receipt
         return parse_event_from_receipt(receipt, contract_func)

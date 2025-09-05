@@ -204,6 +204,61 @@ class ExecutionClient:
         if return_built_tx:
             return await self._scheduler.return_transaction_data(tx)
         return await self._scheduler.send(tx)
+    
+    async def perp_amend_order(
+        self,
+        asset: HexBytes,
+        order_id: int,
+        subaccount: int,
+        side: Side,
+        amount: int,
+        price: int,
+        return_built_tx: bool = False,
+        **kwargs: Unpack[TxParams],
+    ):
+        """
+        Amend a perpetuals order.
+        """
+        args = AmendLimitOrderArgsPerp(
+            asset=asset,
+            subaccount=subaccount,
+            order_id=order_id,
+            base_amount=amount,
+            price=price,
+            expiry_time=0,
+            side=side.value,
+            reduce_only=False,
+        )
+        tx = self._chain_client.perp_manager.amend_limit_order(
+            account=self.wallet_address,
+            args=args,
+            **kwargs,
+        ).with_event(self._chain_client.perp_manager.contract.events.OrderAmended())
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
+        return await self._scheduler.send(tx)
+        
+    
+    async def perp_update_leverage(
+        self,
+        asset: HexBytes,
+        subaccount: int = 1,
+        leverage: int = 1,
+        return_built_tx: bool = False,
+        **kwargs: Unpack[TxParams],
+    ):
+        """
+        Update the leverage for a perpetual market.
+        """
+        tx = self._chain_client.perp_manager.set_position_leverage(
+            account=self.wallet_address,
+            asset=asset,
+            subaccount=subaccount,
+            new_leverage=leverage,
+        )
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
+        return await self._scheduler.send_wait(tx)
 
     async def perp_place_limit_order(
         self,
@@ -256,10 +311,10 @@ class ExecutionClient:
             account=self.wallet_address,
             args=args,
             **kwargs,
-        )
+        ).with_event(self._chain_client.perp_manager.contract.events.OrderProcessed())
         if return_built_tx:
             return await self._scheduler.return_transaction_data(tx)
-        return await self._scheduler.send(tx)
+        return await self._scheduler.send_wait(tx)
 
     async def perp_get_position(
         self,
@@ -299,6 +354,15 @@ class ExecutionClient:
             account=self.wallet_address,
             subaccount=subaccount,
         )
+    
+    async def perp_get_mark_price(
+        self,
+        asset: HexBytes,
+    ) -> int:
+        """
+        Get mark price for a perpetual market.
+        """
+        return await self._chain_client.perp_manager.get_mark_price(asset)
 
     async def perp_cancel_limit_orders(
         self,
@@ -327,7 +391,7 @@ class ExecutionClient:
             subaccount=subaccount,
             order_ids=order_ids,
             **kwargs,
-        )
+        ).with_event(self._chain_client.perp_manager.contract.events.OrderCanceled())
         if return_built_tx:
             return await self._scheduler.return_transaction_data(tx)
         return await self._scheduler.send(tx)
