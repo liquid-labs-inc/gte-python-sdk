@@ -71,7 +71,7 @@ class ExecutionClient:
 
     async def perp_deposit(
         self,
-        amount: int,
+        amount: Decimal,
         return_built_tx: bool = False,
         **kwargs: Unpack[TxParams],
     ):
@@ -79,16 +79,17 @@ class ExecutionClient:
         Deposit collateral to the perpetuals manager.
         
         Args:
-            amount: Amount to deposit in atomic units
+            amount: Amount to deposit in decimal units
             return_built_tx: Whether to return built transaction data
             **kwargs: Additional transaction parameters
             
         Returns:
             Transaction receipt from the deposit operation
         """
+        amount_atomic = self._convert_decimal_to_atomic(amount)
         tx = self._chain_client.perp_manager.deposit(
             account=self.wallet_address,
-            amount=amount,
+            amount=amount_atomic,
             **kwargs,
         )
         if return_built_tx:
@@ -97,7 +98,7 @@ class ExecutionClient:
 
     async def perp_withdraw(
         self,
-        amount: int,
+        amount: Decimal,
         return_built_tx: bool = False,
         **kwargs: Unpack[TxParams],
     ):
@@ -105,16 +106,17 @@ class ExecutionClient:
         Withdraw collateral from the perpetuals manager.
         
         Args:
-            amount: Amount to withdraw in atomic units
+            amount: Amount to withdraw in decimal units
             return_built_tx: Whether to return built transaction data
             **kwargs: Additional transaction parameters
             
         Returns:
             Transaction receipt from the withdraw operation
         """
+        amount_atomic = self._convert_decimal_to_atomic(amount)
         tx = self._chain_client.perp_manager.withdraw(
             account=self.wallet_address,
-            amount=amount,
+            amount=amount_atomic,
             **kwargs,
         )
         if return_built_tx:
@@ -124,7 +126,7 @@ class ExecutionClient:
     async def perp_add_margin(
         self,
         subaccount: int,
-        amount: int,
+        amount: Decimal,
         return_built_tx: bool = False,
         **kwargs: Unpack[TxParams],
     ):
@@ -133,17 +135,18 @@ class ExecutionClient:
         
         Args:
             subaccount: Subaccount ID
-            amount: Amount to add in atomic units
+            amount: Amount to add in decimal units
             return_built_tx: Whether to return built transaction data
             **kwargs: Additional transaction parameters
             
         Returns:
             Transaction receipt from the add margin operation
         """
+        amount_atomic = self._convert_decimal_to_atomic(amount)
         tx = self._chain_client.perp_manager.add_margin(
             account=self.wallet_address,
             subaccount=subaccount,
-            amount=amount,
+            amount=amount_atomic,
             **kwargs,
         )
         if return_built_tx:
@@ -153,7 +156,7 @@ class ExecutionClient:
     async def perp_remove_margin(
         self,
         subaccount: int,
-        amount: int,
+        amount: Decimal,
         return_built_tx: bool = False,
         **kwargs: Unpack[TxParams],
     ):
@@ -162,43 +165,18 @@ class ExecutionClient:
         
         Args:
             subaccount: Subaccount ID
-            amount: Amount to remove in atomic units
+            amount: Amount to remove in decimal units
             return_built_tx: Whether to return built transaction data
             **kwargs: Additional transaction parameters
             
         Returns:
             Transaction receipt from the remove margin operation
         """
+        amount_atomic = self._convert_decimal_to_atomic(amount)
         tx = self._chain_client.perp_manager.remove_margin(
             account=self.wallet_address,
             subaccount=subaccount,
-            amount=amount,
-            **kwargs,
-        )
-        if return_built_tx:
-            return await self._scheduler.return_transaction_data(tx)
-        return await self._scheduler.send(tx)
-
-    async def perp_place_order(
-        self,
-        args: PlaceOrderArgsPerp,
-        return_built_tx: bool = False,
-        **kwargs: Unpack[TxParams],
-    ):
-        """
-        Place a perpetuals order using raw PlaceOrderArgsPerp.
-        
-        Args:
-            args: Perpetual order arguments (with subaccount)
-            return_built_tx: Whether to return built transaction data
-            **kwargs: Additional transaction parameters
-            
-        Returns:
-            Transaction receipt from the place order operation
-        """
-        tx = self._chain_client.perp_manager.place_order(
-            account=self.wallet_address,
-            args=args,
+            amount=amount_atomic,
             **kwargs,
         )
         if return_built_tx:
@@ -211,20 +189,32 @@ class ExecutionClient:
         order_id: int,
         subaccount: int,
         side: Side,
-        amount: int,
-        price: int,
+        amount: Decimal,
+        price: Decimal,
         return_built_tx: bool = False,
         **kwargs: Unpack[TxParams],
     ):
         """
         Amend a perpetuals order.
+        
+        Args:
+            asset: Asset identifier
+            order_id: Order ID to amend
+            subaccount: Subaccount ID
+            side: Order side
+            amount: Order amount in decimal units
+            price: Order price in decimal units
+            return_built_tx: Whether to return built transaction data
+            **kwargs: Additional transaction parameters
         """
+        amount_atomic = self._convert_decimal_to_atomic(amount)
+        price_atomic = self._convert_decimal_to_atomic(price)
         args = AmendLimitOrderArgsPerp(
             asset=asset,
             subaccount=subaccount,
             order_id=order_id,
-            base_amount=amount,
-            price=price,
+            base_amount=amount_atomic,
+            price=price_atomic,
             expiry_time=0,
             side=side.value,
             reduce_only=False,
@@ -243,29 +233,30 @@ class ExecutionClient:
         self,
         asset: HexBytes,
         subaccount: int = 1,
-        leverage: int = 1,
+        leverage: Decimal = Decimal(1),
         return_built_tx: bool = False,
         **kwargs: Unpack[TxParams],
     ):
         """
         Update the leverage for a perpetual market.
         """
+        leverage_atomic = self._convert_decimal_to_atomic(leverage)
         tx = self._chain_client.perp_manager.set_position_leverage(
             account=self.wallet_address,
             asset=asset,
             subaccount=subaccount,
-            new_leverage=leverage,
+            new_leverage=leverage_atomic,
         )
         if return_built_tx:
             return await self._scheduler.return_transaction_data(tx)
         return await self._scheduler.send_wait(tx)
 
-    async def perp_place_limit_order(
+    async def perp_place_order(
         self,
         asset: HexBytes,
         side: Side,
-        amount: int,
-        limit_price: int,
+        amount: Decimal,
+        limit_price: Decimal,
         subaccount: int = 0,
         expiry_time: int = 0,
         base_denominated: bool = True,
@@ -276,13 +267,13 @@ class ExecutionClient:
         **kwargs: Unpack[TxParams],
     ):
         """
-        Place a leveraged limit order on a perpetual market.
+        Place an order on a perpetual market.
         
         Args:
             asset: Asset identifier (market)
             side: Order side (BUY=0, SELL=1)
-            amount: Order amount in atomic units
-            limit_price: Limit price in atomic units
+            amount: Order amount in decimal units
+            limit_price: Limit price in decimal units
             subaccount: Subaccount ID (default: 0)
             expiry_time: Order expiry timestamp (0 = no expiry)
             base_denominated: Whether amount is in base units (default: True)
@@ -293,13 +284,17 @@ class ExecutionClient:
         Returns:
             Transaction receipt from the place order operation
         """
+        # Convert decimal inputs to atomic units
+        amount_atomic = self._convert_decimal_to_atomic(amount)
+        limit_price_atomic = self._convert_decimal_to_atomic(limit_price)
+        
         # Create PlaceOrderArgsPerp with the correct fields for PerpManager
         args = PlaceOrderArgsPerp(
             subaccount=subaccount,
             asset=asset,
             side=side.value,
-            limit_price=limit_price,
-            amount=amount,
+            limit_price=limit_price_atomic,
+            amount=amount_atomic,
             base_denominated=base_denominated,
             tif=tif,
             expiry_time=expiry_time,
@@ -925,6 +920,10 @@ class ExecutionClient:
         if is_base:
             return market.base.convert_quantity_to_amount(amount)
         return market.quote.convert_quantity_to_amount(amount)
+    
+    def _convert_decimal_to_atomic(self, amount: Decimal) -> int:
+        """Convert atomic amount to decimal units based on token type."""
+        return int(amount * (10 ** 18))
 
     # ================= TOKEN SWAP OPERATIONS =================
     
