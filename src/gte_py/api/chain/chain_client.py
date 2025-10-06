@@ -54,11 +54,11 @@ class ChainClient:
         self._operator = OperatorContract(web3=web3, address=self._operator_address)
         
         self._univ2_router_address: ChecksumAddress | None = None
-        self._weth_address: ChecksumAddress | None = None
+        self._weth_address: ChecksumAddress= weth_address
         
         # Cached contract instances
         self._univ2_router: UniswapRouter | None = None
-        self._weth: Weth | None = None
+        self._weth: Weth = Weth(web3=web3, address=self._weth_address)
         self._clob_contracts: dict[ChecksumAddress, Clob] = {}
         self._erc20_contracts: dict[ChecksumAddress, Erc20] = {}
 
@@ -66,15 +66,14 @@ class ChainClient:
         """
         Initialize the chain client by fetching required addresses.
         """
-        if self._univ2_router_address and self._weth_address:
-            return
+        # if self._univ2_router_address:
+        #     return
 
-        # Get and cache addresses from router
-        self._univ2_router_address = await self._router.uni_v2_router()
-        self._weth_address = await self._router.weth()
+        # # Get and cache addresses from router
+        # self._univ2_router_address = await self._router.uni_v2_router()
         
-        self._univ2_router = UniswapRouter(web3=self._web3, address=self._univ2_router_address)
-        self._weth = Weth(web3=self._web3, address=self._weth_address)
+        # self._univ2_router = UniswapRouter(web3=self._web3, address=self._univ2_router_address)
+        pass
 
     # Router properties
     @property

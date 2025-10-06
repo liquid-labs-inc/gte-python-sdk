@@ -231,16 +231,25 @@ def get_perp_structs_used_by_abi(abi: list[dict[str, Any]]) -> set[str]:
     
     return structs_used
 
-def generate_event_class(event: dict[str, Any], struct_types: set[str]) -> tuple[str, str]:
+def generate_event_class(event: dict[str, Any], struct_types: set[str], contract_name: str = '') -> tuple[str, str]:
     # Ensure event class name is UpperCamelCase (PascalCase) and matches event name exactly
     pascal_name = event['name'] + "Event"
+    
+    # For perp_manager events, append "Perp" to the class name
+    if contract_name == "perp_manager":
+        pascal_name = event['name'] + "PerpEvent"
+    
     lines = [f"@dataclass", f"class {pascal_name}:"]
     for inp in event.get('inputs', []):
         if inp.get("type") == "tuple" and inp.get("components"):
             # This is a struct - use the struct name as the type
             struct_name = extract_struct_name(inp.get("internalType", ""))
             if struct_name:
-                typ = struct_name
+                # For perp_manager events, use Perp structs
+                if contract_name == "perp_manager":
+                    typ = struct_name + "Perp"
+                else:
+                    typ = struct_name
             else:
                 typ = "Any"
         else:
@@ -580,6 +589,11 @@ struct_types = set(all_structs.keys())
 for abi_file in abi_files:
     with open(abi_file, "r") as f:
         abi = json.load(f)
+    
+    # Determine contract name from filename
+    base = os.path.splitext(os.path.basename(abi_file))[0]
+    contract_name = base
+    
     event_class_names = set()
     for item in abi:
         if item.get("type") == "event":
@@ -588,10 +602,15 @@ for abi_file in abi_files:
                 if inp.get("type") == "tuple" and inp.get("components"):
                     struct_name = extract_struct_name(inp.get("internalType", ""))
                     if struct_name:
-                        events_struct_usage.add(struct_name)
+                        # For perp_manager events, track Perp structs
+                        if contract_name == "perp_manager":
+                            events_struct_usage.add(struct_name + "Perp")
+                        else:
+                            events_struct_usage.add(struct_name)
             
-            event_class, class_name = generate_event_class(item, struct_types)
-            all_events[class_name] = event_class  # Will overwrite duplicates, which is fine
+            event_class, class_name = generate_event_class(item, struct_types, contract_name)
+            # Always add the event - we want both regular and Perp versions
+            all_events[class_name] = event_class
             event_class_names.add(class_name)
     abi_event_map[abi_file] = event_class_names
 
@@ -600,10 +619,22 @@ with open(os.path.join(output_dir, "events.py"), "w") as f:
     f.write("# This file is auto-generated. Do not edit manually.\n")
     f.write("from dataclasses import dataclass\n")
     f.write("from eth_typing import ChecksumAddress\n")
+    f.write("from typing import Any\n")
     f.write("from hexbytes import HexBytes\n")
-    # Import structs used by events
+    # Import structs used by events - need both regular and Perp versions
     if events_struct_usage:
-        f.write(f"from .structs import {', '.join(sorted(events_struct_usage))}\n")
+        # Separate regular and Perp structs
+        regular_structs = [s for s in events_struct_usage if not s.endswith('Perp')]
+        perp_structs = [s for s in events_struct_usage if s.endswith('Perp')]
+        
+        imports = []
+        if regular_structs:
+            imports.append(f"from .structs import {', '.join(sorted(regular_structs))}")
+        if perp_structs:
+            imports.append(f"from .structs import {', '.join(sorted(perp_structs))}")
+        
+        for import_line in imports:
+            f.write(import_line + "\n")
     f.write("\n")
     for class_name in sorted(all_events.keys()):  # Sort for consistent output
         f.write(all_events[class_name] + "\n\n")

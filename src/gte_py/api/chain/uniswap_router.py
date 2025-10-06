@@ -53,6 +53,10 @@ class UniswapRouter:
         func = self.contract.functions.getAmountsOut(amount_in, path)
         return await func.call()
 
+    async def gte_router(self) -> ChecksumAddress:
+        func = self.contract.functions.gteRouter()
+        return await func.call()
+
     async def quote(self, amount_a: int, reserve_a: int, reserve_b: int) -> int:
         func = self.contract.functions.quote(amount_a, reserve_a, reserve_b)
         return await func.call()

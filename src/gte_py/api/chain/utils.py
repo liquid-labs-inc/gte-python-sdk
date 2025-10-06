@@ -619,14 +619,23 @@ class BoundedNonceTxScheduler:
                 # Extract revert data and check against known errors
                 from .errors import ERROR_SELECTORS
                 
+                # Log the full error for debugging
+                self.logger.error(f"Transaction simulation failed: {call_error}")
+                print(f"Full error details: {call_error}")
+                print(f"Error type: {type(call_error)}")
+                print(f"Error args: {call_error.args}")
+                
                 # Handle tuple format like ('0xe285a9fd', '0xe285a9fd')
                 if isinstance(call_error.args, tuple) and len(call_error.args) > 0:
                     selector = call_error.args[0]
                 else:
                     selector = str(call_error)
                 
+                print(f"Extracted selector: {selector}")
+                
                 # parse error
                 error_name = ERROR_SELECTORS.get(selector)
+                print(f"Error name from selector: {error_name}")
                 
                 if error_name:
                     raise Exception(f"Transaction failed: {error_name}")

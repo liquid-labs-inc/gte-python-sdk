@@ -214,6 +214,11 @@
                  "name":"lotSizeInBase",
                  "type":"uint256",
                  "internalType":"uint256"
+              },
+              {
+                 "name":"builderRevShareBps",
+                 "type":"uint256",
+                 "internalType":"uint256"
               }
            ]
         }
@@ -519,6 +524,26 @@
   },
   {
      "type":"function",
+     "name":"setBuilderRevShareBps",
+     "inputs":[
+        {
+           "name":"market",
+           "type":"address",
+           "internalType":"contract ICLOB"
+        },
+        {
+           "name":"newBuilderRevShareBps",
+           "type":"uint256",
+           "internalType":"uint256"
+        }
+     ],
+     "outputs":[
+        
+     ],
+     "stateMutability":"nonpayable"
+  },
+  {
+     "type":"function",
      "name":"setLotSizeInBase",
      "inputs":[
         {
@@ -747,6 +772,11 @@
               },
               {
                  "name":"lotSizeInBase",
+                 "type":"uint256",
+                 "internalType":"uint256"
+              },
+              {
+                 "name":"builderRevShareBps",
                  "type":"uint256",
                  "internalType":"uint256"
               }

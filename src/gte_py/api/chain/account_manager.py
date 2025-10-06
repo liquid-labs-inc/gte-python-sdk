@@ -5,7 +5,7 @@ from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 from hexbytes import HexBytes
 from .structs import SettleParams
-from .events import AccountCreditedEvent, AccountDebitedEvent, AccountFeeTierUpdatedEvent, FeesAccruedEvent, FeesClaimedEvent, InitializedEvent, MarketRegisteredEvent, OperatorApprovedEvent, OperatorDisapprovedEvent, OwnershipHandoverCanceledEvent, OwnershipHandoverRequestedEvent, OwnershipTransferredEvent, RolesUpdatedEvent
+from .events import AccountCreditedEvent, AccountDebitedEvent, AccountFeeTierUpdatedEvent, BuilderCodeRegisteredEvent, FeesAccruedEvent, FeesClaimedEvent, InitializedEvent, MarketRegisteredEvent, OperatorApprovedEvent, OperatorDisapprovedEvent, OwnershipHandoverCanceledEvent, OwnershipHandoverRequestedEvent, OwnershipTransferredEvent, RolesUpdatedEvent
 
 
 class AccountManager:
@@ -15,9 +15,17 @@ class AccountManager:
         loaded_abi = load_abi("account_manager")
         self.contract = web3.eth.contract(address=address, abi=loaded_abi)
 
-    async def fee_collector(self) -> int:
-        func = self.contract.functions.FEE_COLLECTOR()
+    async def admin(self) -> int:
+        func = self.contract.functions.ADMIN()
         return await func.call()
+
+    def accrue_fee(self, token: ChecksumAddress, amount: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.accrueFee(token, amount)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def accrue_launch_fee(self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.accrueLaunchFee(account, token, amount)
+        return TypedContractFunction(func, params={**kwargs})
 
     def approve_operator(self, account: ChecksumAddress, operator: ChecksumAddress, roles: int, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.approveOperator(account, operator, roles)
@@ -59,10 +67,6 @@ class AccountManager:
         func = self.contract.functions.depositFromPerps(account, amount)
         return TypedContractFunction(func, params={**kwargs})
 
-    def deposit_from_router(self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.depositFromRouter(account, token, amount)
-        return TypedContractFunction(func, params={**kwargs})
-
     def deposit_to(self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.depositTo(account, token, amount)
         return TypedContractFunction(func, params={**kwargs})
@@ -71,12 +75,40 @@ class AccountManager:
         func = self.contract.functions.disapproveOperator(account, operator, roles)
         return TypedContractFunction(func, params={**kwargs})
 
+    async def distributor(self) -> ChecksumAddress:
+        func = self.contract.functions.distributor()
+        return await func.call()
+
     async def get_account_balance(self, account: ChecksumAddress, token: ChecksumAddress) -> int:
         func = self.contract.functions.getAccountBalance(account, token)
         return await func.call()
 
+    async def get_account_balances(self, accounts: list[ChecksumAddress], tokens: list[ChecksumAddress]) -> list[int]:
+        func = self.contract.functions.getAccountBalances(accounts, tokens)
+        return await func.call()
+
+    async def get_builder_code_owner(self, builder_code: HexBytes) -> ChecksumAddress:
+        func = self.contract.functions.getBuilderCodeOwner(builder_code)
+        return await func.call()
+
     async def get_event_nonce(self) -> int:
         func = self.contract.functions.getEventNonce()
+        return await func.call()
+
+    async def get_fee_rates_for_account(self, account: ChecksumAddress) -> tuple[Any, Any]:
+        """
+        Returns:
+            tuple: (maker_rate, taker_rate)
+        """
+        func = self.contract.functions.getFeeRatesForAccount(account)
+        return await func.call()
+
+    async def get_fee_rates_for_tier(self, tier: int) -> tuple[Any, Any]:
+        """
+        Returns:
+            tuple: (maker_rate, taker_rate)
+        """
+        func = self.contract.functions.getFeeRatesForTier(tier)
         return await func.call()
 
     async def get_fee_tier(self, account: ChecksumAddress) -> int:
@@ -127,6 +159,10 @@ class AccountManager:
         func = self.contract.functions.initialize(owner)
         return TypedContractFunction(func, params={**kwargs})
 
+    async def launchpad(self) -> ChecksumAddress:
+        func = self.contract.functions.launchpad()
+        return await func.call()
+
     async def operator_hub(self) -> ChecksumAddress:
         func = self.contract.functions.operatorHub()
         return await func.call()
@@ -138,6 +174,14 @@ class AccountManager:
     async def ownership_handover_expires_at(self, pending_owner: ChecksumAddress) -> int:
         func = self.contract.functions.ownershipHandoverExpiresAt(pending_owner)
         return await func.call()
+
+    async def perp_manager(self) -> ChecksumAddress:
+        func = self.contract.functions.perpManager()
+        return await func.call()
+
+    def register_builder_code(self, account: ChecksumAddress, builder_code: HexBytes, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.registerBuilderCode(account, builder_code)
+        return TypedContractFunction(func, params={**kwargs})
 
     def register_market(self, market: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.registerMarket(market)
@@ -187,14 +231,18 @@ class AccountManager:
         func = self.contract.functions.transferOwnership(new_owner)
         return TypedContractFunction(func, params={**kwargs})
 
+    def unregister_builder_code(self, builder_code: HexBytes, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.unregisterBuilderCode(builder_code)
+        return TypedContractFunction(func, params={**kwargs})
+
+    async def weth(self) -> ChecksumAddress:
+        func = self.contract.functions.weth()
+        return await func.call()
+
     def withdraw(self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.withdraw(account, token, amount)
         return TypedContractFunction(func, params={**kwargs})
 
-    def withdraw_to_perps(self, account: ChecksumAddress, amount: int, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.withdrawToPerps(account, amount)
-        return TypedContractFunction(func, params={**kwargs})
-
-    def withdraw_to_router(self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.withdrawToRouter(account, token, amount)
+    def withdraw_from(self, account: ChecksumAddress, token: ChecksumAddress, amount: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.withdrawFrom(account, token, amount)
         return TypedContractFunction(func, params={**kwargs})

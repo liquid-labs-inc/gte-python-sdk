@@ -5,7 +5,6 @@ from hexbytes import HexBytes
 from enum import IntEnum
 
 # Enums
-# Enums
 class BookType(IntEnum):
     STANDARD = 0
     BACKSTOP = 1
@@ -64,7 +63,7 @@ class TiF(IntEnum):
 class AmendArgs(NamedTuple):
     """Struct definition for AmendArgs."""
 
-    order_id: int
+    order_or_client_id: int
     amount_in_base: int
     price: int
     cancel_timestamp: int
@@ -75,7 +74,7 @@ class AmendLimitOrderArgsPerp(NamedTuple):
 
     asset: HexBytes
     subaccount: int
-    order_id: int
+    order_or_client_id: int
     base_amount: int
     price: int
     expiry_time: int
@@ -94,6 +93,7 @@ class CancelArgs(NamedTuple):
     """Struct definition for CancelArgs."""
 
     order_ids: list[int]
+    settlement: int
 
 class ConditionPerp(NamedTuple):
     """Struct definition for ConditionPerp."""
@@ -123,12 +123,10 @@ class LaunchData(NamedTuple):
     """Struct definition for LaunchData."""
 
     active: bool
-    bonding_curve: ChecksumAddress
+    is_fee_sharing: bool
     quote: ChecksumAddress
-    unallocated_field_0: int
-    unallocated_field_1: int
-    base_sold_from_curve: int
-    quote_bought_by_curve: int
+    curve: ChecksumAddress
+    pair: ChecksumAddress
 
 class Limit(NamedTuple):
     """Struct definition for Limit."""
@@ -153,8 +151,11 @@ class MarketParamsPerp(NamedTuple):
     liquidation_fee_rate: int
     divergence_cap: int
     reduce_only_cap: int
+    builder_rev_share_bps: int
     partial_liquidation_threshold: int
     partial_liquidation_rate: int
+    index_fair_clamp: int
+    micro_price_clip_bps: int
     cross_margin_enabled: bool
     funding_interval: int
     reset_interval: int
@@ -177,6 +178,7 @@ class MarketSettings(NamedTuple):
     min_limit_order_amount_in_base: int
     tick_size: int
     lot_size_in_base: int
+    builder_rev_share_bps: int
 
 class MarketSettingsPerp(NamedTuple):
     """Struct definition for MarketSettingsPerp."""
@@ -190,18 +192,30 @@ class MarketSettingsPerp(NamedTuple):
     reduce_only_cap: int
     partial_liquidation_threshold: int
     partial_liquidation_rate: int
+    index_fair_clamp: int
+    micro_price_clip_bps: int
+    builder_rev_share_bps: int
+
+class MerkleDataPerp(NamedTuple):
+    """Struct definition for MerkleDataPerp."""
+
+    proof: list[HexBytes]
+    root: HexBytes
+    signature: HexBytes
 
 class Order(NamedTuple):
     """Struct definition for Order."""
 
     side: int
     cancel_timestamp: int
+    maker_fee_rate: Any
     id_: int
     prev_order_id: int
     next_order_id: int
     owner: ChecksumAddress
     price: int
     amount: int
+    builder_code: HexBytes
 
 class OrderPerp(NamedTuple):
     """Struct definition for OrderPerp."""
@@ -215,7 +229,50 @@ class OrderPerp(NamedTuple):
     price: int
     amount: int
     subaccount: int
+    builder_code: HexBytes
     reduce_only: bool
+
+class OrderProcessedData(NamedTuple):
+    """Struct definition for OrderProcessedData."""
+
+    base_posted: int
+    base_traded: int
+    quote_traded: int
+    taker_fee_charged: int
+    taker_fee_rate: Any
+    maker_fee_rate: Any
+    start_order_id: int
+    end_order_id: int
+    makers_cleared: int
+    side: int
+    client_order_id: int
+    tif: int
+    expiry_time: int
+    limit_price: int
+    amount: int
+    builder_code: HexBytes
+
+class OrderProcessedDataPerp(NamedTuple):
+    """Struct definition for OrderProcessedDataPerp."""
+
+    base_posted: int
+    quote_traded: int
+    base_traded: int
+    book_type: int
+    liquidation: bool
+    start_order_id: int
+    end_order_id: int
+    makers_cleared: int
+    client_order_id: int
+    subaccount: int
+    amount_submitted: int
+    reduce_only: bool
+    base_denominated: bool
+    tif: int
+    expiry_time: int
+    limit_price: int
+    side: int
+    builder_code: HexBytes
 
 class PermitDetails(NamedTuple):
     """Struct definition for PermitDetails."""
@@ -237,6 +294,7 @@ class PlaceOrderArgs(NamedTuple):
 
     side: int
     client_order_id: int
+    builder_code: HexBytes
     tif: int
     expiry_time: int
     limit_price: int
@@ -248,6 +306,7 @@ class PlaceOrderArgsPerp(NamedTuple):
 
     subaccount: int
     asset: HexBytes
+    builder_code: HexBytes
     side: int
     limit_price: int
     amount: int
@@ -260,21 +319,19 @@ class PlaceOrderArgsPerp(NamedTuple):
 class PlaceOrderResult(NamedTuple):
     """Struct definition for PlaceOrderResult."""
 
-    account: ChecksumAddress
     order_id: int
     base_posted: int
-    quote_token_amount_traded: int
-    base_token_amount_traded: int
-    taker_fee: int
-    was_market_order: bool
+    base_traded: int
+    quote_traded: int
+    taker_fee_charged: int
 
 class PlaceOrderResultPerp(NamedTuple):
     """Struct definition for PlaceOrderResultPerp."""
 
     order_id: int
     base_posted: int
-    quote_traded: int
     base_traded: int
+    quote_traded: int
 
 class PositionPerp(NamedTuple):
     """Struct definition for PositionPerp."""
@@ -313,17 +370,21 @@ class SettingsParams(NamedTuple):
     max_limits_per_tx: int
     min_limit_order_amount_in_base: int
     tick_size: int
+    lot_size_in_base: int
+    builder_rev_share_bps: int
 
 class SettleParams(NamedTuple):
     """Struct definition for SettleParams."""
 
-    taker: ChecksumAddress
-    quote_token: ChecksumAddress
-    base_token: ChecksumAddress
     side: int
-    settlement: int
-    taker_quote_amount: int
+    taker: ChecksumAddress
+    taker_fee_rate: Any
+    taker_builder_code: HexBytes
     taker_base_amount: int
+    taker_quote_amount: int
+    base_token: ChecksumAddress
+    quote_token: ChecksumAddress
+    builder_rev_share_bps: int
     maker_credits: list[Any]
 
 class SignDataPerp(NamedTuple):
@@ -332,4 +393,20 @@ class SignDataPerp(NamedTuple):
     sig: HexBytes
     nonce: int
     expiry: int
+
+class TwapOrderArgsPerp(NamedTuple):
+    """Struct definition for TwapOrderArgsPerp."""
+
+    asset: HexBytes
+    account: ChecksumAddress
+    subaccount: int
+    amount: int
+    slippage_pct: int
+    min_time: int
+    expiry_time: int
+    base_denominated: bool
+    reduce_only: bool
+    side: int
+    tif: int
+    client_order_id: int
 

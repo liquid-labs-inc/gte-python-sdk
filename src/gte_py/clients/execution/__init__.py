@@ -293,6 +293,7 @@ class ExecutionClient:
             subaccount=subaccount,
             asset=asset,
             side=side.value,
+            builder_code=HexBytes('00' * 32),
             limit_price=limit_price_atomic,
             amount=amount_atomic,
             base_denominated=base_denominated,

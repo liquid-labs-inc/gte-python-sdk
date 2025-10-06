@@ -1,3 +1,5 @@
+from enum import IntEnum
+
 # Enums
 class BookType(IntEnum):
     STANDARD = 0

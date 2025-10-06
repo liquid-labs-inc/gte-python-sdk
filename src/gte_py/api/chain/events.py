@@ -1,9 +1,10 @@
 # This file is auto-generated. Do not edit manually.
 from dataclasses import dataclass
 from eth_typing import ChecksumAddress
-from hexbytes import HexBytes
 from typing import Any
-from .structs import AmendArgs, BookSettingsPerp, ConfigParams, FundingRateSettingsPerp, MarketSettings, Order, SettingsParams
+from hexbytes import HexBytes
+from .structs import AmendArgs, ConfigParams, Order, OrderProcessedData, SettingsParams
+from .structs import BookSettingsPerp, FundingRateSettingsPerp, MarketSettingsPerp, OrderPerp, OrderProcessedDataPerp
 
 @dataclass
 class AccountCreditedEvent:
@@ -11,6 +12,7 @@ class AccountCreditedEvent:
     account: ChecksumAddress
     token: ChecksumAddress
     amount: int
+    new_balance: int
 
 @dataclass
 class AccountDebitedEvent:
@@ -18,6 +20,7 @@ class AccountDebitedEvent:
     account: ChecksumAddress
     token: ChecksumAddress
     amount: int
+    new_balance: int
 
 @dataclass
 class AccountFeeTierUpdatedEvent:
@@ -44,7 +47,36 @@ class BondingLockedEvent:
     event_nonce: int
 
 @dataclass
+class BuilderCodeRegisteredEvent:
+    nonce: int
+    builder_code: HexBytes
+    account: ChecksumAddress
+
+@dataclass
+class BuilderCodeRegisteredPerpEvent:
+    account: ChecksumAddress
+    builder_code: HexBytes
+    nonce: int
+
+@dataclass
+class BuilderRevShareBpsUpdatedEvent:
+    nonce: int
+    new_builder_rev_share_bps: int
+
+@dataclass
+class BuilderRevShareBpsUpdatedPerpEvent:
+    asset: HexBytes
+    builder_rev_share_bps: int
+    nonce: int
+
+@dataclass
 class CancelFailedEvent:
+    event_nonce: int
+    order_id: int
+    owner: ChecksumAddress
+
+@dataclass
+class CancelFailedPerpEvent:
     asset: HexBytes
     order_id: int
     owner: ChecksumAddress
@@ -52,12 +84,18 @@ class CancelFailedEvent:
     nonce: int
 
 @dataclass
-class CrossMarginDisabledEvent:
+class ConditionalCanceledPerpEvent:
+    account: ChecksumAddress
+    conditional_nonces: list[int]
+    nonce: int
+
+@dataclass
+class CrossMarginDisabledPerpEvent:
     asset: HexBytes
     nonce: int
 
 @dataclass
-class CrossMarginEnabledEvent:
+class CrossMarginEnabledPerpEvent:
     asset: HexBytes
     nonce: int
 
@@ -67,24 +105,18 @@ class DepositEvent:
     value: int
 
 @dataclass
-class DivergenceCapUpdatedEvent:
+class DepositPerpEvent:
+    account: ChecksumAddress
+    amount: int
+
+@dataclass
+class DivergenceCapUpdatedPerpEvent:
     asset: HexBytes
     divergence_cap: int
     nonce: int
 
 @dataclass
-class FeeCollectedEvent:
-    token: ChecksumAddress
-    fee: int
-    event_nonce: int
-
-@dataclass
-class FeeRecipientSetEvent:
-    fee_recipient: ChecksumAddress
-    event_nonce: int
-
-@dataclass
-class FeeTierUpdatedEvent:
+class FeeTierUpdatedPerpEvent:
     account: ChecksumAddress
     fee_tier: int
     nonce: int
@@ -102,21 +134,21 @@ class FeesClaimedEvent:
     fee: int
 
 @dataclass
-class FundingClampsUpdatedEvent:
+class FundingClampsUpdatedPerpEvent:
     asset: HexBytes
     inner_clamp: int
     outer_clamp: int
     nonce: int
 
 @dataclass
-class FundingIntervalUpdatedEvent:
+class FundingIntervalUpdatedPerpEvent:
     asset: HexBytes
     funding_interval: int
     reset_interval: int
     nonce: int
 
 @dataclass
-class FundingSettledEvent:
+class FundingSettledPerpEvent:
     asset: HexBytes
     funding: int
     cumulative_funding: int
@@ -124,21 +156,31 @@ class FundingSettledEvent:
     nonce: int
 
 @dataclass
+class IndexFairClampUpdatedPerpEvent:
+    asset: HexBytes
+    index_fair_clamp: int
+    nonce: int
+
+@dataclass
 class InitializedEvent:
     version: int
 
 @dataclass
-class InsuranceFundDepositEvent:
+class InitializedPerpEvent:
+    version: int
+
+@dataclass
+class InsuranceFundDepositPerpEvent:
     account: ChecksumAddress
     amount: int
 
 @dataclass
-class InsuranceFundWithdrawalEvent:
+class InsuranceFundWithdrawalPerpEvent:
     account: ChecksumAddress
     amount: int
 
 @dataclass
-class InterestRateUpdatedEvent:
+class InterestRateUpdatedPerpEvent:
     asset: HexBytes
     interest_rate: int
     nonce: int
@@ -151,15 +193,13 @@ class LaunchpadDeployedEvent:
     event_nonce: int
 
 @dataclass
-class LimitOrderCreatedEvent:
-    event_nonce: int
-    order_id: int
-    price: int
-    amount: int
-    side: int
+class LiquidationFeeRateUpdatedPerpEvent:
+    asset: HexBytes
+    liquidation_fee_rate: int
+    nonce: int
 
 @dataclass
-class LiquidationEvent:
+class LiquidationPerpEvent:
     asset: HexBytes
     account: ChecksumAddress
     subaccount: int
@@ -172,9 +212,9 @@ class LiquidationEvent:
     nonce: int
 
 @dataclass
-class LiquidationFeeRateUpdatedEvent:
-    asset: HexBytes
-    liquidation_fee_rate: int
+class LiquidatorPointsSetPerpEvent:
+    account: ChecksumAddress
+    points: int
     nonce: int
 
 @dataclass
@@ -183,18 +223,18 @@ class LotSizeInBaseUpdatedEvent:
     new_lot_size_in_base: int
 
 @dataclass
-class MaintenanceMarginRatioUpdatedEvent:
+class MaintenanceMarginRatioUpdatedPerpEvent:
     asset: HexBytes
     maintenance_margin_ratio: int
     nonce: int
 
 @dataclass
-class MakerFeeRatesUpdatedEvent:
+class MakerFeeRatesUpdatedPerpEvent:
     maker_fee_rates: list[Any]
     nonce: int
 
 @dataclass
-class MarginAddedEvent:
+class MarginAddedPerpEvent:
     account: ChecksumAddress
     subaccount: int
     amount: int
@@ -202,7 +242,7 @@ class MarginAddedEvent:
     nonce: int
 
 @dataclass
-class MarginRemovedEvent:
+class MarginRemovedPerpEvent:
     account: ChecksumAddress
     subaccount: int
     amount: int
@@ -210,18 +250,30 @@ class MarginRemovedEvent:
     nonce: int
 
 @dataclass
-class MarkPriceUpdatedEvent:
+class MarkPriceUpdatedPerpEvent:
     asset: HexBytes
     mark_price: int
-    p1: int
-    p2: int
-    p3: int
+    index_fair: int
+    impact_price: int
+    micro_price: int
     nonce: int
 
 @dataclass
 class MarketCreatedEvent:
+    event_nonce: int
+    creator: ChecksumAddress
+    base_token: ChecksumAddress
+    quote_token: ChecksumAddress
+    market: ChecksumAddress
+    quote_decimals: int
+    base_decimals: int
+    config: ConfigParams
+    settings: SettingsParams
+
+@dataclass
+class MarketCreatedPerpEvent:
     asset: HexBytes
-    market_settings: MarketSettings
+    market_settings: MarketSettingsPerp
     funding_settings: FundingRateSettingsPerp
     book_settings: BookSettingsPerp
     lot_size: int
@@ -234,13 +286,13 @@ class MarketRegisteredEvent:
     market: ChecksumAddress
 
 @dataclass
-class MarketStatusUpdatedEvent:
+class MarketStatusUpdatedPerpEvent:
     asset: HexBytes
     status: int
     nonce: int
 
 @dataclass
-class MaxLeverageUpdatedEvent:
+class MaxLeverageUpdatedPerpEvent:
     asset: HexBytes
     max_open_leverage: int
     nonce: int
@@ -251,25 +303,43 @@ class MaxLimitOrdersPerTxUpdatedEvent:
     new_max_limits: int
 
 @dataclass
-class MaxLimitsPerTxUpdatedEvent:
+class MaxLimitsPerTxUpdatedPerpEvent:
     asset: HexBytes
     max_limits_per_tx: int
     nonce: int
 
 @dataclass
-class MaxNumOrdersUpdatedEvent:
+class MaxNumOrdersUpdatedPerpEvent:
     asset: HexBytes
     max_num_orders: int
     nonce: int
 
 @dataclass
+class MicroPriceClipBpsUpdatedPerpEvent:
+    asset: HexBytes
+    micro_price_clip_bps: int
+    nonce: int
+
+@dataclass
 class MinLimitOrderAmountInBaseUpdatedEvent:
+    event_nonce: int
+    new_min_limit_order_amount_in_base: int
+
+@dataclass
+class MinLimitOrderAmountInBaseUpdatedPerpEvent:
     asset: HexBytes
     min_limit_order_amount_in_base: int
     nonce: int
 
 @dataclass
 class OperatorApprovedEvent:
+    event_nonce: int
+    account: ChecksumAddress
+    operator: ChecksumAddress
+    new_roles: int
+
+@dataclass
+class OperatorApprovedPerpEvent:
     event_nonce: int
     account: ChecksumAddress
     operator: ChecksumAddress
@@ -283,16 +353,41 @@ class OperatorDisapprovedEvent:
     removed_roles: int
 
 @dataclass
+class OperatorDisapprovedPerpEvent:
+    event_nonce: int
+    account: ChecksumAddress
+    operator: ChecksumAddress
+    removed_roles: int
+
+@dataclass
 class OrderAmendedEvent:
+    event_nonce: int
+    pre_amend: Order
+    args: AmendArgs
+    quote_token_delta: int
+    base_token_delta: int
+    maker_fee_rate: Any
+
+@dataclass
+class OrderAmendedPerpEvent:
     asset: HexBytes
     order_id: int
-    new_order: Order
+    new_order: OrderPerp
     collateral_delta: int
     book_type: int
     nonce: int
 
 @dataclass
 class OrderCanceledEvent:
+    event_nonce: int
+    order_id: int
+    owner: ChecksumAddress
+    quote_token_refunded: int
+    base_token_refunded: int
+    context: int
+
+@dataclass
+class OrderCanceledPerpEvent:
     asset: HexBytes
     order_id: int
     owner: ChecksumAddress
@@ -303,29 +398,33 @@ class OrderCanceledEvent:
 
 @dataclass
 class OrderProcessedEvent:
+    event_nonce: int
+    account: ChecksumAddress
+    order_id: int
+    data: OrderProcessedData
+
+@dataclass
+class OrderProcessedPerpEvent:
     asset: HexBytes
     account: ChecksumAddress
-    subaccount: int
     order_id: int
-    amount_submitted: int
-    base_denominated: bool
-    tif: int
-    expiry_time: int
-    limit_price: int
-    side: int
-    reduce_only: bool
-    base_posted: int
-    quote_traded: int
-    base_traded: int
-    book_type: int
     nonce: int
+    data: OrderProcessedDataPerp
 
 @dataclass
 class OwnershipHandoverCanceledEvent:
     pending_owner: ChecksumAddress
 
 @dataclass
+class OwnershipHandoverCanceledPerpEvent:
+    pending_owner: ChecksumAddress
+
+@dataclass
 class OwnershipHandoverRequestedEvent:
+    pending_owner: ChecksumAddress
+
+@dataclass
+class OwnershipHandoverRequestedPerpEvent:
     pending_owner: ChecksumAddress
 
 @dataclass
@@ -339,26 +438,33 @@ class OwnershipTransferredEvent:
     new_owner: ChecksumAddress
 
 @dataclass
+class OwnershipTransferredPerpEvent:
+    old_owner: ChecksumAddress
+    new_owner: ChecksumAddress
+
+@dataclass
 class PairCreatedEvent:
     token0: ChecksumAddress
     token1: ChecksumAddress
+    token0_decimals: int
+    token1_decimals: int
     pair: ChecksumAddress
     param: int
 
 @dataclass
-class PartialLiquidationRateUpdatedEvent:
+class PartialLiquidationRateUpdatedPerpEvent:
     asset: HexBytes
     partial_liquidation_rate: int
     nonce: int
 
 @dataclass
-class PartialLiquidationThresholdUpdatedEvent:
+class PartialLiquidationThresholdUpdatedPerpEvent:
     asset: HexBytes
     partial_liquidation_threshold: int
     nonce: int
 
 @dataclass
-class PositionLeverageSetEvent:
+class PositionLeverageSetPerpEvent:
     asset: HexBytes
     account: ChecksumAddress
     subaccount: int
@@ -368,11 +474,11 @@ class PositionLeverageSetEvent:
     nonce: int
 
 @dataclass
-class ProtocolActivatedEvent:
+class ProtocolActivatedPerpEvent:
     nonce: int
 
 @dataclass
-class ProtocolDeactivatedEvent:
+class ProtocolDeactivatedPerpEvent:
     nonce: int
 
 @dataclass
@@ -383,13 +489,18 @@ class QuoteAssetUpdatedEvent:
     event_nonce: int
 
 @dataclass
-class ReduceOnlyCapUpdatedEvent:
+class ReduceOnlyCapUpdatedPerpEvent:
     asset: HexBytes
     reduce_only_cap: int
     nonce: int
 
 @dataclass
-class ResetIterationsUpdatedEvent:
+class RemoveExemptFromLimitPerTxCapPerpEvent:
+    account: ChecksumAddress
+    nonce: int
+
+@dataclass
+class ResetIterationsUpdatedPerpEvent:
     asset: HexBytes
     reset_iterations: int
     nonce: int
@@ -398,6 +509,16 @@ class ResetIterationsUpdatedEvent:
 class RolesUpdatedEvent:
     user: ChecksumAddress
     roles: int
+
+@dataclass
+class RolesUpdatedPerpEvent:
+    user: ChecksumAddress
+    roles: int
+
+@dataclass
+class SetExemptFromLimitPerTxCapPerpEvent:
+    account: ChecksumAddress
+    nonce: int
 
 @dataclass
 class SwapEvent:
@@ -410,12 +531,17 @@ class SwapEvent:
     event_nonce: int
 
 @dataclass
-class TakerFeeRatesUpdatedEvent:
+class TakerFeeRatesUpdatedPerpEvent:
     taker_fee_rates: list[Any]
     nonce: int
 
 @dataclass
 class TickSizeUpdatedEvent:
+    event_nonce: int
+    new_tick_size: int
+
+@dataclass
+class TickSizeUpdatedPerpEvent:
     asset: HexBytes
     tick_size: int
     nonce: int
@@ -427,7 +553,6 @@ class TokenLaunchedEvent:
     quote_asset: ChecksumAddress
     bonding_curve: ChecksumAddress
     timestamp: int
-    quote_scaling: int
     event_nonce: int
 
 @dataclass
@@ -437,7 +562,13 @@ class TransferEvent:
     value: int
 
 @dataclass
-class WithdrawEvent:
+class TwapCanceledPerpEvent:
+    account: ChecksumAddress
+    root: HexBytes
+    nonce: int
+
+@dataclass
+class WithdrawPerpEvent:
     account: ChecksumAddress
     amount: int
 

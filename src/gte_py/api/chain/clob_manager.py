@@ -123,6 +123,10 @@ class ClobManager:
         func = self.contract.functions.setAccountFeeTiers(accounts, fee_tiers)
         return TypedContractFunction(func, params={**kwargs})
 
+    def set_builder_rev_share_bps(self, market: ChecksumAddress, new_builder_rev_share_bps: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.setBuilderRevShareBps(market, new_builder_rev_share_bps)
+        return TypedContractFunction(func, params={**kwargs})
+
     def set_lot_size_in_base(self, market: ChecksumAddress, new_lot_size: int, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.setLotSizeInBase(market, new_lot_size)
         return TypedContractFunction(func, params={**kwargs})

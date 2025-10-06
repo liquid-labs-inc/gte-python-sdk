@@ -4,8 +4,8 @@ from .utils import TypedContractFunction, load_abi
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 from hexbytes import HexBytes
-from .structs import AmendLimitOrderArgsPerp, BookSettingsPerp, ConditionPerp, FundingRateSettingsPerp, MarketParamsPerp, MarketSettingsPerp, OrderPerp, PlaceOrderArgsPerp, PlaceOrderResultPerp, PositionPerp, SignDataPerp
-from .events import CancelFailedEvent, CrossMarginDisabledEvent, CrossMarginEnabledEvent, DepositEvent, DivergenceCapUpdatedEvent, FeeTierUpdatedEvent, FundingClampsUpdatedEvent, FundingIntervalUpdatedEvent, FundingSettledEvent, InitializedEvent, InsuranceFundDepositEvent, InsuranceFundWithdrawalEvent, InterestRateUpdatedEvent, LiquidationEvent, LiquidationFeeRateUpdatedEvent, MaintenanceMarginRatioUpdatedEvent, MakerFeeRatesUpdatedEvent, MarginAddedEvent, MarginRemovedEvent, MarkPriceUpdatedEvent, MarketCreatedEvent, MarketStatusUpdatedEvent, MaxLeverageUpdatedEvent, MaxLimitsPerTxUpdatedEvent, MaxNumOrdersUpdatedEvent, MinLimitOrderAmountInBaseUpdatedEvent, OperatorApprovedEvent, OperatorDisapprovedEvent, OrderAmendedEvent, OrderCanceledEvent, OrderProcessedEvent, OwnershipHandoverCanceledEvent, OwnershipHandoverRequestedEvent, OwnershipTransferredEvent, PartialLiquidationRateUpdatedEvent, PartialLiquidationThresholdUpdatedEvent, PositionLeverageSetEvent, ProtocolActivatedEvent, ProtocolDeactivatedEvent, ReduceOnlyCapUpdatedEvent, ResetIterationsUpdatedEvent, RolesUpdatedEvent, TakerFeeRatesUpdatedEvent, TickSizeUpdatedEvent, WithdrawEvent
+from .structs import AmendLimitOrderArgsPerp, BookSettingsPerp, ConditionPerp, FundingRateSettingsPerp, MarketParamsPerp, MarketSettingsPerp, MerkleDataPerp, OrderPerp, OrderProcessedDataPerp, PlaceOrderArgsPerp, PlaceOrderResultPerp, PositionPerp, SignDataPerp, TwapOrderArgsPerp
+from .events import BuilderCodeRegisteredPerpEvent, BuilderRevShareBpsUpdatedPerpEvent, CancelFailedPerpEvent, ConditionalCanceledPerpEvent, CrossMarginDisabledPerpEvent, CrossMarginEnabledPerpEvent, DepositPerpEvent, DivergenceCapUpdatedPerpEvent, FeeTierUpdatedPerpEvent, FundingClampsUpdatedPerpEvent, FundingIntervalUpdatedPerpEvent, FundingSettledPerpEvent, IndexFairClampUpdatedPerpEvent, InitializedPerpEvent, InsuranceFundDepositPerpEvent, InsuranceFundWithdrawalPerpEvent, InterestRateUpdatedPerpEvent, LiquidationFeeRateUpdatedPerpEvent, LiquidationPerpEvent, LiquidatorPointsSetPerpEvent, MaintenanceMarginRatioUpdatedPerpEvent, MakerFeeRatesUpdatedPerpEvent, MarginAddedPerpEvent, MarginRemovedPerpEvent, MarkPriceUpdatedPerpEvent, MarketCreatedPerpEvent, MarketStatusUpdatedPerpEvent, MaxLeverageUpdatedPerpEvent, MaxLimitsPerTxUpdatedPerpEvent, MaxNumOrdersUpdatedPerpEvent, MicroPriceClipBpsUpdatedPerpEvent, MinLimitOrderAmountInBaseUpdatedPerpEvent, OperatorApprovedPerpEvent, OperatorDisapprovedPerpEvent, OrderAmendedPerpEvent, OrderCanceledPerpEvent, OrderProcessedPerpEvent, OwnershipHandoverCanceledPerpEvent, OwnershipHandoverRequestedPerpEvent, OwnershipTransferredPerpEvent, PartialLiquidationRateUpdatedPerpEvent, PartialLiquidationThresholdUpdatedPerpEvent, PositionLeverageSetPerpEvent, ProtocolActivatedPerpEvent, ProtocolDeactivatedPerpEvent, ReduceOnlyCapUpdatedPerpEvent, RemoveExemptFromLimitPerTxCapPerpEvent, ResetIterationsUpdatedPerpEvent, RolesUpdatedPerpEvent, SetExemptFromLimitPerTxCapPerpEvent, TakerFeeRatesUpdatedPerpEvent, TickSizeUpdatedPerpEvent, TwapCanceledPerpEvent, WithdrawPerpEvent
 
 
 class PerpManager:
@@ -57,6 +57,10 @@ class PerpManager:
 
     def cancel_ownership_handover(self, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.cancelOwnershipHandover()
+        return TypedContractFunction(func, params={**kwargs})
+
+    def cancel_twap_order(self, account: ChecksumAddress, root: HexBytes, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.cancelTwapOrder(account, root)
         return TypedContractFunction(func, params={**kwargs})
 
     def complete_ownership_handover(self, pending_owner: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
@@ -119,6 +123,22 @@ class PerpManager:
         func = self.contract.functions.getAssets(account, subaccount)
         return await func.call()
 
+    async def get_best_ask(self, asset: HexBytes) -> int:
+        func = self.contract.functions.getBestAsk(asset)
+        return await func.call()
+
+    async def get_best_bid(self, asset: HexBytes) -> int:
+        func = self.contract.functions.getBestBid(asset)
+        return await func.call()
+
+    async def get_builder_code_owner(self, builder_code: HexBytes) -> ChecksumAddress:
+        func = self.contract.functions.getBuilderCodeOwner(builder_code)
+        return await func.call()
+
+    async def get_builder_rev_share_bps(self, asset: HexBytes) -> int:
+        func = self.contract.functions.getBuilderRevShareBps(asset)
+        return await func.call()
+
     async def get_collateral_asset(self) -> ChecksumAddress:
         func = self.contract.functions.getCollateralAsset()
         return await func.call()
@@ -133,6 +153,18 @@ class PerpManager:
 
     async def get_divergence_cap(self, asset: HexBytes) -> int:
         func = self.contract.functions.getDivergenceCap(asset)
+        return await func.call()
+
+    async def get_fee_tier(self, account: ChecksumAddress) -> int:
+        func = self.contract.functions.getFeeTier(account)
+        return await func.call()
+
+    async def get_fee_tier_maker_rate(self, fee_tier: int) -> Any:
+        func = self.contract.functions.getFeeTierMakerRate(fee_tier)
+        return await func.call()
+
+    async def get_fee_tier_taker_rate(self, fee_tier: int) -> Any:
+        func = self.contract.functions.getFeeTierTakerRate(fee_tier)
         return await func.call()
 
     async def get_free_collateral_balance(self, account: ChecksumAddress) -> int:
@@ -153,6 +185,22 @@ class PerpManager:
 
     async def get_funding_rate(self, asset: HexBytes) -> int:
         func = self.contract.functions.getFundingRate(asset)
+        return await func.call()
+
+    async def get_impact_ask(self, asset: HexBytes, impact_notional: int) -> int:
+        func = self.contract.functions.getImpactAsk(asset, impact_notional)
+        return await func.call()
+
+    async def get_impact_bid(self, asset: HexBytes, impact_notional: int) -> int:
+        func = self.contract.functions.getImpactBid(asset, impact_notional)
+        return await func.call()
+
+    async def get_impact_price(self, asset: HexBytes, impact_notional: int) -> int:
+        func = self.contract.functions.getImpactPrice(asset, impact_notional)
+        return await func.call()
+
+    async def get_index_fair_clamp(self, asset: HexBytes) -> int:
+        func = self.contract.functions.getIndexFairClamp(asset)
         return await func.call()
 
     async def get_index_price(self, asset: HexBytes) -> int:
@@ -191,6 +239,10 @@ class PerpManager:
         func = self.contract.functions.getLiquidationFeeRate(asset)
         return await func.call()
 
+    async def get_liquidator_points(self, account: ChecksumAddress) -> int:
+        func = self.contract.functions.getLiquidatorPoints(account)
+        return await func.call()
+
     async def get_lot_size(self, asset: HexBytes) -> int:
         func = self.contract.functions.getLotSize(asset)
         return await func.call()
@@ -227,8 +279,8 @@ class PerpManager:
         func = self.contract.functions.getMaxNumOrders(asset)
         return await func.call()
 
-    async def get_mid_price(self, asset: HexBytes) -> int:
-        func = self.contract.functions.getMidPrice(asset)
+    async def get_micro_price_clip_bps(self, asset: HexBytes) -> int:
+        func = self.contract.functions.getMicroPriceClipBps(asset)
         return await func.call()
 
     async def get_min_limit_order_amount_in_base(self, asset: HexBytes) -> int:
@@ -363,6 +415,26 @@ class PerpManager:
         func = self.contract.functions.grantAdmin(account)
         return TypedContractFunction(func, params={**kwargs})
 
+    def grant_backstop_liquidator(self, account: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.grantBackstopLiquidator(account)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def grant_backstop_maker(self, account: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.grantBackstopMaker(account)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def grant_exempt_from_max_limits(self, account: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.grantExemptFromMaxLimits(account)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def grant_keeper(self, account: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.grantKeeper(account)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def grant_liquidator(self, account: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.grantLiquidator(account)
+        return TypedContractFunction(func, params={**kwargs})
+
     def grant_roles(self, user: ChecksumAddress, roles: int, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.grantRoles(user, roles)
         return TypedContractFunction(func, params={**kwargs})
@@ -391,8 +463,24 @@ class PerpManager:
         func = self.contract.functions.isAdmin(account)
         return await func.call()
 
+    async def is_backstop_liquidator(self, account: ChecksumAddress) -> bool:
+        func = self.contract.functions.isBackstopLiquidator(account)
+        return await func.call()
+
+    async def is_backstop_maker(self, account: ChecksumAddress) -> bool:
+        func = self.contract.functions.isBackstopMaker(account)
+        return await func.call()
+
     async def is_cross_margin_enabled(self, asset: HexBytes) -> bool:
         func = self.contract.functions.isCrossMarginEnabled(asset)
+        return await func.call()
+
+    async def is_keeper(self, account: ChecksumAddress) -> bool:
+        func = self.contract.functions.isKeeper(account)
+        return await func.call()
+
+    async def is_leaf_used(self, account: ChecksumAddress, root: HexBytes, leaf: HexBytes) -> bool:
+        func = self.contract.functions.isLeafUsed(account, root, leaf)
         return await func.call()
 
     async def is_liquidatable(self, account: ChecksumAddress, subaccount: int) -> bool:
@@ -401,6 +489,14 @@ class PerpManager:
 
     async def is_liquidatable_backstop(self, account: ChecksumAddress, subaccount: int) -> bool:
         func = self.contract.functions.isLiquidatableBackstop(account, subaccount)
+        return await func.call()
+
+    async def is_liquidator(self, account: ChecksumAddress) -> bool:
+        func = self.contract.functions.isLiquidator(account)
+        return await func.call()
+
+    async def is_root_canceled(self, account: ChecksumAddress, root: HexBytes) -> bool:
+        func = self.contract.functions.isRootCanceled(account, root)
         return await func.call()
 
     def liquidate(self, asset: HexBytes, account: ChecksumAddress, subaccount: int, **kwargs) -> TypedContractFunction[Any]:
@@ -427,8 +523,8 @@ class PerpManager:
         func = self.contract.functions.placeTPSLOrder(account, tuple(args), tuple(condition), tuple(sign_data))
         return TypedContractFunction(func, params={**kwargs})
 
-    def place_twap_order(self, account: ChecksumAddress, args: PlaceOrderArgsPerp, sign_data: SignDataPerp, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.placeTwapOrder(account, tuple(args), tuple(sign_data))
+    def place_twap_order(self, args: TwapOrderArgsPerp, merkle_data: MerkleDataPerp, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.placeTwapOrder(tuple(args), tuple(merkle_data))
         return TypedContractFunction(func, params={**kwargs})
 
     def post_limit_order_backstop(self, account: ChecksumAddress, args: PlaceOrderArgsPerp, **kwargs) -> TypedContractFunction[Any]:
@@ -467,6 +563,10 @@ class PerpManager:
         func = self.contract.functions.quoteBookInQuote(asset, quote_amount, side)
         return await func.call()
 
+    def register_builder_code(self, account: ChecksumAddress, builder_code: HexBytes, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.registerBuilderCode(account, builder_code)
+        return TypedContractFunction(func, params={**kwargs})
+
     def relist_market(self, asset: HexBytes, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.relistMarket(asset)
         return TypedContractFunction(func, params={**kwargs})
@@ -491,6 +591,26 @@ class PerpManager:
         func = self.contract.functions.revokeAdmin(account)
         return TypedContractFunction(func, params={**kwargs})
 
+    def revoke_backstop_liquidator(self, account: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.revokeBackstopLiquidator(account)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def revoke_backstop_maker(self, account: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.revokeBackstopMaker(account)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def revoke_exempt_from_max_limits(self, account: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.revokeExemptFromMaxLimits(account)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def revoke_keeper(self, account: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.revokeKeeper(account)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def revoke_liquidator(self, account: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.revokeLiquidator(account)
+        return TypedContractFunction(func, params={**kwargs})
+
     def revoke_roles(self, user: ChecksumAddress, roles: int, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.revokeRoles(user, roles)
         return TypedContractFunction(func, params={**kwargs})
@@ -501,6 +621,10 @@ class PerpManager:
 
     def set_book_settings(self, asset: HexBytes, settings: BookSettingsPerp, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.setBookSettings(asset, tuple(settings))
+        return TypedContractFunction(func, params={**kwargs})
+
+    def set_builder_rev_share_bps(self, asset: HexBytes, builder_rev_share_bps: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.setBuilderRevShareBps(asset, builder_rev_share_bps)
         return TypedContractFunction(func, params={**kwargs})
 
     def set_divergence_cap(self, asset: HexBytes, divergence_cap: int, **kwargs) -> TypedContractFunction[Any]:
@@ -521,6 +645,10 @@ class PerpManager:
 
     def set_funding_rate_settings(self, asset: HexBytes, settings: FundingRateSettingsPerp, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.setFundingRateSettings(asset, tuple(settings))
+        return TypedContractFunction(func, params={**kwargs})
+
+    def set_index_fair_clamp(self, asset: HexBytes, index_fair_clamp: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.setIndexFairClamp(asset, index_fair_clamp)
         return TypedContractFunction(func, params={**kwargs})
 
     def set_interest_rate(self, asset: HexBytes, interest_rate: int, **kwargs) -> TypedContractFunction[Any]:
@@ -557,6 +685,10 @@ class PerpManager:
 
     def set_max_num_orders(self, asset: HexBytes, max_num_orders: int, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.setMaxNumOrders(asset, max_num_orders)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def set_micro_price_clip_bps(self, asset: HexBytes, micro_price_clip_bps: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.setMicroPriceClipBps(asset, micro_price_clip_bps)
         return TypedContractFunction(func, params={**kwargs})
 
     def set_min_limit_order_amount_in_base(self, asset: HexBytes, min_limit_order_amount_in_base: int, **kwargs) -> TypedContractFunction[Any]:
@@ -601,6 +733,10 @@ class PerpManager:
 
     def transfer_ownership(self, new_owner: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.transferOwnership(new_owner)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def unregister_builder_code(self, builder_code: HexBytes, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.unregisterBuilderCode(builder_code)
         return TypedContractFunction(func, params={**kwargs})
 
     def withdraw(self, account: ChecksumAddress, amount: int, **kwargs) -> TypedContractFunction[Any]:

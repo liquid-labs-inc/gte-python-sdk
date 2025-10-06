@@ -105,7 +105,7 @@
            "internalType":"struct ICLOB.AmendArgs",
            "components":[
               {
-                 "name":"orderId",
+                 "name":"orderOrClientId",
                  "type":"uint256",
                  "internalType":"uint256"
               },
@@ -156,16 +156,9 @@
            "internalType":"address"
         },
         {
-           "name":"args",
-           "type":"tuple",
-           "internalType":"struct ICLOB.CancelArgs",
-           "components":[
-              {
-                 "name":"orderIds",
-                 "type":"uint256[]",
-                 "internalType":"uint256[]"
-              }
-           ]
+           "name":"orderOrClientIds",
+           "type":"uint256[]",
+           "internalType":"uint256[]"
         }
      ],
      "outputs":[
@@ -395,6 +388,11 @@
                  "name":"lotSizeInBase",
                  "type":"uint256",
                  "internalType":"uint256"
+              },
+              {
+                 "name":"builderRevShareBps",
+                 "type":"uint256",
+                 "internalType":"uint256"
               }
            ]
         }
@@ -472,6 +470,11 @@
                  "internalType":"uint32"
               },
               {
+                 "name":"makerFeeRate",
+                 "type":"uint16",
+                 "internalType":"uint16"
+              },
+              {
                  "name":"id",
                  "type":"uint256",
                  "internalType":"OrderId"
@@ -500,6 +503,11 @@
                  "name":"amount",
                  "type":"uint256",
                  "internalType":"uint256"
+              },
+              {
+                 "name":"builderCode",
+                 "type":"bytes32",
+                 "internalType":"bytes32"
               }
            ]
         }
@@ -607,6 +615,11 @@
                  "internalType":"uint32"
               },
               {
+                 "name":"makerFeeRate",
+                 "type":"uint16",
+                 "internalType":"uint16"
+              },
+              {
                  "name":"id",
                  "type":"uint256",
                  "internalType":"OrderId"
@@ -635,8 +648,103 @@
                  "name":"amount",
                  "type":"uint256",
                  "internalType":"uint256"
+              },
+              {
+                 "name":"builderCode",
+                 "type":"bytes32",
+                 "internalType":"bytes32"
               }
            ]
+        }
+     ],
+     "stateMutability":"view"
+  },
+  {
+     "type":"function",
+     "name":"getOrderByClientId",
+     "inputs":[
+        {
+           "name":"clientOrderId",
+           "type":"uint256",
+           "internalType":"uint256"
+        }
+     ],
+     "outputs":[
+        {
+           "name":"",
+           "type":"tuple",
+           "internalType":"struct Order",
+           "components":[
+              {
+                 "name":"side",
+                 "type":"uint8",
+                 "internalType":"enum Side"
+              },
+              {
+                 "name":"cancelTimestamp",
+                 "type":"uint32",
+                 "internalType":"uint32"
+              },
+              {
+                 "name":"makerFeeRate",
+                 "type":"uint16",
+                 "internalType":"uint16"
+              },
+              {
+                 "name":"id",
+                 "type":"uint256",
+                 "internalType":"OrderId"
+              },
+              {
+                 "name":"prevOrderId",
+                 "type":"uint256",
+                 "internalType":"OrderId"
+              },
+              {
+                 "name":"nextOrderId",
+                 "type":"uint256",
+                 "internalType":"OrderId"
+              },
+              {
+                 "name":"owner",
+                 "type":"address",
+                 "internalType":"address"
+              },
+              {
+                 "name":"price",
+                 "type":"uint256",
+                 "internalType":"uint256"
+              },
+              {
+                 "name":"amount",
+                 "type":"uint256",
+                 "internalType":"uint256"
+              },
+              {
+                 "name":"builderCode",
+                 "type":"bytes32",
+                 "internalType":"bytes32"
+              }
+           ]
+        }
+     ],
+     "stateMutability":"view"
+  },
+  {
+     "type":"function",
+     "name":"getOrderIdByClientId",
+     "inputs":[
+        {
+           "name":"clientOrderId",
+           "type":"uint256",
+           "internalType":"uint256"
+        }
+     ],
+     "outputs":[
+        {
+           "name":"",
+           "type":"uint256",
+           "internalType":"uint256"
         }
      ],
      "stateMutability":"view"
@@ -673,6 +781,11 @@
                  "internalType":"uint32"
               },
               {
+                 "name":"makerFeeRate",
+                 "type":"uint16",
+                 "internalType":"uint16"
+              },
+              {
                  "name":"id",
                  "type":"uint256",
                  "internalType":"OrderId"
@@ -701,6 +814,11 @@
                  "name":"amount",
                  "type":"uint256",
                  "internalType":"uint256"
+              },
+              {
+                 "name":"builderCode",
+                 "type":"bytes32",
+                 "internalType":"bytes32"
               }
            ]
         },
@@ -720,6 +838,11 @@
                  "internalType":"uint32"
               },
               {
+                 "name":"makerFeeRate",
+                 "type":"uint16",
+                 "internalType":"uint16"
+              },
+              {
                  "name":"id",
                  "type":"uint256",
                  "internalType":"OrderId"
@@ -748,6 +871,11 @@
                  "name":"amount",
                  "type":"uint256",
                  "internalType":"uint256"
+              },
+              {
+                 "name":"builderCode",
+                 "type":"bytes32",
+                 "internalType":"bytes32"
               }
            ]
         }
@@ -791,6 +919,11 @@
                  "internalType":"uint32"
               },
               {
+                 "name":"makerFeeRate",
+                 "type":"uint16",
+                 "internalType":"uint16"
+              },
+              {
                  "name":"id",
                  "type":"uint256",
                  "internalType":"OrderId"
@@ -819,6 +952,11 @@
                  "name":"amount",
                  "type":"uint256",
                  "internalType":"uint256"
+              },
+              {
+                 "name":"builderCode",
+                 "type":"bytes32",
+                 "internalType":"bytes32"
               }
            ]
         },
@@ -838,6 +976,11 @@
                  "internalType":"uint32"
               },
               {
+                 "name":"makerFeeRate",
+                 "type":"uint16",
+                 "internalType":"uint16"
+              },
+              {
                  "name":"id",
                  "type":"uint256",
                  "internalType":"OrderId"
@@ -866,6 +1009,11 @@
                  "name":"amount",
                  "type":"uint256",
                  "internalType":"uint256"
+              },
+              {
+                 "name":"builderCode",
+                 "type":"bytes32",
+                 "internalType":"bytes32"
               }
            ]
         }
@@ -1021,6 +1169,11 @@
                  "name":"lotSizeInBase",
                  "type":"uint256",
                  "internalType":"uint256"
+              },
+              {
+                 "name":"builderRevShareBps",
+                 "type":"uint256",
+                 "internalType":"uint256"
               }
            ]
         },
@@ -1046,21 +1199,6 @@
            "name":"",
            "type":"uint256",
            "internalType":"uint256"
-        }
-     ],
-     "stateMutability":"view"
-  },
-  {
-     "type":"function",
-     "name":"operator",
-     "inputs":[
-        
-     ],
-     "outputs":[
-        {
-           "name":"",
-           "type":"address",
-           "internalType":"contract IOperatorPanel"
         }
      ],
      "stateMutability":"view"
@@ -1120,6 +1258,11 @@
                  "internalType":"uint96"
               },
               {
+                 "name":"builderCode",
+                 "type":"bytes32",
+                 "internalType":"bytes32"
+              },
+              {
                  "name":"tif",
                  "type":"uint8",
                  "internalType":"enum ICLOB.TiF"
@@ -1154,11 +1297,6 @@
            "internalType":"struct ICLOB.PlaceOrderResult",
            "components":[
               {
-                 "name":"account",
-                 "type":"address",
-                 "internalType":"address"
-              },
-              {
                  "name":"orderId",
                  "type":"uint256",
                  "internalType":"uint256"
@@ -1169,24 +1307,19 @@
                  "internalType":"uint256"
               },
               {
-                 "name":"quoteTokenAmountTraded",
-                 "type":"int256",
-                 "internalType":"int256"
-              },
-              {
-                 "name":"baseTokenAmountTraded",
-                 "type":"int256",
-                 "internalType":"int256"
-              },
-              {
-                 "name":"takerFee",
+                 "name":"baseTraded",
                  "type":"uint256",
                  "internalType":"uint256"
               },
               {
-                 "name":"wasMarketOrder",
-                 "type":"bool",
-                 "internalType":"bool"
+                 "name":"quoteTraded",
+                 "type":"uint256",
+                 "internalType":"uint256"
+              },
+              {
+                 "name":"takerFeeCharged",
+                 "type":"uint256",
+                 "internalType":"uint256"
               }
            ]
         }
@@ -1198,6 +1331,21 @@
      "name":"renounceOwnership",
      "inputs":[
         
+     ],
+     "outputs":[
+        
+     ],
+     "stateMutability":"nonpayable"
+  },
+  {
+     "type":"function",
+     "name":"setBuilderRevShareBps",
+     "inputs":[
+        {
+           "name":"newBuilderRevShareBps",
+           "type":"uint256",
+           "internalType":"uint256"
+        }
      ],
      "outputs":[
         
@@ -1281,6 +1429,25 @@
   },
   {
      "type":"event",
+     "name":"BuilderRevShareBpsUpdated",
+     "inputs":[
+        {
+           "name":"nonce",
+           "type":"uint256",
+           "indexed":false,
+           "internalType":"uint256"
+        },
+        {
+           "name":"newBuilderRevShareBps",
+           "type":"uint256",
+           "indexed":false,
+           "internalType":"uint256"
+        }
+     ],
+     "anonymous":false
+  },
+  {
+     "type":"event",
      "name":"CancelFailed",
      "inputs":[
         {
@@ -1313,43 +1480,6 @@
            "type":"uint64",
            "indexed":false,
            "internalType":"uint64"
-        }
-     ],
-     "anonymous":false
-  },
-  {
-     "type":"event",
-     "name":"LimitOrderCreated",
-     "inputs":[
-        {
-           "name":"eventNonce",
-           "type":"uint256",
-           "indexed":true,
-           "internalType":"uint256"
-        },
-        {
-           "name":"orderId",
-           "type":"uint256",
-           "indexed":true,
-           "internalType":"OrderId"
-        },
-        {
-           "name":"price",
-           "type":"uint256",
-           "indexed":false,
-           "internalType":"uint256"
-        },
-        {
-           "name":"amount",
-           "type":"uint256",
-           "indexed":false,
-           "internalType":"uint256"
-        },
-        {
-           "name":"side",
-           "type":"uint8",
-           "indexed":false,
-           "internalType":"enum Side"
         }
      ],
      "anonymous":false
@@ -1438,6 +1568,11 @@
                  "internalType":"uint32"
               },
               {
+                 "name":"makerFeeRate",
+                 "type":"uint16",
+                 "internalType":"uint16"
+              },
+              {
                  "name":"id",
                  "type":"uint256",
                  "internalType":"OrderId"
@@ -1466,6 +1601,11 @@
                  "name":"amount",
                  "type":"uint256",
                  "internalType":"uint256"
+              },
+              {
+                 "name":"builderCode",
+                 "type":"bytes32",
+                 "internalType":"bytes32"
               }
            ]
         },
@@ -1476,7 +1616,7 @@
            "internalType":"struct ICLOB.AmendArgs",
            "components":[
               {
-                 "name":"orderId",
+                 "name":"orderOrClientId",
                  "type":"uint256",
                  "internalType":"uint256"
               },
@@ -1513,6 +1653,12 @@
            "type":"int256",
            "indexed":false,
            "internalType":"int256"
+        },
+        {
+           "name":"makerFeeRate",
+           "type":"uint16",
+           "indexed":false,
+           "internalType":"uint16"
         }
      ],
      "anonymous":false
@@ -1583,40 +1729,92 @@
            "internalType":"uint256"
         },
         {
-           "name":"tif",
-           "type":"uint8",
+           "name":"data",
+           "type":"tuple",
            "indexed":false,
-           "internalType":"enum ICLOB.TiF"
-        },
-        {
-           "name":"limitPrice",
-           "type":"uint256",
-           "indexed":false,
-           "internalType":"uint256"
-        },
-        {
-           "name":"basePosted",
-           "type":"uint256",
-           "indexed":false,
-           "internalType":"uint256"
-        },
-        {
-           "name":"quoteDelta",
-           "type":"int256",
-           "indexed":false,
-           "internalType":"int256"
-        },
-        {
-           "name":"baseDelta",
-           "type":"int256",
-           "indexed":false,
-           "internalType":"int256"
-        },
-        {
-           "name":"takerFee",
-           "type":"uint256",
-           "indexed":false,
-           "internalType":"uint256"
+           "internalType":"struct ICLOB.OrderProcessedData",
+           "components":[
+              {
+                 "name":"basePosted",
+                 "type":"uint256",
+                 "internalType":"uint256"
+              },
+              {
+                 "name":"baseTraded",
+                 "type":"uint256",
+                 "internalType":"uint256"
+              },
+              {
+                 "name":"quoteTraded",
+                 "type":"uint256",
+                 "internalType":"uint256"
+              },
+              {
+                 "name":"takerFeeCharged",
+                 "type":"uint256",
+                 "internalType":"uint256"
+              },
+              {
+                 "name":"takerFeeRate",
+                 "type":"uint16",
+                 "internalType":"uint16"
+              },
+              {
+                 "name":"makerFeeRate",
+                 "type":"uint16",
+                 "internalType":"uint16"
+              },
+              {
+                 "name":"startOrderId",
+                 "type":"uint256",
+                 "internalType":"uint256"
+              },
+              {
+                 "name":"endOrderId",
+                 "type":"uint256",
+                 "internalType":"uint256"
+              },
+              {
+                 "name":"makersCleared",
+                 "type":"uint256",
+                 "internalType":"uint256"
+              },
+              {
+                 "name":"side",
+                 "type":"uint8",
+                 "internalType":"enum Side"
+              },
+              {
+                 "name":"clientOrderId",
+                 "type":"uint256",
+                 "internalType":"uint256"
+              },
+              {
+                 "name":"tif",
+                 "type":"uint8",
+                 "internalType":"enum ICLOB.TiF"
+              },
+              {
+                 "name":"expiryTime",
+                 "type":"uint32",
+                 "internalType":"uint32"
+              },
+              {
+                 "name":"limitPrice",
+                 "type":"uint256",
+                 "internalType":"uint256"
+              },
+              {
+                 "name":"amount",
+                 "type":"uint256",
+                 "internalType":"uint256"
+              },
+              {
+                 "name":"builderCode",
+                 "type":"bytes32",
+                 "internalType":"bytes32"
+              }
+           ]
         }
      ],
      "anonymous":false
@@ -1708,6 +1906,13 @@
   },
   {
      "type":"error",
+     "name":"ClientOrderIdInUse",
+     "inputs":[
+        
+     ]
+  },
+  {
+     "type":"error",
      "name":"FOKOrderNotFilled",
      "inputs":[
         
@@ -1785,6 +1990,13 @@
   },
   {
      "type":"error",
+     "name":"NewBuilderRevShareBpsInvalid",
+     "inputs":[
+        
+     ]
+  },
+  {
+     "type":"error",
      "name":"NewLotSizeInvalid",
      "inputs":[
         
@@ -1835,13 +2047,6 @@
   {
      "type":"error",
      "name":"OrderExpired",
-     "inputs":[
-        
-     ]
-  },
-  {
-     "type":"error",
-     "name":"OrderIdInUse",
      "inputs":[
         
      ]

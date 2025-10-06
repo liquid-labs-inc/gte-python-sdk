@@ -4,8 +4,8 @@ from .utils import TypedContractFunction, load_abi
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 from hexbytes import HexBytes
-from .structs import AmendArgs, CancelArgs, Limit, MarketConfig, MarketSettings, Order, PlaceOrderArgs, PlaceOrderResult
-from .events import CancelFailedEvent, InitializedEvent, LimitOrderCreatedEvent, LotSizeInBaseUpdatedEvent, MaxLimitOrdersPerTxUpdatedEvent, MinLimitOrderAmountInBaseUpdatedEvent, OrderAmendedEvent, OrderCanceledEvent, OrderProcessedEvent, OwnershipTransferStartedEvent, OwnershipTransferredEvent, TickSizeUpdatedEvent
+from .structs import AmendArgs, Limit, MarketConfig, MarketSettings, Order, OrderProcessedData, PlaceOrderArgs, PlaceOrderResult
+from .events import BuilderRevShareBpsUpdatedEvent, CancelFailedEvent, InitializedEvent, LotSizeInBaseUpdatedEvent, MaxLimitOrdersPerTxUpdatedEvent, MinLimitOrderAmountInBaseUpdatedEvent, OrderAmendedEvent, OrderCanceledEvent, OrderProcessedEvent, OwnershipTransferStartedEvent, OwnershipTransferredEvent, TickSizeUpdatedEvent
 
 
 class Clob:
@@ -39,12 +39,12 @@ class Clob:
         func = self.contract.functions.amend(account, tuple(args))
         return TypedContractFunction(func, params={**kwargs})
 
-    def cancel(self, account: ChecksumAddress, args: CancelArgs, **kwargs) -> TypedContractFunction[Any]:
+    def cancel(self, account: ChecksumAddress, order_or_client_ids: list[int], **kwargs) -> TypedContractFunction[Any]:
         """
         Returns:
             TypedContractFunction that returns tuple: (cancel_result0, cancel_result1)
         """
-        func = self.contract.functions.cancel(account, tuple(args))
+        func = self.contract.functions.cancel(account, order_or_client_ids)
         return TypedContractFunction(func, params={**kwargs})
 
     async def factory(self) -> ChecksumAddress:
@@ -119,6 +119,14 @@ class Clob:
         func = self.contract.functions.getOrder(order_id)
         return await func.call()
 
+    async def get_order_by_client_id(self, client_order_id: int) -> Order:
+        func = self.contract.functions.getOrderByClientId(client_order_id)
+        return await func.call()
+
+    async def get_order_id_by_client_id(self, client_order_id: int) -> int:
+        func = self.contract.functions.getOrderIdByClientId(client_order_id)
+        return await func.call()
+
     async def get_orders_paginated(self, start_order_id: int, page_size: int) -> tuple[Any, Order]:
         """
         Returns:
@@ -167,10 +175,6 @@ class Clob:
         func = self.contract.functions.maxNumOrdersPerSide()
         return await func.call()
 
-    async def operator(self) -> ChecksumAddress:
-        func = self.contract.functions.operator()
-        return await func.call()
-
     async def owner(self) -> ChecksumAddress:
         func = self.contract.functions.owner()
         return await func.call()
@@ -185,6 +189,10 @@ class Clob:
 
     def renounce_ownership(self, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.renounceOwnership()
+        return TypedContractFunction(func, params={**kwargs})
+
+    def set_builder_rev_share_bps(self, new_builder_rev_share_bps: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.setBuilderRevShareBps(new_builder_rev_share_bps)
         return TypedContractFunction(func, params={**kwargs})
 
     def set_lot_size_in_base(self, new_lot_size_in_base: int, **kwargs) -> TypedContractFunction[Any]:
