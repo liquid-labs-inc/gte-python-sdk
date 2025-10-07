@@ -507,7 +507,7 @@ class ExecutionClient:
     async def account_deposit(
         self,
         token: ChecksumAddress,
-        amount: int,
+        amount: Decimal,
         return_built_tx: bool = False,
         **kwargs: Unpack[TxParams],
     ):
@@ -523,12 +523,13 @@ class ExecutionClient:
         Returns:
             Transaction receipt from the deposit operation
         """
+        amount_atomic = self._convert_decimal_to_atomic(amount)
         await self._ensure_am_approval(self._chain_client.get_erc20(token))
 
         tx = self._chain_client.account_manager.deposit(
             account=self.wallet_address,
             token=token,
-            amount=amount,
+            amount=amount_atomic,
             **kwargs,
         )
         if return_built_tx:
