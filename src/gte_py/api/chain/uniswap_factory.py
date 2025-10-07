@@ -4,7 +4,7 @@ from .utils import TypedContractFunction, load_abi
 from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 from hexbytes import HexBytes
-from .events import PairCreatedEvent
+from .events import InitializedEvent, PairCreatedEvent
 
 
 class UniswapFactory:
@@ -34,14 +34,26 @@ class UniswapFactory:
         func = self.contract.functions.feeToSetter()
         return await func.call()
 
-    async def get_pair(self, token_a: ChecksumAddress, token_b: ChecksumAddress) -> ChecksumAddress:
-        func = self.contract.functions.getPair(token_a, token_b)
+    async def get_pair(self, param: ChecksumAddress, param: ChecksumAddress) -> ChecksumAddress:
+        func = self.contract.functions.getPair(param, param)
         return await func.call()
 
-    def set_fee_to(self, param: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.setFeeTo(param)
+    def initialize(self, fee_to_setter: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.initialize(fee_to_setter)
         return TypedContractFunction(func, params={**kwargs})
 
-    def set_fee_to_setter(self, param: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.setFeeToSetter(param)
+    async def launchpad(self) -> ChecksumAddress:
+        func = self.contract.functions.launchpad()
+        return await func.call()
+
+    async def router(self) -> ChecksumAddress:
+        func = self.contract.functions.router()
+        return await func.call()
+
+    def set_fee_to(self, fee_to: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.setFeeTo(fee_to)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def set_fee_to_setter(self, fee_to_setter: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.setFeeToSetter(fee_to_setter)
         return TypedContractFunction(func, params={**kwargs})

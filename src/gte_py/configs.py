@@ -49,7 +49,11 @@ class NetworkConfig:
     router_address: ChecksumAddress
     launchpad_address: ChecksumAddress
     clob_manager_address: ChecksumAddress
+    perp_manager_address: ChecksumAddress
+    account_manager_address: ChecksumAddress
+    operator_address: ChecksumAddress
     weth_address: ChecksumAddress
+    collateral_asset_address: ChecksumAddress
 
 
 TESTNET_CONFIG = NetworkConfig(
@@ -67,8 +71,12 @@ TESTNET_CONFIG = NetworkConfig(
     eip_1559_max_block_size=2_000_000_000,
     eip_1559_target_block_size=1_000_000_000,
     block_time="10ms for mini blocks, 1s for EVM blocks",
-    router_address=to_checksum_address("0x86470efcEa37e50F94E74649463b737C87ada367"),
-    launchpad_address=to_checksum_address("0x0B6cD1DefCe3189Df60A210326E315383fbC14Ed"),
-    clob_manager_address=to_checksum_address("0xD7310f8A0D569Dd0803D28BB29f4E0A471fA84F6"),
+    router_address=to_checksum_address("0x08a8af705633593A754D624568D48A4069Af7729"),
+    launchpad_address=to_checksum_address("0x3Fd26412Dbd0269f6E962b5802A9007D841D5032"),
+    clob_manager_address=to_checksum_address("0xAECA107CCef55f3B26eea0dEe13DF128F15A57EC"),
+    perp_manager_address=to_checksum_address("0xba881A0b1B01aBc545Ad80eB0D9bdD837e22D05f"),
+    account_manager_address=to_checksum_address("0x4C34461a317d08aEE0109e27c5fcF5aB3d88c468"),
+    operator_address=to_checksum_address("0x3E1e8b0D9D2faf3Bfda32f5119e61AF482c28adD"),
     weth_address=to_checksum_address("0x776401b9BC8aAe31A685731B7147D4445fD9FB19"),
+    collateral_asset_address=to_checksum_address("0xe9b6e75c243b6100ffcb1c66e8f78f96feea727f"),
 )

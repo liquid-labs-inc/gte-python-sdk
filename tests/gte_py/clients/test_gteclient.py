@@ -28,6 +28,10 @@ def config():
         launchpad_address=to_checksum_address("0x000000000000000000000000000000000000cafe"),
         clob_manager_address=to_checksum_address("0x000000000000000000000000000000000000beef"),
         weth_address=to_checksum_address("0x000000000000000000000000000000000000feed"),
+        perp_manager_address=to_checksum_address("0x000000000000000000000000000000000000d00d"),
+        account_manager_address=to_checksum_address("0x000000000000000000000000000000000000a00a"),
+        operator_address=to_checksum_address("0x000000000000000000000000000000000000b00b"),
+        collateral_asset_address=to_checksum_address("0x000000000000000000000000000000000000c00c"),
     )
 
 
@@ -99,7 +103,7 @@ def test_execution_client_initialization_parameters(config, private_key, patched
     patched_clients["execution_class"].assert_called_once_with(
         web3=client._web3,
         account=client._account,
-        gte_router_address=config.router_address,
+        config=config,
         info=client.info,
     )
 

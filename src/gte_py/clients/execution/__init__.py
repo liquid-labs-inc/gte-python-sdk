@@ -14,11 +14,13 @@ from web3.types import TxParams, Wei
 
 from gte_py.clients.info import InfoClient
 from gte_py.api.chain.chain_client import ChainClient
-from gte_py.api.chain.events import OrderAmendedEvent, OrderCanceledEvent, FillOrderProcessedEvent, LimitOrderProcessedEvent
-from gte_py.api.chain.structs import AmendArgs, OrderSide, Settlement, LimitOrderType, FillOrderType, OperatorRole, PostFillOrderArgs, PostLimitOrderArgs, CancelArgs
+from gte_py.api.chain.clob import Clob
+from gte_py.api.chain.structs import AmendArgs, AmendLimitOrderArgsPerp, Side, Settlement, TiF, CancelArgs, PlaceOrderArgs, PlaceOrderArgsPerp, AmendLimitOrderArgsPerp, SettleParams
+from gte_py.api.chain.events import OrderAmendedPerpEvent, OrderProcessedPerpEvent, OrderProcessedEvent, OrderAmendedEvent
 from gte_py.api.chain.utils import TypedContractFunction, BoundedNonceTxScheduler
 from gte_py.models import Market, Order, OrderStatus, TimeInForce, Token
 from gte_py.api.chain.erc20 import Erc20
+from gte_py.configs import NetworkConfig
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +32,7 @@ class ExecutionClient:
             self,
             web3: AsyncWeb3,
             info: InfoClient,
-            gte_router_address: ChecksumAddress,
+            config: NetworkConfig,
             account: LocalAccount | None = None,
     ):
         """
@@ -39,33 +41,592 @@ class ExecutionClient:
         Args:
             web3: AsyncWeb3 instance for on-chain interactions
             info: InfoClient instance for market data
-            gte_router_address: Address of the GTE router
+            config: NetworkConfig instance for network configuration
             account: LocalAccount instance for signing transactions
         """
+        self._config = config
         self._web3 = web3
         self._account = account
         self._wallet_address = web3.eth.default_account
-        self._chain_client = ChainClient(web3, gte_router_address)
+        self._chain_client = ChainClient(web3, config.router_address, config.launchpad_address, config.clob_manager_address, config.perp_manager_address, config.account_manager_address, config.operator_address, config.weth_address)
         self._scheduler = BoundedNonceTxScheduler(
             web3=self._web3,
             account=self._account,
         )
         self._info = info
         
-        # Cache for approved clob tokens
-        self._approved_spot_tokens: set[ChecksumAddress] = set()
-        
-        # Cache for approved swap tokens
-        self._approved_swap_tokens: set[ChecksumAddress] = set()
-        
-        # Cache for approved launchpad tokens
-        self._approved_launchpad_tokens: set[ChecksumAddress] = set()
-        
-        # TOB cache for market order optimization
-        self._tob_cache: dict[ChecksumAddress, tuple[Decimal, Decimal]] = {}  # market -> (bid, ask)
-        
-        # Maximum approval amount (2^256 - 1)
+        self._approved_am_tokens: set[ChecksumAddress] = set()
+        self._approved_pm_tokens: bool = False
         self._max_approval = 2**256 - 1
+
+        self._spot_market_cache: dict[ChecksumAddress, Clob] = {}
+
+    def perp_asset_to_bytes32(self, asset: str) -> HexBytes:
+        """
+        Convert a perpetual asset name to a bytes32.
+        """
+        return HexBytes(asset.encode("utf-8").ljust(32, b"\0"))
+    
+    def _convert_atomic_to_decimal(self, amount: int) -> Decimal:
+        """Convert decimal amount to atomic units based on token type."""
+        return Decimal(amount) / Decimal(10 ** 18)
+    
+    def _convert_decimal_to_atomic(self, amount: Decimal) -> int:
+        """Convert atomic amount to decimal units based on token type."""
+        return int(amount * (10 ** 18))
+
+    async def _ensure_pm_approval(
+        self,
+        capUSD_address: ChecksumAddress,
+        **kwargs,
+    ):
+        """
+        Ensure the correct token is approved for the required amount.
+        Uses infinite approvals (2^256 - 1) and caches approved tokens.
+        """ 
+        token_address = capUSD_address
+
+        # Check if we've already approved this token
+        if self._approved_pm_tokens:
+            return
+        
+        # check if allowance is already set
+        allowance = await self._chain_client.get_erc20(capUSD_address).allowance(owner=self.wallet_address, spender=self._chain_client.perp_manager_address)
+        if allowance >= self._max_approval // 2:
+            self._approved_pm_tokens = True
+            return
+        
+        # Need to approve - use infinite approval
+        _ = await self._scheduler.send(self._chain_client.get_erc20(capUSD_address).approve(spender=self._chain_client.perp_manager_address, value=self._max_approval, **kwargs))
+        
+        # Cache the token as approved
+        self._approved_pm_tokens = True
+
+    async def perp_deposit(
+        self,
+        amount: Decimal,
+        return_built_tx: bool = False,
+        **kwargs: Unpack[TxParams],
+    ):
+        """
+        Deposit capUSD collateral to the perpetuals manager.
+        
+        Args:
+            amount: Amount to deposit in decimal units
+            return_built_tx: Whether to return built transaction data
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction receipt from the deposit operation
+        """
+        await self._ensure_pm_approval(self._config.collateral_asset_address)
+
+        amount_atomic = self._convert_decimal_to_atomic(amount)
+        tx = self._chain_client.perp_manager.deposit(
+            account=self.wallet_address,
+            amount=amount_atomic,
+            **kwargs,
+        )
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
+        return await self._scheduler.send(tx)
+
+    async def perp_withdraw(
+        self,
+        amount: Decimal,
+        return_built_tx: bool = False,
+        **kwargs: Unpack[TxParams],
+    ):
+        """
+        Withdraw capUSD collateral from the perpetuals manager.
+        
+        Args:
+            amount: Amount to withdraw in decimal units
+            return_built_tx: Whether to return built transaction data
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction receipt from the withdraw operation
+        """
+        amount_atomic = self._convert_decimal_to_atomic(amount)
+        tx = self._chain_client.perp_manager.withdraw(
+            account=self.wallet_address,
+            amount=amount_atomic,
+            **kwargs,
+        )
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
+        return await self._scheduler.send(tx)
+
+    async def perp_add_margin(
+        self,
+        subaccount: int,
+        amount: Decimal,
+        return_built_tx: bool = False,
+        **kwargs: Unpack[TxParams],
+    ):
+        """
+        Add margin to a perpetuals subaccount.
+        
+        Args:
+            subaccount: Subaccount ID
+            amount: Amount to add in decimal units
+            return_built_tx: Whether to return built transaction data
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction receipt from the add margin operation
+        """
+        amount_atomic = self._convert_decimal_to_atomic(amount)
+        tx = self._chain_client.perp_manager.add_margin(
+            account=self.wallet_address,
+            subaccount=subaccount,
+            amount=amount_atomic,
+            **kwargs,
+        )
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
+        return await self._scheduler.send(tx)
+
+    async def perp_remove_margin(
+        self,
+        subaccount: int,
+        amount: Decimal,
+        return_built_tx: bool = False,
+        **kwargs: Unpack[TxParams],
+    ):
+        """
+        Remove margin from a perpetuals subaccount.
+        
+        Args:
+            subaccount: Subaccount ID
+            amount: Amount to remove in decimal units
+            return_built_tx: Whether to return built transaction data
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction receipt from the remove margin operation
+        """
+        amount_atomic = self._convert_decimal_to_atomic(amount)
+        tx = self._chain_client.perp_manager.remove_margin(
+            account=self.wallet_address,
+            subaccount=subaccount,
+            amount=amount_atomic,
+            **kwargs,
+        )
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
+        return await self._scheduler.send(tx)
+    
+    async def perp_amend_order(
+        self,
+        asset: str,
+        order_id: int,
+        subaccount: int,
+        side: Side,
+        amount: Decimal,
+        price: Decimal,
+        return_built_tx: bool = False,
+        **kwargs: Unpack[TxParams],
+    ):
+        """
+        Amend a perpetuals order.
+        
+        Args:
+            asset: Asset identifier
+            order_id: Order ID to amend
+            subaccount: Subaccount ID
+            side: Order side
+            amount: Order amount in decimal units
+            price: Order price in decimal units
+            return_built_tx: Whether to return built transaction data
+            **kwargs: Additional transaction parameters
+        """
+        amount_atomic = self._convert_decimal_to_atomic(amount)
+        price_atomic = self._convert_decimal_to_atomic(price)
+        args = AmendLimitOrderArgsPerp(
+            asset=self.perp_asset_to_bytes32(asset),
+            subaccount=subaccount,
+            order_or_client_id=order_id,
+            base_amount=amount_atomic,
+            price=price_atomic,
+            expiry_time=0,
+            side=side.value,
+            reduce_only=False,
+        )
+        tx = self._chain_client.perp_manager.amend_limit_order(
+            account=self.wallet_address,
+            args=args,
+            **kwargs,
+        ).with_event(self._chain_client.perp_manager.contract.events.OrderAmended())
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
+        return await self._scheduler.send(tx)
+        
+    
+    async def perp_update_leverage(
+        self,
+        asset: str,
+        subaccount: int = 1,
+        leverage: Decimal = Decimal(1),
+        return_built_tx: bool = False,
+        **kwargs: Unpack[TxParams],
+    ):
+        """
+        Update the leverage for a perpetual market.
+        """
+        leverage_atomic = self._convert_decimal_to_atomic(leverage)
+        tx = self._chain_client.perp_manager.set_position_leverage(
+            account=self.wallet_address,
+            asset=self.perp_asset_to_bytes32(asset),
+            subaccount=subaccount,
+            new_leverage=leverage_atomic,
+        )
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
+        return await self._scheduler.send_wait(tx)
+
+    async def perp_place_order(
+        self,
+        asset: str,
+        side: Side,
+        amount: Decimal,
+        limit_price: Decimal,
+        subaccount: int = 0,
+        expiry_time: int = 0,
+        base_denominated: bool = True,
+        tif: int = 0,  # 0 = GTC (Good Till Cancelled)
+        client_order_id: int = 0,
+        reduce_only: bool = False,
+        return_built_tx: bool = False,
+        **kwargs: Unpack[TxParams],
+    ):
+        """
+        Place an order on a perpetual market.
+        
+        Args:
+            asset: Asset identifier (market)
+            side: Order side (BUY=0, SELL=1)
+            amount: Order amount in decimal units
+            limit_price: Limit price in decimal units
+            subaccount: Subaccount ID (default: 0)
+            expiry_time: Order expiry timestamp (0 = no expiry)
+            base_denominated: Whether amount is in base units (default: True)
+            tif: Time in force (0 = GTC, default: 0)
+            return_built_tx: Whether to return built transaction data
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction receipt from the place order operation
+        """
+        # Convert decimal inputs to atomic units
+        amount_atomic = self._convert_decimal_to_atomic(amount)
+        limit_price_atomic = self._convert_decimal_to_atomic(limit_price)
+        
+        # Create PlaceOrderArgsPerp with the correct fields for PerpManager
+        args = PlaceOrderArgsPerp(
+            subaccount=subaccount,
+            asset=self.perp_asset_to_bytes32(asset),
+            side=side.value,
+            builder_code=HexBytes('00' * 32),
+            limit_price=limit_price_atomic,
+            amount=amount_atomic,
+            base_denominated=base_denominated,
+            tif=tif,
+            expiry_time=expiry_time,
+            client_order_id=client_order_id,
+            reduce_only=reduce_only,
+        )
+        
+        tx = self._chain_client.perp_manager.place_order(
+            account=self.wallet_address,
+            args=args,
+            **kwargs,
+        ).with_event(self._chain_client.perp_manager.contract.events.OrderProcessed())
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
+        return await self._scheduler.send_wait(tx)
+
+    async def perp_get_position(
+        self,
+        asset: str,
+        subaccount: int,
+    ):
+        """
+        Get position information for a perpetuals asset.
+        
+        Args:
+            asset: Asset identifier
+            subaccount: Subaccount ID
+            
+        Returns:
+            Position data
+        """
+        return await self._chain_client.perp_manager.get_position(
+            asset=self.perp_asset_to_bytes32(asset),
+            account=self.wallet_address,
+            subaccount=subaccount,
+        )
+
+    async def perp_get_margin_balance(
+        self,
+        subaccount: int,
+    ) -> int:
+        """
+        Get margin balance for a subaccount.
+        
+        Args:
+            subaccount: Subaccount ID
+            
+        Returns:
+            Margin balance in atomic units
+        """
+        return await self._chain_client.perp_manager.get_margin_balance(
+            account=self.wallet_address,
+            subaccount=subaccount,
+        )
+    
+    async def perp_get_mark_price(
+        self,
+        asset: str,
+    ) -> int:
+        """
+        Get mark price for a perpetual market.
+        """
+        return await self._chain_client.perp_manager.get_mark_price(self.perp_asset_to_bytes32(asset))
+    
+
+    async def perp_cancel_limit_orders(
+        self,
+        asset: str,
+        subaccount: int,
+        order_ids: list[int],
+        return_built_tx: bool = False,
+        **kwargs: Unpack[TxParams],
+    ):
+        """
+        Cancel limit orders on a perpetual market.
+        
+        Args:
+            asset: Asset identifier (market)
+            subaccount: Subaccount ID
+            order_ids: List of order IDs to cancel
+            return_built_tx: Whether to return built transaction data
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction receipt from the cancel operation
+        """
+        tx = self._chain_client.perp_manager.cancel_limit_orders(
+            asset=self.perp_asset_to_bytes32(asset),
+            account=self.wallet_address,
+            subaccount=subaccount,
+            order_ids=order_ids,
+            **kwargs,
+        ).with_event(self._chain_client.perp_manager.contract.events.OrderCanceled())
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
+        return await self._scheduler.send(tx)
+
+    async def perp_get_account_value(
+        self,
+        subaccount: int,
+    ) -> int:
+        """
+        Get total account value for a subaccount.
+        
+        Args:
+            subaccount: Subaccount ID
+            
+        Returns:
+            Account value in atomic units
+        """
+        return await self._chain_client.perp_manager.get_account_value(
+            account=self.wallet_address,
+            subaccount=subaccount,
+        )
+
+    async def perp_get_free_collateral_balance(self) -> int:
+        """
+        Get free collateral balance available for trading.
+        
+        Returns:
+            Free collateral balance in atomic units
+        """
+        return await self._chain_client.perp_manager.get_free_collateral_balance(
+            account=self.wallet_address,
+        )
+
+    async def perp_is_liquidatable(
+        self,
+        subaccount: int,
+    ) -> bool:
+        """
+        Check if a subaccount is liquidatable.
+        
+        Args:
+            subaccount: Subaccount ID
+            
+        Returns:
+            True if the subaccount is liquidatable
+        """
+        return await self._chain_client.perp_manager.is_liquidatable(
+            account=self.wallet_address,
+            subaccount=subaccount,
+        )
+
+    # ================= ACCOUNT MANAGER OPERATIONS =================
+
+    async def _ensure_am_approval(
+        self,
+        token: Erc20,
+        **kwargs,
+    ):
+        """
+        Ensure the correct token is approved for the required amount.
+        Uses infinite approvals (2^256 - 1) and caches approved tokens.
+        """ 
+        token_address = token.address
+        
+        # Check if we've already approved this token
+        if token_address in self._approved_am_tokens:
+            return
+        
+        # check if allowance is already set
+        allowance = await token.allowance(owner=self.wallet_address, spender=self._chain_client.clob_manager_address)
+        if allowance >= self._max_approval // 2:
+            self._approved_am_tokens.add(token_address)
+            return
+        
+        # Need to approve - use infinite approval
+        _ = await self._scheduler.send(token.approve(spender=self._chain_client.clob_manager_address, value=self._max_approval, **kwargs))
+        
+        # Cache the token as approved
+        self._approved_am_tokens.add(token_address)
+
+    async def account_deposit(
+        self,
+        token: ChecksumAddress,
+        amount: Decimal,
+        return_built_tx: bool = False,
+        **kwargs: Unpack[TxParams],
+    ):
+        """
+        Deposit tokens to the account manager.
+        
+        Args:
+            token: Token address
+            amount: Amount to deposit in atomic units
+            return_built_tx: Whether to return built transaction data
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction receipt from the deposit operation
+        """
+        amount_atomic = self._convert_decimal_to_atomic(amount)
+        await self._ensure_am_approval(self._chain_client.get_erc20(token))
+
+        tx = self._chain_client.account_manager.deposit(
+            account=self.wallet_address,
+            token=token,
+            amount=amount_atomic,
+            **kwargs,
+        )
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
+        return await self._scheduler.send(tx)
+
+    async def account_withdraw(
+        self,
+        token: ChecksumAddress,
+        amount: int,
+        return_built_tx: bool = False,
+        **kwargs: Unpack[TxParams],
+    ):
+        """
+        Withdraw tokens from the account manager.
+        
+        Args:
+            token: Token address
+            amount: Amount to withdraw in atomic units
+            return_built_tx: Whether to return built transaction data
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction receipt from the withdraw operation
+        """
+        tx = self._chain_client.account_manager.withdraw(
+            account=self.wallet_address,
+            token=token,
+            amount=amount,
+            **kwargs,
+        )
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
+        return await self._scheduler.send(tx)
+
+    async def account_get_balance(
+        self,
+        token: ChecksumAddress,
+        account: ChecksumAddress | None = None,
+    ) -> int:
+        """
+        Get account balance for a token from the account manager.
+        
+        Args:
+            token: Token address
+            account: Account address (defaults to wallet address)
+            
+        Returns:
+            Balance in atomic units
+        """
+        account_addr = account if account else self.wallet_address
+        return await self._chain_client.account_manager.get_account_balance(
+            account=account_addr,
+            token=token,
+        )
+
+    async def account_deposit_from_perps(
+        self,
+        amount: int,
+        return_built_tx: bool = False,
+        **kwargs: Unpack[TxParams],
+    ):
+        """
+        Deposit collateral from perpetuals to account manager.
+        
+        Args:
+            amount: Amount to deposit in atomic units
+            return_built_tx: Whether to return built transaction data
+            **kwargs: Additional transaction parameters
+            
+        Returns:
+            Transaction receipt from the deposit operation
+        """
+        tx = self._chain_client.perp_manager.deposit_from_spot(
+            account=self.wallet_address,
+            amount=amount,
+            **kwargs,
+        )
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
+        return await self._scheduler.send(tx)
+
+    async def account_get_fee_tier(
+        self,
+        account: ChecksumAddress | None = None,
+    ) -> int:
+        """
+        Get fee tier for an account.
+        
+        Args:
+            account: Account address (defaults to wallet address)
+            
+        Returns:
+            Fee tier
+        """
+        account_addr = account if account else self.wallet_address
+        return await self._chain_client.account_manager.get_fee_tier(account=account_addr)
 
     @property
     def wallet_address(self) -> ChecksumAddress:
@@ -81,19 +642,8 @@ class ExecutionClient:
 
     async def close(self):
         """Clean up resources and unsubscribe from all WebSocket subscriptions."""
-        # Unsubscribe from all TOB subscriptions
-        for market_address in list(self._tob_cache.keys()):
-            try:
-                await self._info.unsubscribe_orderbook(market_address, limit=1)
-                logger.debug(f"Unsubscribed from TOB updates for {market_address}")
-            except Exception as e:
-                logger.warning(f"Error unsubscribing from {market_address}: {e}")
-        
         # Stop the transaction scheduler
         await self._scheduler.stop()
-        
-        # Clear caches
-        self._tob_cache.clear()
         
         logger.info("ExecutionClient cleanup completed")
 
@@ -111,97 +661,13 @@ class ExecutionClient:
         if return_built_tx:
             return await self._scheduler.return_transaction_data(token.approve(spender=contract_address, value=self._max_approval, **kwargs))
         _ = await self._scheduler.send(token.approve(spender=contract_address, value=self._max_approval, **kwargs))
-        
     
-    async def _ensure_spot_approval(
-        self,
-        token: Erc20,
-        **kwargs,
-    ):
+    async def get_erc20(self, token_address: ChecksumAddress) -> Erc20:
         """
-        Ensure the correct token is approved for the required amount.
-        Uses infinite approvals (2^256 - 1) and caches approved tokens.
-        """ 
-        token_address = token.address
-        
-        # Check if we've already approved this token
-        if token_address in self._approved_spot_tokens:
-            return
-        
-        # check if allowance is already set
-        allowance = await token.allowance(owner=self.wallet_address, spender=self._chain_client.clob_manager_address)
-        if allowance >= self._max_approval // 2:
-            self._approved_spot_tokens.add(token_address)
-            return
-        
-        # Need to approve - use infinite approval
-        _ = await self._scheduler.send(token.approve(spender=self._chain_client.clob_manager_address, value=self._max_approval, **kwargs))
-        
-        # Cache the token as approved
-        self._approved_spot_tokens.add(token_address)
+        Get an Erc20 token contract.
+        """
+        return self._chain_client.get_erc20(token_address)
 
-    async def _ensure_swap_approval(
-        self,
-        token: Erc20,
-        **kwargs,
-    ):
-        """
-        Ensure the token is approved for swap operations.
-        Uses infinite approvals (2^256 - 1) and caches approved tokens.
-        """ 
-        token_address = token.address
-        
-        # Check if we've already approved this token for swaps
-        if token_address in self._approved_swap_tokens:
-            return
-        
-        # check if allowance is already set
-        allowance = await token.allowance(owner=self.wallet_address, spender=self._chain_client.univ2_router_address)
-        if allowance >= self._max_approval // 2:
-            self._approved_swap_tokens.add(token_address)
-            return
-        
-        # Need to approve - use infinite approval
-        _ = await self._scheduler.send(token.approve(spender=self._chain_client.univ2_router_address, value=self._max_approval, **kwargs))
-        
-        # Cache the token as approved for swaps
-        self._approved_swap_tokens.add(token_address)
-
-    # ================= LAUNCHPAD OPERATIONS =================
-    
-    async def _ensure_launchpad_approval(
-        self,
-        token: Erc20,
-        **kwargs,
-    ):
-        """
-        Ensure the token is approved for launchpad operations.
-        Uses infinite approvals (2^256 - 1) and caches approved tokens.
-        """ 
-        token_address = token.address
-        
-        # Check if we've already approved this token for launchpad
-        if token_address in self._approved_launchpad_tokens:
-            return
-        
-        # check if allowance is already set
-        allowance = await token.allowance(owner=self.wallet_address, spender=self._chain_client.launchpad_address)
-        if allowance >= self._max_approval // 2:
-            self._approved_launchpad_tokens.add(token_address)
-            return
-        
-        # Standard DeFi pattern: approve the launchpad contract to spend this token
-        # This allows launchpad.transferFrom(user, launchpad, amount) to work
-        _ = await self._scheduler.send(token.approve(
-            spender=self._chain_client.launchpad_address, 
-            value=self._max_approval, 
-            **kwargs
-        ))
-        
-        # Cache the token as approved
-        self._approved_launchpad_tokens.add(token_address)
-        
-        logger.debug(f"Approved {token_address} for launchpad spending by {self._chain_client.launchpad_address}")
 
     async def launchpad_buy_exact_quote(
         self,
@@ -240,7 +706,7 @@ class ExecutionClient:
         
         # Ensure approval for quote token
         quote_token_contract = self._chain_client.get_erc20(quote_token.address)
-        await self._ensure_launchpad_approval(
+        await self._ensure_am_approval(
             token=quote_token_contract,
             **kwargs,
         )
@@ -297,7 +763,7 @@ class ExecutionClient:
         
         # Ensure approval for launch token
         launch_token_contract = self._chain_client.get_erc20(launch_token.address)
-        await self._ensure_launchpad_approval(
+        await self._ensure_am_approval(
             token=launch_token_contract,
             **kwargs,
         )
@@ -384,14 +850,6 @@ class ExecutionClient:
         effective_price = quote_amount / base_amount if base_amount > 0 else Decimal('0')
         
         return quote_amount, effective_price
-    
-    # ================= EXISTING METHODS CONTINUE... =================
-
-    def _convert_amount_to_atomic(self, market: Market, amount: Decimal, is_base: bool) -> int:
-        """Convert decimal amount to atomic units based on token type."""
-        if is_base:
-            return market.base.convert_quantity_to_amount(amount)
-        return market.quote.convert_quantity_to_amount(amount)
 
     # ================= TOKEN SWAP OPERATIONS =================
     
@@ -497,7 +955,7 @@ class ExecutionClient:
         # Only approve if input token is not ETH/WETH (for ETH swaps, no approval needed)
         if token_in.address != self._chain_client.weth_address:
             token_in_contract = self._chain_client.get_erc20(token_in.address)
-            await self._ensure_swap_approval(
+            await self._ensure_am_approval(
                 token=token_in_contract,
                 **kwargs,
             )
@@ -521,8 +979,8 @@ class ExecutionClient:
 
     def _get_swap_for_exact_function(
         self,
-        token_in: Token,
-        token_out: Token,
+        token_in: ChecksumAddress,
+        token_out: ChecksumAddress,
         amount_out_atomic: int,
         amount_in_max: int,
         path: list[ChecksumAddress],
@@ -544,8 +1002,8 @@ class ExecutionClient:
         Returns:
             TypedContractFunction for the appropriate swap method
         """
-        is_eth_in = token_in.address == self._chain_client.weth_address
-        is_eth_out = token_out.address == self._chain_client.weth_address
+        is_eth_in = token_in == self._chain_client.weth_address
+        is_eth_out = token_out == self._chain_client.weth_address
         
         if is_eth_in and not is_eth_out:
             # ETH -> Token: use swapETHForExactTokens
@@ -580,8 +1038,8 @@ class ExecutionClient:
 
     async def swap_tokens_for_exact_output(
         self,
-        token_in: Token,
-        token_out: Token,
+        token_in: ChecksumAddress,
+        token_out: ChecksumAddress,
         amount_out: Decimal,
         slippage_tolerance: float = 0.01,
         deadline_seconds: int = 1200,
@@ -603,10 +1061,10 @@ class ExecutionClient:
             Transaction receipt from the swap
         """
         # Convert decimal amount to atomic units
-        amount_out_atomic = token_out.convert_quantity_to_amount(amount_out)
+        amount_out_atomic = self._convert_decimal_to_atomic(amount_out)
         
         # Create swap path
-        path = [token_in.address, token_out.address]
+        path = [token_in, token_out]
         
         # Get required input amount
         amounts_in = await self._chain_client.univ2_router.get_amounts_in(amount_out_atomic, path)
@@ -618,15 +1076,12 @@ class ExecutionClient:
         # Calculate deadline
         deadline = int(time.time()) + deadline_seconds
         
-        # Only approve if input token is not ETH/WETH (for ETH swaps, no approval needed)
-        if token_in.address != self._chain_client.weth_address:
-            token_in_contract = self._chain_client.get_erc20(token_in.address)
-            await self._ensure_swap_approval(
+        if token_in != self._chain_client.weth_address:
+            token_in_contract = self._chain_client.get_erc20(token_in)
+            await self._ensure_am_approval(
                 token=token_in_contract,
                 **kwargs,
             )
-        
-        logger.info(f"Swapping {token_in.symbol} for exactly {amount_out} {token_out.symbol}")
 
         # Get the appropriate swap function
         swap_tx = self._get_swap_for_exact_function(
@@ -645,8 +1100,8 @@ class ExecutionClient:
 
     async def get_swap_quote(
         self,
-        token_in: Token,
-        token_out: Token,
+        token_in: ChecksumAddress,
+        token_out: ChecksumAddress,
         amount_in: Decimal,
     ) -> tuple[Decimal, Decimal]:
         """
@@ -661,76 +1116,22 @@ class ExecutionClient:
             Tuple of (expected_output_amount, effective_price)
         """
         # Convert decimal amount to atomic units
-        amount_in_atomic = token_in.convert_quantity_to_amount(amount_in)
+        amount_in_atomic = self._convert_decimal_to_atomic(amount_in)
         
         # Create swap path
-        path = [token_in.address, token_out.address]
+        path = [token_in, token_out]
         
         # Get expected output amount
         amounts_out = await self._chain_client.univ2_router.get_amounts_out(amount_in_atomic, path)
         expected_out_atomic = amounts_out[1]
         
         # Convert back to decimal units
-        expected_out = token_out.convert_amount_to_quantity(expected_out_atomic)
+        expected_out = self._convert_atomic_to_decimal(expected_out_atomic)
         
         # Calculate effective price
         effective_price = expected_out / amount_in if amount_in > 0 else Decimal('0')
         
         return expected_out, effective_price
-
-    # ================= EXISTING METHODS CONTINUE... =================
-
-    async def deposit(
-            self, token_address: ChecksumAddress, amount: int, return_built_tx: bool = False, **kwargs: Unpack[TxParams]
-    ):
-        """
-        Deposit tokens to the exchange for trading.
-
-        Args:
-            token_address: Address of token to deposit
-            amount: Amount to deposit in base units
-            **kwargs: Additional transaction parameters
-
-        Returns:
-            Transaction result from the deposit operation
-        """
-
-        token = self._chain_client.get_erc20(token_address)
-        
-        # time the approval
-        await self._ensure_spot_approval(token, **kwargs)
-
-        tx = self._chain_client.clob_manager.deposit(
-            account=self.wallet_address,
-            token=token_address,
-            amount=amount,
-            from_operator=False,
-            **kwargs,
-        )
-        if return_built_tx:
-            return await self._scheduler.return_transaction_data(tx)
-        return await self._scheduler.send(tx)
-
-    async def withdraw(
-            self, token_address: ChecksumAddress, amount: int, return_built_tx: bool = False, **kwargs: Unpack[TxParams]
-    ):
-        """
-        Withdraw tokens from the exchange.
-
-        Args:
-            token_address: Address of token to withdraw
-            amount: Amount to withdraw
-            **kwargs: Additional transaction parameters
-
-        Returns:
-            Transaction result from the withdrawal transaction
-        """
-        tx = self._chain_client.clob_manager.withdraw(
-            account=self.wallet_address, token=token_address, amount=amount, to_operator=False, **kwargs
-        )
-        if return_built_tx:
-            return await self._scheduler.return_transaction_data(tx)
-        return await self._scheduler.send(tx)
 
     async def get_token_balance(self, token_address: ChecksumAddress) -> int:
         """
@@ -793,17 +1194,8 @@ class ExecutionClient:
 
     # ================= APPROVE OPERATIONS =================
 
-    def _encode_rules(self, roles: list[OperatorRole]) -> int:
-        """Encode operator roles into an integer."""
-        roles_int = 0
-        for role in roles:
-            roles_int |= role.value
-        return roles_int
-
     async def approve_operator(self, operator_address: ChecksumAddress,
-                               roles: list[OperatorRole] = [],
-                               unsafe_withdraw: bool = False,
-                               unsafe_launchpad_fill: bool = False,
+                               roles: int = 0,
                                return_built_tx: bool = False,
                                **kwargs: Unpack[TxParams]):
         """
@@ -811,25 +1203,18 @@ class ExecutionClient:
 
         Args:
             operator_address: Address of the operator to approve
-            roles: List of roles to assign to the operator
-            unsafe_withdraw: Whether to allow unsafe withdrawals
-            unsafe_launchpad_fill: Whether to allow unsafe launchpad fills
+            roles: Integer representing roles to assign to the operator
             **kwargs: Additional transaction parameters
 
         Returns:
             Transaction hash from the approve_operator operation
         """
-        if OperatorRole.WITHDRAW in roles and not unsafe_withdraw:
-            raise ValueError("Unsafe withdraw must be enabled to approve withdraw role")
-        if OperatorRole.LAUNCHPAD_FILL in roles and not unsafe_launchpad_fill:
-            raise ValueError("Unsafe launchpad fill must be enabled to approve launchpad fill role")
-        
-        roles_int = self._encode_rules(roles)
         logger.info(f"Approving operator {operator_address} for account {self.wallet_address} with roles {roles}")
 
-        tx = self._chain_client.clob_manager.approve_operator(
+        tx = self._chain_client.account_manager.approve_operator(
+            account=self.wallet_address,
             operator=operator_address,
-            roles=roles_int,
+            roles=roles,
             **kwargs,
         )
         if return_built_tx:
@@ -837,49 +1222,48 @@ class ExecutionClient:
         return await self._scheduler.send(tx)
 
     async def disapprove_operator(self, operator_address: ChecksumAddress,
-                                  roles: list[OperatorRole],
+                                  roles: int,
                                   **kwargs: Unpack[TxParams]):
         """
         Disapprove an operator from acting on behalf of the account.
 
         Args:
             operator_address: Address of the operator to disapprove
-            roles: List of roles to disapprove
+            roles: Integer representing roles to disapprove
             **kwargs: Additional transaction parameters
 
         Returns:
             Transaction hash from the disapprove_operator operation
         """
-        roles_int = self._encode_rules(roles)
         logger.info(f"Disapproving operator {operator_address} for account {self.wallet_address} with roles {roles}")
 
-        return await self._scheduler.send(self._chain_client.clob_manager.disapprove_operator(
+        return await self._scheduler.send(self._chain_client.account_manager.disapprove_operator(
+            account=self.wallet_address,
             operator=operator_address,
-            roles=roles_int,
+            roles=roles,
             **kwargs
         ))
 
-    # ================= ORDER OPERATIONS =================
-
-    async def get_tob(self, market: Market) -> tuple[Decimal, Decimal]:
+    async def get_tob(self, market_address: ChecksumAddress) -> tuple[Decimal, Decimal]:
         """
         Get the top of book for a market.
         Returns:
             Tuple of (best bid price, best ask price)
         """
-        clob = self._chain_client.get_clob(market.address)
+        clob = self._chain_client.get_clob(market_address)
         best_bid, best_ask = await clob.get_tob()
-        return market.quote.convert_amount_to_quantity(best_bid), market.quote.convert_amount_to_quantity(best_ask)
+        best_bid = self._convert_atomic_to_decimal(best_bid)
+        best_ask = self._convert_atomic_to_decimal(best_ask)
+        return best_bid, best_ask
     
-    def place_limit_order_tx(
+    def spot_place_order_tx(
             self,
             market_address: ChecksumAddress,
-            side: OrderSide,
+            side: Side,
             amount: int,
             price: int,
-            time_in_force: TimeInForce = TimeInForce.GTC,
-            client_order_id: int = 0,
-            settlement: Settlement = Settlement.INSTANT,
+            time_in_force: TiF,
+            client_order_id: int,
             **kwargs,
     ) -> TypedContractFunction[Any]:
         """
@@ -901,59 +1285,30 @@ class ExecutionClient:
         Returns:
             TypedContractFunction that can be used to execute the transaction
         """
+        clob = self._chain_client.get_clob(market_address)
+        return clob.place_order(
+            account=self.wallet_address,
+            args=PlaceOrderArgs(
+                side=side,
+                amount=amount,
+                builder_code=HexBytes('00' * 32),
+                expiry_time=0,
+                base_denominated=True,
+                limit_price=price,
+                tif=time_in_force,
+                client_order_id=client_order_id,
+            ),
+            **kwargs,
+        )
 
-        # For IOC and FOK orders, we use the fill order API
-        if time_in_force in [TimeInForce.IOC, TimeInForce.FOK]:
-            if time_in_force == TimeInForce.IOC:
-                fill_order_type = FillOrderType.IMMEDIATE_OR_CANCEL
-            elif time_in_force == TimeInForce.FOK:
-                fill_order_type = FillOrderType.FILL_OR_KILL
-            else:
-                raise ValueError(f"Unknown time_in_force: {time_in_force}")
-
-            # Create post fill order args using NamedTuple
-            args = PostFillOrderArgs(
-                amount,
-                price,
-                side.value,
-                True,  # amountIsBase - since amount is in base tokens
-                fill_order_type.value,
-                settlement.value,
-            )
-
-            # Return the router transaction
-            return self._chain_client.router.clob_post_fill_order(clob=market_address, args=args, **kwargs)
-        else:
-            if time_in_force == TimeInForce.GTC:
-                tif = LimitOrderType.GOOD_TILL_CANCELLED
-            elif time_in_force == TimeInForce.POST_ONLY:
-                tif = LimitOrderType.POST_ONLY
-            else:
-                raise ValueError(f"Unknown time_in_force: {time_in_force}")
-            
-            # Create post limit order args using NamedTuple
-            args = PostLimitOrderArgs(
-                amount,
-                price,
-                0,  # cancelTimestamp - no expiration
-                side.value,
-                client_order_id,
-                tif.value,
-                settlement.value,
-            )
-
-            # Return the router transaction
-            return self._chain_client.router.clob_post_limit_order(clob=market_address, args=args, **kwargs)
-
-    async def place_limit_order(
+    async def spot_place_order(
             self,
-            market: Market,
-            side: OrderSide,
+            market_address: ChecksumAddress,
+            side: Side,
             amount: Decimal,
             price: Decimal,
-            time_in_force: TimeInForce = TimeInForce.GTC,
+            time_in_force: TiF,
             client_order_id: int = 0,
-            settlement: Settlement = Settlement.INSTANT,
             return_order: bool = False,
             return_built_tx: bool = False,
             **kwargs: Unpack[TxParams],
@@ -973,179 +1328,34 @@ class ExecutionClient:
         Returns:
             Transaction hash of the placed order or Event of the placed order
         """
-        amount_atomic = market.base.convert_quantity_to_amount(amount)
-        price_atomic = market.quote.convert_quantity_to_amount(price)
-        
-        token = self._chain_client.get_erc20(market.quote.address) if side == OrderSide.BUY else self._chain_client.get_erc20(market.base.address)
-        await self._ensure_spot_approval(
-            token=token,
-            **kwargs,
-        )
-        clob = self._chain_client.get_clob(market.address)
-        tx = self.place_limit_order_tx(
-            market_address=market.address,
+        amount_atomic = self._convert_decimal_to_atomic(amount)
+        price_atomic = self._convert_decimal_to_atomic(price)
+
+        clob = self._chain_client.get_clob(market_address)
+        tx = self.spot_place_order_tx(
+            market_address=market_address,
             side=side,
             amount=amount_atomic,
             price=price_atomic,
             time_in_force=time_in_force,
             client_order_id=client_order_id,
-            settlement=settlement,
             **kwargs,
         ).with_event(clob.contract.events.LimitOrderProcessed())
         
         if return_built_tx:
             return await self._scheduler.return_transaction_data(tx)
-        # Send the transaction and return the receipt
         if return_order:
             return await self._scheduler.send_wait(tx)
         else:
             return await self._scheduler.send(tx)
 
-    def place_market_order_tx(
+    def amend_order_tx(
             self,
-            market: Market,
-            side: OrderSide,
-            amount: int,
-            price_limit: int,
-            amount_is_base: bool = True,
-            **kwargs,
-    ) -> TypedContractFunction[Any]:
-        """
-        Place a market order using the router contract.
-
-        Args:
-            market: Market to place the order on
-            side: Order side (BUY or SELL)
-            amount: Order amount in base tokens if amount_is_base is True, otherwise in quote tokens
-            amount_is_base: Whether the amount is in base tokens
-            price_limit: Price limit for the order
-            **kwargs: Additional transaction parameters
-
-        Returns:
-            TypedContractFunction that can be used to execute the transaction
-        """
-
-        # Create post fill order args using named tuple
-        args = PostFillOrderArgs(
-            amount,
-            price_limit,
-            side.value,
-            amount_is_base,
-            FillOrderType.IMMEDIATE_OR_CANCEL.value,
-            Settlement.INSTANT.value,
-        )
-
-        # Return the router transaction
-        return self._chain_client.router.clob_post_fill_order(clob=market.address, args=args, **kwargs)
-
-    async def _ensure_tob_subscription(self, market: Market):
-        """Ensure we have a live TOB subscription for this market."""
-        if market.address in self._tob_cache:
-            return  # Already subscribed
-        
-        def tob_callback(data):
-            """Callback runs in the same event loop - no threading issues."""
-            try:
-                bids = data.get("b", [])
-                asks = data.get("a", [])
-                
-                best_bid = Decimal(bids[0]["px"]) if bids else Decimal('0')
-                best_ask = Decimal(asks[0]["px"]) if asks else Decimal('0')
-                
-                # This is thread-safe because it's all in the same event loop
-                self._tob_cache[market.address] = (best_bid, best_ask)
-                
-                logger.debug(f"TOB updated for {market.address}: {best_bid}/{best_ask}")
-            except Exception as e:
-                logger.warning(f"Error processing TOB update for {market.address}: {e}")
-        
-        # This uses the existing WebSocket connection - no new threads
-        await self._info.subscribe_orderbook(market.address, tob_callback, limit=1)
-        
-        logger.info(f"Subscribed to TOB updates for {market.address}")
-
-    async def _get_cached_tob(self, market: Market) -> tuple[Decimal, Decimal]:
-        """Get TOB from cache or fallback to RPC."""
-        # Ensure subscription exists (this is async but runs in same event loop)
-        await self._ensure_tob_subscription(market)
-        
-        # Check cache
-        if market.address in self._tob_cache:
-            bid, ask = self._tob_cache[market.address]
-            logger.debug(f"Using cached TOB for {market.address}")
-            return bid, ask
-        
-        # Cache miss/stale - fallback to RPC
-        logger.debug(f"TOB cache miss for {market.address}, using RPC fallback")
-        return await self.get_tob(market)
-
-    async def _get_price_limit(self, market: Market, side: OrderSide, slippage: float = 0.01) -> int:
-        """
-        Get the price limit for a market order with slippage applied.
-        Uses cached WebSocket TOB data for better performance.
-        """
-        # Use cached TOB data (fast) with RPC fallback
-        best_bid, best_ask = await self._get_cached_tob(market)
-        
-        if side == OrderSide.BUY:
-            # For BUY orders, use lowest ask with positive slippage
-            return int(market.quote.convert_quantity_to_amount(best_ask * Decimal(str(1 + slippage))))
-        else:
-            # For SELL orders, use highest bid with negative slippage
-            return int(market.quote.convert_quantity_to_amount(best_bid * Decimal(str(1 - slippage))))
-
-    async def place_market_order(
-            self,
-            market: Market,
-            side: OrderSide,
-            amount: Decimal,
-            amount_is_base: bool = True,
-            slippage: float = 0.01,
-            return_built_tx: bool = False,
-            **kwargs,
-    ):
-        """
-        Place a market order using the router contract.
-
-        Args:
-            market: Market to place the order on
-            side: Order side (BUY or SELL)
-            amount: Order amount in decimal units
-            amount_is_base: Whether the amount is in base tokens
-            slippage: Slippage percentage for price limit
-            **kwargs: Additional transaction parameters
-
-        Returns:
-            Transaction receipt of the placed order
-        """
-        amount_atomic = market.base.convert_quantity_to_amount(amount) if amount_is_base else market.quote.convert_quantity_to_amount(amount)
-        price_limit = await self._get_price_limit(market, side, slippage)
-        token = self._chain_client.get_erc20(market.quote.address) if amount_is_base else self._chain_client.get_erc20(market.base.address)
-        
-        await self._ensure_spot_approval(
-            token=token,
-            **kwargs,
-        )
-        
-        tx = self.place_market_order_tx(
-            market=market,
-            side=side,
-            amount=amount_atomic,
-            price_limit=price_limit,
-            amount_is_base=amount_is_base,
-            **kwargs,
-        )
-        if return_built_tx:
-            return await self._scheduler.return_transaction_data(tx)
-        return await self._scheduler.send(tx)
-    
-    async def amend_order_tx(
-            self,
-            market: Market,
+            market_address: ChecksumAddress,
             order_id: int,
-            amount_in_base: int,
-            price_in_ticks: int,
-            side: OrderSide,
+            amount_atomic: int,
+            price_atomic: int,
+            side: Side,
             **kwargs,
     ) -> TypedContractFunction[Any]:
         """
@@ -1163,31 +1373,27 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
         # Get the CLOB contract
-        clob = self._chain_client.get_clob(market.address)
+        clob = self._chain_client.get_clob(market_address)
 
         # Create amend args
         args = AmendArgs(
-            order_id=order_id,
-            amount_in_base=amount_in_base,
-            price=price_in_ticks,
-            cancel_timestamp=0,  # No expiration
+            order_or_client_id=order_id,
+            amount_in_base=amount_atomic,
+            price=price_atomic,
+            cancel_timestamp=0,
             side=side.value,
-            limit_order_type=LimitOrderType.POST_ONLY.value,
-            settlement=Settlement.INSTANT.value,
         )
 
         # Return the transaction
         return clob.amend(account=self.wallet_address, args=args, **kwargs)
 
-    async def amend_order(
+    async def spot_amend_order(
             self,
-            market: Market,
+            market_address: ChecksumAddress,
             order_id: int,
-            side: OrderSide,
-            original_amount: Decimal | None = None,
-            original_price: Decimal | None = None,
-            new_amount: Decimal | None = None,
-            new_price: Decimal | None = None,
+            side: Side,
+            new_amount: Decimal,
+            new_price: Decimal,
             return_built_tx: bool = False,
             **kwargs,
     ):
@@ -1198,43 +1404,32 @@ class ExecutionClient:
             market: Market the order is on
             order_id: ID of the order to amend
             side: Order side
-            original_amount: Original amount for the order
-            original_price: Original price for the order
-            new_amount: New amount for the order (None to keep current)
-            new_price: New price for the order (None to keep current)
+            new_amount: New amount for the order
+            new_price: New price for the order
             **kwargs: Additional transaction parameters
 
         Returns:
             Transaction receipt from the amend operation
         """
-        amount_in_base = market.base.convert_quantity_to_amount(new_amount if new_amount else original_amount) if original_amount else 0
-        price_in_ticks = market.quote.convert_quantity_to_amount(new_price if new_price else original_price) if original_price else 0
-        
-        if amount_in_base == 0 or price_in_ticks == 0:
-            raise ValueError("Amount or price is 0")
-        
-        token = self._chain_client.get_erc20(market.quote.address) if side == OrderSide.BUY else self._chain_client.get_erc20(market.base.address)
-        
-        await self._ensure_spot_approval(
-            token=token,
-            **kwargs,
-        )
+        amount_atomic = self._convert_decimal_to_atomic(new_amount)
+        price_atomic = self._convert_decimal_to_atomic(new_price)
 
         # Create and execute transaction
-        tx = await self.amend_order_tx(
-            market=market, 
+        clob = self._chain_client.get_clob(market_address)
+        tx = self.amend_order_tx(
+            market_address=market_address, 
             order_id=order_id, 
-            amount_in_base=int(amount_in_base),
-            price_in_ticks=int(price_in_ticks),
+            amount_atomic=amount_atomic,
+            price_atomic=price_atomic,
             side=side,
             **kwargs
-        )
+        ).with_event(clob.contract.events.OrderAmended())
         if return_built_tx:
             return await self._scheduler.return_transaction_data(tx)
-        return await self._scheduler.send(tx)
+        return await self._scheduler.send_wait(tx)
 
-    def cancel_order_tx(
-            self, market: Market, order_ids: list[int], **kwargs
+    def spot_cancel_order_tx(
+            self, market_address: ChecksumAddress, order_ids: list[int], **kwargs
     ) -> TypedContractFunction[Any]:
         """
         Cancel an existing order using the router contract.
@@ -1248,80 +1443,32 @@ class ExecutionClient:
             TypedContractFunction that can be used to execute the transaction
         """
 
-        # Create cancel args
-        args = CancelArgs(
-            order_ids, 
-            Settlement.INSTANT.value          
-        )
+        clob = self._chain_client.get_clob(market_address)
+        return clob.cancel(account=self.wallet_address, order_or_client_ids=order_ids, **kwargs)
 
-        # Return the router transaction
-        return self._chain_client.router.clob_cancel(clob=market.address, args=args, is_unwrapping=True, **kwargs)
-
-    async def cancel_order(self, market: Market, order_id: int, return_built_tx: bool = False, **kwargs):
+    async def spot_cancel_orders(self, market_address: ChecksumAddress, order_ids: list[int], return_built_tx: bool = False, **kwargs):
         """
-        Cancel an existing order using the router contract.
+        Cancel existing orders using the router contract.
 
         Args:
-            market: Market the order is on
-            order_id: ID of the order to cancel
+            market_address: Address of the market to cancel orders on
+            order_ids: IDs of the orders to cancel
             **kwargs: Additional transaction parameters
 
         Returns:
             Transaction receipt of the cancellation
         """
-        clob = self._chain_client.get_clob(market.address)
-        tx = self.cancel_order_tx(market=market, order_ids=[order_id], **kwargs)
+        clob = self._chain_client.get_clob(market_address)
+        tx = self.spot_cancel_order_tx(market_address=market_address, order_ids=order_ids, **kwargs).with_event(clob.contract.events.OrderCanceled())
         if return_built_tx:
             return await self._scheduler.return_transaction_data(tx)
-        return await self._scheduler.send(tx)
+        return await self._scheduler.send_wait(tx)
 
-    async def cancel_all_orders(self, market: Market, order_ids: list[int], return_built_tx: bool = False, **kwargs):
-        """
-        Cancel all orders for the current user on a specific market using the router.
-
-        Args:
-            market: Market to cancel orders on
-            order_ids: IDs of the orders to cancel
-            **kwargs: Additional transaction parameters
-            
-        Returns:
-            List of transaction hashes
-        """
-        tx = self.cancel_order_tx(market=market, order_ids=order_ids, **kwargs)
-        if return_built_tx:
-            return await self._scheduler.return_transaction_data(tx)
-        return await self._scheduler.send(tx)
-
-    def clear_approval_cache(self):
-        """Clear the approval cache. Use this if you want to force re-checking approvals."""
-        self._approved_spot_tokens.clear()
-        self._approved_swap_tokens.clear()
-        self._approved_launchpad_tokens.clear()
-        logger.info("Approval cache cleared")
-
-    def clear_tob_cache(self):
-        """Clear TOB cache - useful for testing or if stale data is suspected.
-        Note: This also clears subscription tracking, so new subscriptions will be created as needed."""
-        self._tob_cache.clear()
-        logger.info("TOB cache cleared")
-
-    async def unsubscribe_tob(self, market: Market):
-        """Unsubscribe from TOB updates for a specific market."""
-        if market.address in self._tob_cache:
-            try:
-                await self._info.unsubscribe_orderbook(market.address, limit=1)
-                self._tob_cache.pop(market.address, None)
-                logger.info(f"Unsubscribed from TOB updates for {market.address}")
-            except Exception as e:
-                logger.warning(f"Error unsubscribing from {market.address}: {e}")
-
-    # ================= UTILITY OPERATIONS =================
-
-    async def get_balance(
+    async def get_account_manager_balance(
             self, token_address: ChecksumAddress, account: ChecksumAddress | None = None
     ) -> tuple[Decimal, Decimal]:
         """
-        Get token balance for an account both on-chain and in the exchange.
+        Get token balance for an account both on-chain and in the account manager.
 
         Args:
             token_address: Address of token to check
@@ -1330,18 +1477,16 @@ class ExecutionClient:
         Returns:
             Tuple of (wallet_balance, exchange_balance) in human-readable format
         """
-        token_details = await self._info.get_token(token_address)
         account = account if account else self.wallet_address
         token = self._chain_client.get_erc20(token_address)
 
-        # Get wallet balance
-        wallet_balance_raw = await token.balance_of(account)
-        wallet_balance = token_details.convert_amount_to_quantity(wallet_balance_raw)
+        wallet_balance_atomic = await token.balance_of(account)
+        wallet_balance = self._convert_atomic_to_decimal(wallet_balance_atomic)
 
-        # Get exchange balance
-        exchange_balance_raw = await self._chain_client.clob_manager.get_account_balance(
-            account, token_address
+        exchange_balance_atomic = await self._chain_client.account_manager.get_account_balance(
+            account=account,
+            token=token_address,
         )
-        exchange_balance = token_details.convert_amount_to_quantity(exchange_balance_raw)
+        exchange_balance = self._convert_atomic_to_decimal(exchange_balance_atomic)
 
         return wallet_balance, exchange_balance

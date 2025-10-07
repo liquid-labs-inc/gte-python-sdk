@@ -12,8 +12,8 @@ from eth_utils.address import to_checksum_address
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
 
-from gte_py.api.chain.events import LimitOrderProcessedEvent, FillOrderProcessedEvent
-from gte_py.api.chain.structs import OrderSide as ContractOrderSide, Order as CLOBOrder
+from gte_py.api.chain.events import OrderProcessedEvent
+from gte_py.api.chain.structs import Side as ContractOrderSide, Order as CLOBOrder
 from gte_py.api.chain.utils import get_current_timestamp
 
 
@@ -154,11 +154,6 @@ class Market(BaseModel):
             price=data.get("price"),
             volume_24hr_usd=data.get("volume24HrUsd"),
         )
-
-    @property
-    def pair(self) -> str:
-        """Get the trading pair symbol."""
-        return f"{self.base.symbol}/{self.quote.symbol}"
 
 class Candle(BaseModel):
     """Candlestick model."""
@@ -411,41 +406,18 @@ class Order(BaseModel):
         )
 
     @classmethod
-    def from_clob_limit_order_processed(
-            cls, event: LimitOrderProcessedEvent, amount: int, side: OrderSide, price: int
+    def from_order_processed_event(
+            cls, event: OrderProcessedEvent, amount: int, side: OrderSide, price: int
     ) -> "Order":
-        """Create an Order object from a CLOB limit order."""
+        """Create an Order object from a order processed event."""
         status = OrderStatus.OPEN
-        if event.base_token_amount_traded == amount:
+        if event.base_posted == amount:
             status = OrderStatus.FILLED
 
         # Create Order model
         return cls(
             order_id=event.order_id,
             market_address=event.account, # ?
-            side=side,
-            order_type=OrderType.LIMIT,
-            remaining_amount=amount,
-            price=price,
-            time_in_force=TimeInForce.GTC,  # Default
-            status=status,
-            owner=event.account,
-            placed_at=0,  # Need to be retrieved from event timestamp
-        )
-
-    @classmethod
-    def from_clob_fill_order_processed(
-            cls, event: FillOrderProcessedEvent, amount: int, side: OrderSide, price: int
-    ) -> "Order":
-        """Create an Order object from a CLOB limit order."""
-        status = OrderStatus.OPEN
-        if event.base_token_amount_traded == amount:
-            status = OrderStatus.FILLED
-
-        # Create Order model
-        return cls(
-            order_id=event.order_id,
-            market_address=event.address,
             side=side,
             order_type=OrderType.LIMIT,
             remaining_amount=amount,
