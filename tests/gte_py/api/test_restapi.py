@@ -63,7 +63,7 @@ class TestRestApiInitialization:
         """Test default parameters create valid instance."""
         client = RestApi()
         
-        assert client.base_url == "https://api-testnet.gte.xyz/v1"
+        assert client.base_url == "https://perps-api.gte.xyz/v1"
         assert client.timeout == 10
         assert client.max_retries == 3
         assert client.retry_delay == 1.0
