@@ -87,7 +87,7 @@ def test_initialization_without_wallet(config, patched_clients):
     client = GTEClient(config=config)
 
     assert client._account is None
-    assert client._execution is None
+    assert client._execution is patched_clients["execution"]
     assert client._web3 is not None
 
 
@@ -113,13 +113,11 @@ def test_execution_property_with_wallet(config, private_key, patched_clients):
 
 
 def test_execution_property_without_wallet(config, patched_clients):
-    """Test that execution property raises assertion error when no wallet address was provided during initialization."""
+    """Test that execution property returns the execution client even when no wallet is provided."""
     client = GTEClient(config=config)
     
-    assert client._execution is None
-    
-    with pytest.raises(AssertionError, match="Execution client not initialized"):
-        _ = client.execution
+    assert client._execution is patched_clients["execution"]
+    assert client.execution is patched_clients["execution"]
 
 
 def test_execution_property_after_wallet_removal(config, private_key, patched_clients):
@@ -201,13 +199,15 @@ async def test_connect_and_disconnect_without_wallet(config, patched_clients):
     assert client.connected is True
     rest.connect.assert_awaited_once()
     ws.connect.assert_awaited_once()
-    assert client._execution is None  # Use private attribute, not property
+    assert client._execution is patched_clients["execution"]  # Execution client is always initialized
+    patched_clients["execution"].init.assert_awaited_once()
 
     await client.disconnect()
     assert client.connected is False
     info.unsubscribe_all.assert_awaited_once()
     rest.disconnect.assert_awaited_once()
     ws.disconnect.assert_awaited_once()
+    patched_clients["execution"].close.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -243,7 +243,7 @@ async def test_context_manager(config, patched_clients):
     client2 = GTEClient(config=config)
     async with client2:
         assert client2.connected is True
-        assert client2._execution is None  # Use private attribute, not property
+        assert client2._execution is patched_clients["execution"]  # Execution client is always initialized
     assert client2.connected is False
 
 

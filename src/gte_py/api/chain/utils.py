@@ -20,7 +20,7 @@ from eth_account.datastructures import SignedTransaction
 from eth_account.signers.local import LocalAccount
 from eth_account.types import PrivateKeyType, TransactionDictType
 from eth_typing import ChecksumAddress
-from eth_utils.address import is_checksum_address
+from eth_utils.address import is_checksum_address, to_checksum_address
 from hexbytes import HexBytes
 from web3 import AsyncWeb3
 from web3.contract.async_contract import AsyncContractFunction, AsyncContractEvent
@@ -253,6 +253,7 @@ def format_contract_function(func: AsyncContractFunction, tx_hash: HexBytes | No
 
 def make_web3(
     rpc_url: str,
+    wallet_address: ChecksumAddress | None = None,
     wallet_private_key: PrivateKeyType | None = None,
 ) -> tuple[AsyncWeb3, LocalAccount | None]:
     """
@@ -267,8 +268,11 @@ def make_web3(
     """
     web3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(rpc_url))
     web3.middleware_onion.clear()
+    if wallet_address:
+        web3.eth.default_account = wallet_address
     if wallet_private_key:
         account = Account.from_key(wallet_private_key)
+        web3.eth.default_account = account.address
         return web3, account
     return web3, None
 
@@ -309,7 +313,7 @@ def normalize_receipt(receipt: TxReceipt) -> TxReceipt:
 class BoundedNonceTxScheduler:
     """A transaction scheduler that manages nonce allocation and prevents nonce gaps."""
     
-    def __init__(self, web3: AsyncWeb3, account: LocalAccount, max_pending_window: int = 499):
+    def __init__(self, web3: AsyncWeb3, account: LocalAccount | None = None, max_pending_window: int = 499):
         """
         Initialize the high-throughput transaction scheduler.
         
@@ -319,8 +323,11 @@ class BoundedNonceTxScheduler:
             max_pending_window: Maximum pending transactions (default: 499)
         """
         self.web3 = web3
-        self.account = account
-        self.from_address = account.address
+        self._account = account
+        if not web3.eth.default_account:
+            web3.eth.default_account = to_checksum_address("0x0000000000000000000000000000000000000000")
+        self.from_address = account.address if account else web3.eth.default_account
+
         self.max_pending_window = max_pending_window
         
         # Lock-based nonce management
@@ -335,6 +342,12 @@ class BoundedNonceTxScheduler:
         self._monitor_interval = 10  # seconds
         
         self.logger = logging.getLogger(__name__)
+    
+    @property
+    def account(self) -> LocalAccount:
+        if not self._account:
+            raise ValueError("No account set")
+        return self._account
 
     async def start(self):
         """Initialize scheduler and optionally start background monitoring."""
@@ -464,6 +477,35 @@ class BoundedNonceTxScheduler:
                 f"Pending transaction window still full after {len(retry_delays)} retries: ",
                 f"{final_pending}/{self.max_pending_window} transactions pending"
             )
+
+    async def return_transaction_data(self, contract_func: "TypedContractFunction[Any]") -> TransactionDictType:
+        """
+        Return the transaction data for a contract function.
+
+        Args:
+            contract_func: The contract function to execute
+
+        Returns:
+            TransactionDictType: transaction data
+        """
+        # get nonce from chain for web3 default account
+        if not self.web3.eth.default_account:
+            raise ValueError("No default account set")
+        nonce = await self.web3.eth.get_transaction_count(self.web3.eth.default_account, "latest")
+        if not self.chain_id:
+            raise ValueError("Chain ID is not set")
+        tx_params: TransactionDictType = {
+                "chainId": self.chain_id,
+                "from": self.from_address,
+                "nonce": Nonce(nonce),
+                "to": contract_func.func_call.address,
+                "data": contract_func.func_call._encode_transaction_data(),
+                "gas": contract_func.params.get("gas", 1_000_000_000), # max gas (1 giga gas)
+                "maxFeePerGas": contract_func.params.get("maxFeePerGas", 2_500_000), # 0.0025 gwei
+                "maxPriorityFeePerGas": contract_func.params.get("maxPriorityFeePerGas", 0),
+                "value": contract_func.params.get("value", 0),
+            }
+        return tx_params
 
     async def _sign_transaction(self, contract_func: "TypedContractFunction[Any]") -> SignedTransaction:
         """

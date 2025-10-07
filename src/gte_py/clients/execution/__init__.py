@@ -29,21 +29,22 @@ class ExecutionClient:
     def __init__(
             self,
             web3: AsyncWeb3,
-            account: LocalAccount,
-            gte_router_address: ChecksumAddress,
             info: InfoClient,
+            gte_router_address: ChecksumAddress,
+            account: LocalAccount | None = None,
     ):
         """
         Initialize the execution client.
 
         Args:
             web3: AsyncWeb3 instance for on-chain interactions
-            account: Address to send transactions from
+            info: InfoClient instance for market data
             gte_router_address: Address of the GTE router
-            clob_manager_address: Address of the CLOB manager
+            account: LocalAccount instance for signing transactions
         """
         self._web3 = web3
         self._account = account
+        self._wallet_address = web3.eth.default_account
         self._chain_client = ChainClient(web3, gte_router_address)
         self._scheduler = BoundedNonceTxScheduler(
             web3=self._web3,
@@ -52,7 +53,7 @@ class ExecutionClient:
         self._info = info
         
         # Cache for approved clob tokens
-        self._approved_clob_tokens: set[ChecksumAddress] = set()
+        self._approved_spot_tokens: set[ChecksumAddress] = set()
         
         # Cache for approved swap tokens
         self._approved_swap_tokens: set[ChecksumAddress] = set()
@@ -65,6 +66,13 @@ class ExecutionClient:
         
         # Maximum approval amount (2^256 - 1)
         self._max_approval = 2**256 - 1
+
+    @property
+    def wallet_address(self) -> ChecksumAddress:
+        """Get the wallet address."""
+        if not self._wallet_address:
+            raise ValueError("No wallet address set")
+        return self._wallet_address
 
     async def init(self):
         """Initialize the chain client."""
@@ -90,8 +98,22 @@ class ExecutionClient:
         logger.info("ExecutionClient cleanup completed")
 
     # ================= DEPOSIT/WITHDRAW OPERATIONS =================
+
+    async def approve_token(self, token: Erc20, contract_address: ChecksumAddress, return_built_tx: bool = False, **kwargs):
+        """
+        Ensure the token is approved for the required amount.
+        Uses infinite approvals (2^256 - 1) and caches approved tokens.
+        """
+        allowance = await token.allowance(owner=self.wallet_address, spender=contract_address)
+        if allowance >= self._max_approval // 2:
+            return
+        
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(token.approve(spender=contract_address, value=self._max_approval, **kwargs))
+        _ = await self._scheduler.send(token.approve(spender=contract_address, value=self._max_approval, **kwargs))
+        
     
-    async def _ensure_approval(
+    async def _ensure_spot_approval(
         self,
         token: Erc20,
         **kwargs,
@@ -103,20 +125,20 @@ class ExecutionClient:
         token_address = token.address
         
         # Check if we've already approved this token
-        if token_address in self._approved_clob_tokens:
+        if token_address in self._approved_spot_tokens:
             return
         
         # check if allowance is already set
-        allowance = await token.allowance(owner=self._account.address, spender=self._chain_client.clob_manager_address)
+        allowance = await token.allowance(owner=self.wallet_address, spender=self._chain_client.clob_manager_address)
         if allowance >= self._max_approval // 2:
-            self._approved_clob_tokens.add(token_address)
+            self._approved_spot_tokens.add(token_address)
             return
         
         # Need to approve - use infinite approval
         _ = await self._scheduler.send(token.approve(spender=self._chain_client.clob_manager_address, value=self._max_approval, **kwargs))
         
         # Cache the token as approved
-        self._approved_clob_tokens.add(token_address)
+        self._approved_spot_tokens.add(token_address)
 
     async def _ensure_swap_approval(
         self,
@@ -134,7 +156,7 @@ class ExecutionClient:
             return
         
         # check if allowance is already set
-        allowance = await token.allowance(owner=self._account.address, spender=self._chain_client.univ2_router_address)
+        allowance = await token.allowance(owner=self.wallet_address, spender=self._chain_client.univ2_router_address)
         if allowance >= self._max_approval // 2:
             self._approved_swap_tokens.add(token_address)
             return
@@ -163,7 +185,7 @@ class ExecutionClient:
             return
         
         # check if allowance is already set
-        allowance = await token.allowance(owner=self._account.address, spender=self._chain_client.launchpad_address)
+        allowance = await token.allowance(owner=self.wallet_address, spender=self._chain_client.launchpad_address)
         if allowance >= self._max_approval // 2:
             self._approved_launchpad_tokens.add(token_address)
             return
@@ -187,6 +209,7 @@ class ExecutionClient:
         quote_token: Token,
         quote_amount_in: Decimal,
         slippage_tolerance: float = 0.01,
+        return_built_tx: bool = False,
         **kwargs: Unpack[TxParams],
     ):
         """
@@ -225,14 +248,16 @@ class ExecutionClient:
         logger.info(f"Buying {launch_token.symbol} with exactly {quote_amount_in} {quote_token.symbol}")
 
         tx = self._chain_client.launchpad.buy(
-            account=self._account.address,
+            account=self.wallet_address,
             token=launch_token.address,
-            recipient=self._account.address,
+            recipient=self.wallet_address,
             amount_out_base=min_base_out,
             max_amount_in_quote=quote_amount_atomic,
             **kwargs,
         )
         
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
         return await self._scheduler.send(tx)
 
     async def launchpad_sell_exact_base(
@@ -241,6 +266,7 @@ class ExecutionClient:
         quote_token: Token,
         base_amount_in: Decimal,
         slippage_tolerance: float = 0.01,
+        return_built_tx: bool = False,
         **kwargs: Unpack[TxParams],
     ):
         """
@@ -279,14 +305,16 @@ class ExecutionClient:
         logger.info(f"Selling exactly {base_amount_in} {launch_token.symbol} for {quote_token.symbol}")
 
         tx = self._chain_client.launchpad.sell(
-            account=self._account.address,
+            account=self.wallet_address,
             token=launch_token.address,
-            recipient=self._account.address,
+            recipient=self.wallet_address,
             amount_in_base=base_amount_atomic,
             min_amount_out_quote=min_quote_out,
             **kwargs,
         )
         
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
         return await self._scheduler.send(tx)
 
     async def get_launchpad_quote_buy(
@@ -400,7 +428,7 @@ class ExecutionClient:
             return self._chain_client.univ2_router.swap_exact_eth_for_tokens(
                 amount_out_min=amount_out_min,
                 path=path,
-                to_=self._account.address,
+                to_=self.wallet_address,
                 deadline=deadline,
                 value=amount_in_atomic,  # ETH value sent with transaction
                 **kwargs,
@@ -411,7 +439,7 @@ class ExecutionClient:
                 amount_in=amount_in_atomic,
                 amount_out_min=amount_out_min,
                 path=path,
-                to_=self._account.address,
+                to_=self.wallet_address,
                 deadline=deadline,
                 **kwargs,
             )
@@ -421,7 +449,7 @@ class ExecutionClient:
                 amount_in=amount_in_atomic,
                 amount_out_min=amount_out_min,
                 path=path,
-                to_=self._account.address,
+                to_=self.wallet_address,
                 deadline=deadline,
                 **kwargs,
             )
@@ -433,6 +461,7 @@ class ExecutionClient:
         amount_in: Decimal,
         slippage_tolerance: float = 0.01,
         deadline_seconds: int = 1200,
+        return_built_tx: bool = False,
         **kwargs: Unpack[TxParams],
     ):
         """
@@ -486,6 +515,8 @@ class ExecutionClient:
             **kwargs,
         )
         
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(swap_tx)
         return await self._scheduler.send(swap_tx)
 
     def _get_swap_for_exact_function(
@@ -521,7 +552,7 @@ class ExecutionClient:
             return self._chain_client.univ2_router.swap_eth_for_exact_tokens(
                 amount_out=amount_out_atomic,
                 path=path,
-                to=self._account.address,
+                to=self.wallet_address,
                 deadline=deadline,
                 value=amount_in_max,  # ETH value sent with transaction
                 **kwargs,
@@ -532,7 +563,7 @@ class ExecutionClient:
                 amount_out=amount_out_atomic,
                 amount_in_max=amount_in_max,
                 path=path,
-                to=self._account.address,
+                to=self.wallet_address,
                 deadline=deadline,
                 **kwargs,
             )
@@ -542,7 +573,7 @@ class ExecutionClient:
                 amount_out=amount_out_atomic,
                 amount_in_max=amount_in_max,
                 path=path,
-                to=self._account.address,
+                to=self.wallet_address,
                 deadline=deadline,
                 **kwargs,
             )
@@ -554,6 +585,7 @@ class ExecutionClient:
         amount_out: Decimal,
         slippage_tolerance: float = 0.01,
         deadline_seconds: int = 1200,
+        return_built_tx: bool = False,
         **kwargs: Unpack[TxParams],
     ):
         """
@@ -607,6 +639,8 @@ class ExecutionClient:
             **kwargs,
         )
         
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(swap_tx)
         return await self._scheduler.send(swap_tx)
 
     async def get_swap_quote(
@@ -647,7 +681,7 @@ class ExecutionClient:
     # ================= EXISTING METHODS CONTINUE... =================
 
     async def deposit(
-            self, token_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
+            self, token_address: ChecksumAddress, amount: int, return_built_tx: bool = False, **kwargs: Unpack[TxParams]
     ):
         """
         Deposit tokens to the exchange for trading.
@@ -664,19 +698,21 @@ class ExecutionClient:
         token = self._chain_client.get_erc20(token_address)
         
         # time the approval
-        await self._ensure_approval(token, **kwargs)
+        await self._ensure_spot_approval(token, **kwargs)
 
         tx = self._chain_client.clob_manager.deposit(
-            account=self._account.address,
+            account=self.wallet_address,
             token=token_address,
             amount=amount,
             from_operator=False,
             **kwargs,
         )
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
         return await self._scheduler.send(tx)
 
     async def withdraw(
-            self, token_address: ChecksumAddress, amount: int, **kwargs: Unpack[TxParams]
+            self, token_address: ChecksumAddress, amount: int, return_built_tx: bool = False, **kwargs: Unpack[TxParams]
     ):
         """
         Withdraw tokens from the exchange.
@@ -690,16 +726,17 @@ class ExecutionClient:
             Transaction result from the withdrawal transaction
         """
         tx = self._chain_client.clob_manager.withdraw(
-            account=self._account.address, token=token_address, amount=amount, to_operator=False, **kwargs
+            account=self.wallet_address, token=token_address, amount=amount, to_operator=False, **kwargs
         )
-        
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
         return await self._scheduler.send(tx)
 
     async def get_token_balance(self, token_address: ChecksumAddress) -> int:
         """
         Get the balance of a token in the wallet.
         """
-        return await self._chain_client.get_erc20(token_address).balance_of(self._account.address)
+        return await self._chain_client.get_erc20(token_address).balance_of(self.wallet_address)
     
     async def get_weth_balance(self) -> Decimal:
         """
@@ -709,7 +746,7 @@ class ExecutionClient:
         return weth_token.convert_amount_to_quantity(await self.get_token_balance(self._chain_client.weth_address))
 
     async def wrap_eth(
-            self, amount: Decimal, **kwargs: Unpack[TxParams]
+            self, amount: Decimal, return_built_tx: bool = False, **kwargs: Unpack[TxParams]
     ):
         """
         Wrap ETH to WETH.
@@ -728,10 +765,13 @@ class ExecutionClient:
         kwargs['value'] = Wei(amount_wei)
         
         tx = weth.deposit(**kwargs)
+
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
         return await self._scheduler.send(tx)
 
     async def unwrap_eth(
-            self, amount: Decimal, **kwargs: Unpack[TxParams]
+            self, amount: Decimal, return_built_tx: bool = False, **kwargs: Unpack[TxParams]
     ):
         """
         Unwrap WETH to ETH.
@@ -747,6 +787,8 @@ class ExecutionClient:
         amount_wei = weth_token.convert_quantity_to_amount(amount)
         weth = self._chain_client.weth
         tx = weth.withdraw(value_=amount_wei, **kwargs)
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
         return await self._scheduler.send(tx)
 
     # ================= APPROVE OPERATIONS =================
@@ -762,6 +804,7 @@ class ExecutionClient:
                                roles: list[OperatorRole] = [],
                                unsafe_withdraw: bool = False,
                                unsafe_launchpad_fill: bool = False,
+                               return_built_tx: bool = False,
                                **kwargs: Unpack[TxParams]):
         """
         Approve an operator to act on behalf of the account.
@@ -782,14 +825,16 @@ class ExecutionClient:
             raise ValueError("Unsafe launchpad fill must be enabled to approve launchpad fill role")
         
         roles_int = self._encode_rules(roles)
-        logger.info(f"Approving operator {operator_address} for account {self._account.address} with roles {roles}")
+        logger.info(f"Approving operator {operator_address} for account {self.wallet_address} with roles {roles}")
 
-
-        return await self._scheduler.send(self._chain_client.clob_manager.approve_operator(
+        tx = self._chain_client.clob_manager.approve_operator(
             operator=operator_address,
             roles=roles_int,
-            **kwargs
-        ))
+            **kwargs,
+        )
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
+        return await self._scheduler.send(tx)
 
     async def disapprove_operator(self, operator_address: ChecksumAddress,
                                   roles: list[OperatorRole],
@@ -806,7 +851,7 @@ class ExecutionClient:
             Transaction hash from the disapprove_operator operation
         """
         roles_int = self._encode_rules(roles)
-        logger.info(f"Disapproving operator {operator_address} for account {self._account.address} with roles {roles}")
+        logger.info(f"Disapproving operator {operator_address} for account {self.wallet_address} with roles {roles}")
 
         return await self._scheduler.send(self._chain_client.clob_manager.disapprove_operator(
             operator=operator_address,
@@ -910,6 +955,7 @@ class ExecutionClient:
             client_order_id: int = 0,
             settlement: Settlement = Settlement.INSTANT,
             return_order: bool = False,
+            return_built_tx: bool = False,
             **kwargs: Unpack[TxParams],
     ) -> str | dict[str, Any]:
         """
@@ -931,7 +977,7 @@ class ExecutionClient:
         price_atomic = market.quote.convert_quantity_to_amount(price)
         
         token = self._chain_client.get_erc20(market.quote.address) if side == OrderSide.BUY else self._chain_client.get_erc20(market.base.address)
-        await self._ensure_approval(
+        await self._ensure_spot_approval(
             token=token,
             **kwargs,
         )
@@ -947,6 +993,8 @@ class ExecutionClient:
             **kwargs,
         ).with_event(clob.contract.events.LimitOrderProcessed())
         
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
         # Send the transaction and return the receipt
         if return_order:
             return await self._scheduler.send_wait(tx)
@@ -1053,6 +1101,7 @@ class ExecutionClient:
             amount: Decimal,
             amount_is_base: bool = True,
             slippage: float = 0.01,
+            return_built_tx: bool = False,
             **kwargs,
     ):
         """
@@ -1073,7 +1122,7 @@ class ExecutionClient:
         price_limit = await self._get_price_limit(market, side, slippage)
         token = self._chain_client.get_erc20(market.quote.address) if amount_is_base else self._chain_client.get_erc20(market.base.address)
         
-        await self._ensure_approval(
+        await self._ensure_spot_approval(
             token=token,
             **kwargs,
         )
@@ -1086,6 +1135,8 @@ class ExecutionClient:
             amount_is_base=amount_is_base,
             **kwargs,
         )
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
         return await self._scheduler.send(tx)
     
     async def amend_order_tx(
@@ -1126,7 +1177,7 @@ class ExecutionClient:
         )
 
         # Return the transaction
-        return clob.amend(account=self._account.address, args=args, **kwargs)
+        return clob.amend(account=self.wallet_address, args=args, **kwargs)
 
     async def amend_order(
             self,
@@ -1137,8 +1188,9 @@ class ExecutionClient:
             original_price: Decimal | None = None,
             new_amount: Decimal | None = None,
             new_price: Decimal | None = None,
+            return_built_tx: bool = False,
             **kwargs,
-    ) -> str:
+    ):
         """
         Amend an existing order.
 
@@ -1163,7 +1215,7 @@ class ExecutionClient:
         
         token = self._chain_client.get_erc20(market.quote.address) if side == OrderSide.BUY else self._chain_client.get_erc20(market.base.address)
         
-        await self._ensure_approval(
+        await self._ensure_spot_approval(
             token=token,
             **kwargs,
         )
@@ -1177,18 +1229,19 @@ class ExecutionClient:
             side=side,
             **kwargs
         )
-
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
         return await self._scheduler.send(tx)
 
     def cancel_order_tx(
-            self, market: Market, order_id: int, **kwargs
+            self, market: Market, order_ids: list[int], **kwargs
     ) -> TypedContractFunction[Any]:
         """
         Cancel an existing order using the router contract.
 
         Args:
             market: Market the order is on
-            order_id: ID of the order to cancel
+            order_ids: IDs of the orders to cancel
             **kwargs: Additional transaction parameters
 
         Returns:
@@ -1197,14 +1250,14 @@ class ExecutionClient:
 
         # Create cancel args
         args = CancelArgs(
-            [order_id], 
+            order_ids, 
             Settlement.INSTANT.value          
         )
 
         # Return the router transaction
         return self._chain_client.router.clob_cancel(clob=market.address, args=args, is_unwrapping=True, **kwargs)
 
-    async def cancel_order(self, market: Market, order_id: int, **kwargs) -> str:
+    async def cancel_order(self, market: Market, order_id: int, return_built_tx: bool = False, **kwargs):
         """
         Cancel an existing order using the router contract.
 
@@ -1217,31 +1270,31 @@ class ExecutionClient:
             Transaction receipt of the cancellation
         """
         clob = self._chain_client.get_clob(market.address)
-        tx = self.cancel_order_tx(market=market, order_id=order_id, **kwargs)
+        tx = self.cancel_order_tx(market=market, order_ids=[order_id], **kwargs)
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
         return await self._scheduler.send(tx)
 
-    async def cancel_all_orders(self, market: Market, open_orders: List[Order], **kwargs) -> List[str]:
+    async def cancel_all_orders(self, market: Market, order_ids: list[int], return_built_tx: bool = False, **kwargs):
         """
         Cancel all orders for the current user on a specific market using the router.
 
         Args:
             market: Market to cancel orders on
-            open_orders: List of open orders to cancel
+            order_ids: IDs of the orders to cancel
             **kwargs: Additional transaction parameters
             
         Returns:
             List of transaction hashes
         """
-        cancelled_orders = []
-        for order in open_orders:
-            if order.status == OrderStatus.OPEN:
-                await self.cancel_order(market, order.order_id, **kwargs)
-            cancelled_orders.append(order)
-        return cancelled_orders
+        tx = self.cancel_order_tx(market=market, order_ids=order_ids, **kwargs)
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
+        return await self._scheduler.send(tx)
 
     def clear_approval_cache(self):
         """Clear the approval cache. Use this if you want to force re-checking approvals."""
-        self._approved_clob_tokens.clear()
+        self._approved_spot_tokens.clear()
         self._approved_swap_tokens.clear()
         self._approved_launchpad_tokens.clear()
         logger.info("Approval cache cleared")
@@ -1278,7 +1331,7 @@ class ExecutionClient:
             Tuple of (wallet_balance, exchange_balance) in human-readable format
         """
         token_details = await self._info.get_token(token_address)
-        account = account if account else self._account.address
+        account = account if account else self.wallet_address
         token = self._chain_client.get_erc20(token_address)
 
         # Get wallet balance
