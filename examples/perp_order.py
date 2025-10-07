@@ -25,35 +25,19 @@ async def main():
         # print(tx)
         # add margin
         # check perp account balance
-        perp_account_balance = await client.execution._chain_client.perp_manager.get_free_collateral_balance(client.execution.wallet_address)
+        perp_account_balance = await client.execution.perp_get_free_collateral_balance()
         print_separator(f"Perp account balance: {perp_account_balance / (10**18)}")
         # i have 3 million capUSD in free collateral 
 
-        # tx = await client.execution.perp_add_margin(subaccount=1, amount=Decimal(10**6))
-        # print(tx)
-        # contract_func = client.execution._chain_client.perp_manager.add_margin(account=client.execution.wallet_address, subaccount=1, amount=(3*10**6)* (10 **18))
-        # tx = await client.execution._scheduler.send(contract_func)
-        # print(tx)
-
-        market_name = "FAKEBTC"
-        # convert to bytes32 and pad to 32 bytes
-        market_id = market_name.encode("utf-8").ljust(32, b"\0")
-        market_id = HexBytes(market_id.hex())
-        print(market_id)
+        market_id = "FAKEBTC"
 
         # add margin to subaccount 1
         tx = await client.execution.perp_add_margin(subaccount=1, amount=Decimal(10**5))
         print(tx)
 
-        await asyncio.sleep(1)
-
         # get margin balance
         margin_balance = await client.execution.perp_get_margin_balance(1)
         print_separator(f"Margin balance: {margin_balance / (10**18)}")
-
-        # check if market is active
-        market_status = await client.execution._chain_client.perp_manager.get_market_status(market_id)
-        print_separator(f"Market status: {market_status}")
 
         # cancel all existing orders
         # cancel_response = await client.execution.perp_cancel_limit_orders(market_id, subaccount=1, order_ids=[71])
@@ -71,7 +55,6 @@ async def main():
         # buy .1 btc at $100,000 (much higher than mark price to ensure it's a limit order)
         tx = await client.execution.perp_place_order(market_id, Side.SELL, Decimal(0.1), Decimal(100_000), subaccount=1, tif=TiF.GTC)
         print(tx)
-        print("✅ Order placed successfully!")
 
         # update leverage
         await client.execution.perp_update_leverage(market_id, subaccount=0, leverage=Decimal(1))
