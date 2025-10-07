@@ -31,6 +31,7 @@ def config():
         perp_manager_address=to_checksum_address("0x000000000000000000000000000000000000d00d"),
         account_manager_address=to_checksum_address("0x000000000000000000000000000000000000a00a"),
         operator_address=to_checksum_address("0x000000000000000000000000000000000000b00b"),
+        collateral_asset_address=to_checksum_address("0x000000000000000000000000000000000000c00c"),
     )
 
 

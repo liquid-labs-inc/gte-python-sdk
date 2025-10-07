@@ -53,6 +53,7 @@ class NetworkConfig:
     account_manager_address: ChecksumAddress
     operator_address: ChecksumAddress
     weth_address: ChecksumAddress
+    collateral_asset_address: ChecksumAddress
 
 
 TESTNET_CONFIG = NetworkConfig(
@@ -77,4 +78,5 @@ TESTNET_CONFIG = NetworkConfig(
     account_manager_address=to_checksum_address("0x4C34461a317d08aEE0109e27c5fcF5aB3d88c468"),
     operator_address=to_checksum_address("0x3E1e8b0D9D2faf3Bfda32f5119e61AF482c28adD"),
     weth_address=to_checksum_address("0x776401b9BC8aAe31A685731B7147D4445fD9FB19"),
+    collateral_asset_address=to_checksum_address("0xe9b6e75c243b6100ffcb1c66e8f78f96feea727f"),
 )
