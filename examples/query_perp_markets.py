@@ -35,7 +35,7 @@ async def main():
         for trade in trades[:5]:  # Show first 5 trades
             print(f"  Price: {trade.price}, Size: {trade.size}, Side: {trade.side}")
 
-        await client.execution.perp_deposit()
+        await client.execution.perp_deposit(Decimal("1.0"))
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
