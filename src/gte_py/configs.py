@@ -58,8 +58,8 @@ class NetworkConfig:
 
 TESTNET_CONFIG = NetworkConfig(
     name="MegaETH Testnet",
-    api_url="https://api-testnet.gte.xyz/v1",
-    ws_url="wss://api-testnet.gte.xyz/ws",
+    api_url="https://perps-api.gte.xyz/v1",
+    ws_url="wss://perps-api.gte.xyz/ws",
     chain_id=6342,
     native_token="MegaETH Testnet Ether (ETH)",
     rpc_http=os.environ.get("MEGAETH_TESTNET_RPC_HTTP", "https://api-testnet.gte.xyz/v1/exchange"),

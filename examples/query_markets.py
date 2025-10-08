@@ -14,7 +14,7 @@ async def main():
     async with GTEClient(config=config) as client:
         
         # Get all available markets
-        all_markets = await client.info.get_all_markets()
+        all_markets = await client.info.get_markets()
         print("All available markets:")
         for market in all_markets:
             print(f"  {market.base.symbol}/{market.quote.symbol} - {market.address}")

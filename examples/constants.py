@@ -7,3 +7,5 @@ BTC_ETH_AMM = to_checksum_address("0x6bba3ff4b359392decd0b77239b7e795269fb550")
 # Token addresses
 BTC_ADDRESS = to_checksum_address("0x7f11aa697e05b75600354ac9acf8bb209225e932")
 LAUNCHPAD_TOKEN_ADDRESS = to_checksum_address("0x0eacb3fb580973bb37786942b24fe0022403080f")
+
+FAKEBTCUSD = 'FAKEBTC-USD'
