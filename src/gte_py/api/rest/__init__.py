@@ -19,7 +19,7 @@ class RestApi:
 
     def __init__(
         self, 
-        base_url: str = "https://perps-api.gte.xyz/v1",
+        base_url: str = "https:/dev-api.gte.xyz/v1",
         timeout: int = 10,
         max_retries: int = 3,
         retry_delay: float = 1.0,
