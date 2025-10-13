@@ -562,6 +562,68 @@ class BoundedNonceTxScheduler:
             self.logger.error(f"Unexpected transaction error: {e}")
             raise Exception(f"Transaction failed: {str(e)}")
 
+    async def send_wait_simple(self, contract_func: "TypedContractFunction[Any]") -> Any:
+        """
+        Send transaction and wait for receipt using regular Web3 methods (no realtime).
+        This is a simpler, more reliable method for testing.
+        """
+        # Sign transaction (includes nonce increment)
+        signed = await self._sign_transaction(contract_func)
+        
+        try:
+            # Add timeout to the send operation
+            async with timeout(30):  # 30 second timeout for sending
+                tx_hash = await self.web3.eth.send_raw_transaction(signed.raw_transaction)
+                self.logger.debug(f"Transaction sent: {tx_hash.hex()}")
+        except asyncio.TimeoutError:
+            self.logger.error("Transaction send timed out after 30 seconds")
+            raise Exception("Transaction send timed out - RPC endpoint may be slow")
+        except Exception as e:
+            self.logger.error(f"Transaction send failed: {e}")
+            raise
+        
+        # Wait for receipt with timeout
+        receipt = await self.wait_for_receipt(tx_hash, timeout=60)  # 60 second timeout for receipt
+        
+        # if status is 0, get error
+        if receipt.get("status") == 0:
+            try:
+                if not self.chain_id:
+                    raise ValueError("Chain ID is not set")
+                
+                # Simulate the transaction to get the revert reason
+                tx_params = self._build_tx_params(contract_func, self.last_sent - 1)
+                await self.web3.eth.call(cast(TxParams, tx_params), receipt['blockNumber'] - 1)
+            except Exception as call_error:
+                # Extract revert data and check against known errors
+                from .errors import ERROR_SELECTORS
+                
+                # Log the full error for debugging
+                self.logger.error(f"Transaction simulation failed: {call_error}")
+                print(f"Full error details: {call_error}")
+                print(f"Error type: {type(call_error)}")
+                print(f"Error args: {call_error.args}")
+                
+                # Handle tuple format like ('0xe285a9fd', '0xe285a9fd')
+                if isinstance(call_error.args, tuple) and len(call_error.args) > 0:
+                    selector = call_error.args[0]
+                else:
+                    selector = str(call_error)
+                
+                print(f"Extracted selector: {selector}")
+                
+                # parse error
+                error_name = ERROR_SELECTORS.get(selector)
+                print(f"Error name from selector: {error_name}")
+                
+                if error_name:
+                    raise Exception(f"Transaction failed: {error_name}")
+                else:
+                    raise Exception(f"Transaction failed with unknown error: {selector}")
+        
+        # Parse and return event if specified, else return receipt
+        return parse_event_from_receipt(receipt, contract_func)
+
     async def send_wait(self, contract_func: "TypedContractFunction[Any]") -> Any:
         """
         Send transaction and wait for receipt.
@@ -575,8 +637,15 @@ class BoundedNonceTxScheduler:
             self.logger.debug(f"Realtime transaction completed: {signed.hash.hex()}")
             receipt = normalize_receipt(receipt)
         except Exception as realtime_error:
-            self.logger.debug(f"Realtime transaction failed: {realtime_error}")
-            raise
+            self.logger.warning(f"Realtime transaction failed: {realtime_error}, falling back to regular send")
+            # Fallback to regular send + wait
+            try:
+                tx_hash = await self.web3.eth.send_raw_transaction(signed.raw_transaction)
+                self.logger.debug(f"Regular transaction sent: {tx_hash.hex()}")
+                receipt = await self.wait_for_receipt(tx_hash, timeout=60)  # 60 second timeout for receipt
+            except Exception as fallback_error:
+                self.logger.error(f"Both realtime and regular send failed: {fallback_error}")
+                raise Exception(f"Transaction failed: {fallback_error}")
         
         # if status is 0, get error
         if receipt.get("status") == 0:
@@ -632,7 +701,16 @@ class BoundedNonceTxScheduler:
 
     async def _send_realtime(self, raw_tx: HexBytes) -> TxReceipt:
         """Send transaction using realtime endpoint."""
-        return await self.web3.manager.coro_request(
-            cast(RPCEndpoint, "realtime_sendRawTransaction"),
-            [raw_tx.hex()]
-        )
+        try:
+            # Add timeout to prevent hanging
+            async with timeout(30):  # 30 second timeout
+                return await self.web3.manager.coro_request(
+                    cast(RPCEndpoint, "realtime_sendRawTransaction"),
+                    [raw_tx.hex()]
+                )
+        except asyncio.TimeoutError:
+            self.logger.error("Realtime transaction timed out after 30 seconds")
+            raise Exception("Realtime transaction timed out - try using regular send method")
+        except Exception as e:
+            self.logger.error(f"Realtime transaction failed: {e}")
+            raise

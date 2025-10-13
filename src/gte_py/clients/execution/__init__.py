@@ -252,7 +252,7 @@ class ExecutionClient:
             asset=self._perp_asset_to_bytes32(asset),
             subaccount=subaccount,
             new_leverage=leverage_atomic,
-        ).with_event(self._chain_client.perp_manager.contract.events.LeverageUpdated())
+        ).with_event(self._chain_client.perp_manager.contract.events.PositionLeverageSet())
 
     def perp_place_order_tx(
         self,
@@ -505,7 +505,7 @@ class ExecutionClient:
         )
         if return_built_tx:
             return await self._scheduler.return_transaction_data(tx)
-        return await self._scheduler.send_wait(tx)
+        return await self._scheduler.send_wait_simple(tx)
 
     async def perp_amend_order(
         self,
