@@ -19,7 +19,7 @@ class RestApi:
 
     def __init__(
         self, 
-        base_url: str = "https://api-testnet.gte.xyz/v1",
+        base_url: str = "https://dev-api.gte.xyz/v1",
         timeout: int = 10,
         max_retries: int = 3,
         retry_delay: float = 1.0,
@@ -87,7 +87,7 @@ class RestApi:
             endpoint: str,
             params: dict[str, Any] | None = None,
             data: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | list[dict[str, Any]]:
+    ):
         """Make a request to the API.
 
         Args:
@@ -173,7 +173,7 @@ class RestApi:
             raise last_exception
         assert False, "Unreachable retry fall-through"
 
-    async def get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any] | list[dict[str, Any]]:
+    async def get(self, endpoint: str, params: dict[str, Any] | None = None):
         """Make a GET request.
         
         Args:

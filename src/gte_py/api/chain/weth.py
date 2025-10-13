@@ -30,8 +30,8 @@ class Weth:
         func = self.contract.functions.transferFrom(from_, to, value)
         return TypedContractFunction(func, params={**kwargs})
 
-    def withdraw(self, value_: int, **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.withdraw(value_)
+    def withdraw(self, value: int, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.withdraw(value)
         return TypedContractFunction(func, params={**kwargs})
 
     async def decimals(self) -> int:
@@ -50,9 +50,9 @@ class Weth:
         func = self.contract.functions.transfer(to, value)
         return TypedContractFunction(func, params={**kwargs})
 
-    def deposit(self, value: int, **kwargs) -> TypedContractFunction[Any]:
+    def deposit(self, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.deposit()
-        return TypedContractFunction(func, params={"value": value, **kwargs})
+        return TypedContractFunction(func, params={**kwargs})
 
     async def allowance(self, owner: ChecksumAddress, spender: ChecksumAddress) -> int:
         func = self.contract.functions.allowance(owner, spender)

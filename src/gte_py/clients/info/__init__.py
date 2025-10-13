@@ -3,12 +3,10 @@
 import logging
 from typing import Any, Callable
 from eth_typing import ChecksumAddress
+import requests
 
 from gte_py.api.rest import RestApi
 from gte_py.api.ws import WebSocketApi
-from gte_py.models import (
-    Token, Market, Candle, Trade, Position, OrderBookSnapshot
-)
 
 logger = logging.getLogger(__name__)
 
@@ -56,394 +54,450 @@ class InfoClient:
     # ================= REST API METHODS =================
 
     async def get_health(self) -> dict[str, Any]:
-        """Get API health status.
-
-        Returns:
-            Health status information
-        """
+        """Health check endpoint."""
         return await self._rest._request("GET", "/health")
 
-    async def get_info(self) -> dict[str, Any]:
-        """Get GTE info.
+    # ===== Portfolio =====
+    async def get_user_balance(self, user: str | ChecksumAddress) -> dict[str, Any]:
+        return await self._rest._request("GET", f"/portfolio/{user}/balance")
 
-        Returns:
-            GTE information including stats
-        """
-        return await self._rest._request("GET", "/info")
+    async def get_user_pnl_history(self, user: str | ChecksumAddress, from_ts: int, to_ts: int | None = None) -> dict[str, Any]:
+        params: dict[str, Any] = {"from": from_ts}
+        if to_ts is not None:
+            params["to"] = to_ts
+        return await self._rest._request("GET", f"/portfolio/{user}/pnl_history", params=params)
 
-    # Token methods
-    async def get_tokens(
-        self,
-        creator: str | None = None,
-        market_type: str | None = None,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> list[Token]:
-        """Get list of tokens supported on GTE.
+    async def get_user_balance_history(self, user: str | ChecksumAddress, from_ts: int, to_ts: int | None = None) -> dict[str, Any]:
+        params: dict[str, Any] = {"from": from_ts}
+        if to_ts is not None:
+            params["to"] = to_ts
+        return await self._rest._request("GET", f"/portfolio/{user}/balance_history", params=params)
 
-        Args:
-            creator: Returns assets created by the given user address
-            market_type: Filters assets by the given market type (amm, bonding-curve, clob-spot)
-            limit: Range 1-1000
-            offset: Min value 0
+    async def get_user_lp_positions(self, user: str | ChecksumAddress) -> dict[str, Any]:
+        return await self._rest._request("GET", f"/portfolio/{user}/lp_positions")
 
-        Returns:
-            List of Token objects
-        """
-        params = {"limit": limit, "offset": offset}
-        if creator:
-            params["creator"] = creator
-        if market_type:
-            params["marketType"] = market_type
-        response = await self._rest._request("GET", "/tokens", params=params)
-        return [Token.from_api(token_data) for token_data in response]
+    # ===== Spot CLOB =====
+    async def get_spot_clob_open_orders(self, user: str | ChecksumAddress, market_id: str | None = None, cursor: str | None = None, limit: int = 100) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if market_id is not None:
+            params["marketId"] = market_id
+        if cursor is not None:
+            params["cursor"] = cursor
+        return await self._rest._request("GET", f"/spot_clob/open_orders/{user}", params=params)
 
-    async def search_tokens(self, query: str, market_type: str | None = None) -> list[Token]:
-        """Search tokens based on name or symbol.
+    async def get_spot_clob_order_history(self, user: str | ChecksumAddress, market_id: str | None = None, cursor: str | None = None, limit: int = 100) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if market_id is not None:
+            params["marketId"] = market_id
+        if cursor is not None:
+            params["cursor"] = cursor
+        return await self._rest._request("GET", f"/spot_clob/order_history/{user}", params=params)
 
-        Args:
-            query: Search query
-            market_type: Filters assets by the given market type (amm, bonding-curve, clob-spot)
-
-        Returns:
-            List of matching Token objects
-        """
-        params = {"q": query}
-        if market_type:
-            params["marketType"] = market_type
-        response = await self._rest._request("GET", "/tokens/search", params=params)
-        return [Token.from_api(token_data) for token_data in response]
-
-    async def get_token(self, token_address: str | ChecksumAddress) -> Token:
-        """Get token metadata by address.
-
-        Args:
-            token_address: EVM address of the token
-
-        Returns:
-            Token object with metadata information
-        """
-        response = await self._rest._request("GET", f"/tokens/{token_address}")
-        return Token.from_api(response)
-
-    # Market methods
-    async def get_markets(
-        self,
-        limit: int = 100,
-        offset: int = 0,
-        market_type: str | None = None,
-        sort_by: str = "marketCap",
-        token_address: str | None = None,
-    ) -> list[Market]:
-        """Get list of markets.
-
-        Args:
-            limit: Range 1-1000
-            offset: Min value 0
-            market_type: Filter by market type (amm, launchpad)
-            sort_by: Sort markets in descending order (marketCap, createdAt, volume)
-            token_address: Filter markets by the specified token address
-            newly_graduated: Returns newly graduated markets
-
-        Returns:
-            List of Market objects
-        """
-        params = {"limit": limit, "offset": offset, "sortBy": sort_by}
-        if market_type:
-            params["marketType"] = market_type
-        if token_address:
-            params["tokenAddress"] = token_address
-        response = await self._rest._request("GET", "/markets", params=params)
-        return [Market.from_api(market_data) for market_data in response]
-    
-    async def search_markets(self, query: str, market_type: str | None = None) -> list[Market]:
-        """Search markets based on name or symbol.
-
-        Args:
-            query: Search query
-            market_type: Filters assets by the given market type (amm, bonding-curve, clob-spot)
-
-        Returns:
-            List of matching Market objects
-        """
-        params = {"q": query}
-        if market_type:
-            params["marketType"] = market_type
-        response = await self._rest._request("GET", "/markets/search", params=params)
-        return [Market.from_api(market_data) for market_data in response]
-
-    async def get_market(self, market_address: str | ChecksumAddress) -> Market:
-        """Get market by address.
-
-        Args:
-            market_address: EVM address of the market
-
-        Returns:
-            Market object with market information
-        """
-        response = await self._rest._request("GET", f"/markets/{market_address}")
-        return Market.from_api(response)
-    
-    async def get_dash_markets(self, dash_type: str, limit: int = 100) -> list[Market]:
-        """Get dash markets.
-        
-        Args:
-            limit: Range 1-1000
-            dash_type: Filters assets by the given dash type (new, about-to-graduate, graduated)
-        Returns:
-            List of Market objects
-        """
-        params = {"limit": limit, "dashType": dash_type}
-        response = await self._rest._request("GET", "/markets/dash", params=params)
-        return [Market.from_api(market_data) for market_data in response]
-
-    async def get_candles(
-        self,
-        market_address: str | ChecksumAddress,
-        interval: str,
-        start_time: int,
-        end_time: int | None = None,
-        limit: int = 500,
-    ) -> list[Candle]:
-        """Get candles for a market.
-
-        Args:
-            market_address: EVM address of the market
-            interval: Interval of the candle (1s, 15s, 30s, 1m, 3m, 5m, 15m, 30m, 1h, 4h, 1d, 1w)
-            start_time: Start time in milliseconds
-            end_time: End time in milliseconds, if not provided, the current time will be used
-            limit: Range 1-1000 (default 500)
-
-        Returns:
-            List of Candle objects
-        """
-        params = {"interval": interval, "startTime": start_time, "limit": limit}
-        if end_time:
-            params["endTime"] = end_time
-        response = await self._rest._request("GET", f"/markets/{market_address}/candles", params=params)
-        return [Candle.from_api(candle_data) for candle_data in response]
-
-    async def get_trades(
-        self, market_address: str | ChecksumAddress, limit: int = 100, offset: int = 0
-    ) -> list[Trade]:
-        """Get trades for a market.
-
-        Args:
-            market_address: EVM address of the market
-            limit: Range 1-1000
-            offset: Min value 0
-
-        Returns:
-            List of Trade objects
-        """
-        params = {"limit": limit, "offset": offset}
-        response = await self._rest._request("GET", f"/markets/{market_address}/trades", params=params)
-        return [Trade.from_api(trade_data) for trade_data in response]
-
-    async def get_order_book(self, market_address: str | ChecksumAddress, limit: int = 20) -> OrderBookSnapshot:
-        """Get order book snapshot for a market.
-
-        Args:
-            market_address: EVM address of the market
-            limit: Number of price levels to include on each side, range 1-20 (default 20)
-
-        Returns:
-            OrderBookSnapshot object with bids and asks
-        """
+    async def get_spot_clob_book(self, market_id: str, limit: int = 20) -> dict[str, Any]:
         params = {"limit": limit}
-        response = await self._rest._request("GET", f"/markets/{market_address}/book", params=params)
-        return OrderBookSnapshot.from_api(response)
+        return await self._rest._request("GET", f"/spot_clob/{market_id}/book", params=params)
 
-    # User methods
-    async def get_user_lp_positions(self, user_address: str | ChecksumAddress) -> list[Position]:
-        """Get LP positions for a user.
+    async def get_spot_clob_trades(self, market_id: str, cursor: str | None = None, user: str | ChecksumAddress | None = None, limit: int = 25) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if cursor is not None:
+            params["cursor"] = cursor
+        if user is not None:
+            params["user"] = str(user)
+        return await self._rest._request("GET", f"/spot_clob/{market_id}/trades", params=params)
 
-        Args:
-            user_address: EVM address of the user
+    async def get_spot_clob_candles(self, market_id: str, from_ts: int, interval: str, to_ts: int | None = None, limit: int = 100) -> dict[str, Any]:
+        params: dict[str, Any] = {"from": from_ts, "interval": interval, "limit": limit}
+        if to_ts is not None:
+            params["to"] = to_ts
+        return await self._rest._request("GET", f"/spot_clob/{market_id}/candles", params=params)
 
-        Returns:
-            List of Position objects
-        """
-        response = await self._rest._request("GET", f"/users/{user_address}/lppositions")
-        return [Position.from_api(position_data) for position_data in response]
+    # ===== Perps =====
+    async def get_perp_markets(self) -> dict[str, Any]:
+        return await self._rest._request("GET", "/perp/markets")
 
-    async def get_user_portfolio(self, user_address: str | ChecksumAddress) -> dict[str, Any]:
-        """Get user's portfolio.
+    async def get_perp_market_by_id(self, market_id: str) -> dict[str, Any]:
+        return await self._rest._request("GET", f"/perp/markets/{market_id}")
 
-        Args:
-            user_address: EVM address of the user
+    async def get_perp_positions(self, user: str | ChecksumAddress, market_id: str | None = None, cursor: str | None = None, limit: int = 100) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if market_id is not None:
+            params["marketId"] = market_id
+        if cursor is not None:
+            params["cursor"] = cursor
+        return await self._rest._request("GET", f"/perp/positions/{user}", params=params)
 
-        Returns:
-            User portfolio including token balances
-        """
-        return await self._rest._request("GET", f"/users/{user_address}/portfolio")
+    async def get_perp_open_orders(self, user: str | ChecksumAddress, market_id: str | None = None, cursor: str | None = None, limit: int = 100) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if market_id is not None:
+            params["marketId"] = market_id
+        if cursor is not None:
+            params["cursor"] = cursor
+        return await self._rest._request("GET", f"/perp/open_orders/{user}", params=params)
 
-    async def get_user_trades(
-        self,
-        user_address: str | ChecksumAddress,
-        market_address: str | ChecksumAddress | None = None,
-        limit: int = 100,
-        offset: int = 0
-    ) -> list[Trade]:
-        """Get trades for a user.
+    async def get_perp_order_history(self, user: str | ChecksumAddress, market_id: str | None = None, cursor: str | None = None, limit: int = 100) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if market_id is not None:
+            params["marketId"] = market_id
+        if cursor is not None:
+            params["cursor"] = cursor
+        return await self._rest._request("GET", f"/perp/order_history/{user}", params=params)
 
-        Args:
-            user_address: EVM address of the user
-            market_address: EVM address of the market (optional)
-            limit: Range 1-1000
-            offset: Min value 0
+    async def get_perp_funding_history(self, user: str | ChecksumAddress, market_id: str | None = None, cursor: str | None = None, limit: int = 100) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if market_id is not None:
+            params["marketId"] = market_id
+        if cursor is not None:
+            params["cursor"] = cursor
+        return await self._rest._request("GET", f"/perp/funding_history/{user}", params=params)
 
-        Returns:
-            List of Trade objects
-        """
-        params = {"limit": limit, "offset": offset}
-        if market_address:
-            params["market_address"] = str(market_address)
-        response = await self._rest._request("GET", f"/users/{user_address}/trades", params=params)
-        return [Trade.from_api(trade_data) for trade_data in response]
+    async def get_perp_book(self, market_id: str, limit: int = 20) -> dict[str, Any]:
+        params = {"limit": limit}
+        return await self._rest._request("GET", f"/perp/{market_id}/book", params=params)
 
-    async def get_user_open_orders(
-        self, user_address: ChecksumAddress, market_address: ChecksumAddress,
-        limit: int = 100, offset: int = 0
-    ) -> list[dict[str, Any]]:
-        """Get open orders for a user.
+    async def get_perp_trades(self, market_id: str, user: str | ChecksumAddress | None = None, cursor: str | None = None, limit: int = 25) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if user is not None:
+            params["user"] = str(user)
+        if cursor is not None:
+            params["cursor"] = cursor
+        return await self._rest._request("GET", f"/perp/{market_id}/trades", params=params)
 
-        Args:
-            user_address: EVM address of the user
-            market_address: EVM address of the market
-            limit: Range 1-1000
-            offset: Min value 0
+    async def get_perp_candles(self, market_id: str, from_ts: int, interval: str, to_ts: int | None = None, limit: int = 100) -> dict[str, Any]:
+        params: dict[str, Any] = {"from": from_ts, "interval": interval, "limit": limit}
+        if to_ts is not None:
+            params["to"] = to_ts
+        return await self._rest._request("GET", f"/perp/{market_id}/candles", params=params)
 
-        Returns:
-            List of Orders
-        """
-        params = {"limit": limit, "offset": offset, "market_address": str(market_address)}
-        response = await self._rest._request("GET", f"/users/{user_address}/open_orders", params=params)
-        return response
+    # ===== Tokens =====
+    async def get_tokens(self, creator: str | None = None, market_type: str | None = None, cursor: str | None = None, limit: int = 100) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if creator is not None:
+            params["creator"] = creator
+        if market_type is not None:
+            params["marketType"] = market_type
+        if cursor is not None:
+            params["cursor"] = cursor
+        return await self._rest._request("GET", "/tokens", params=params)
 
-    async def get_user_filled_orders(
-        self, user_address: ChecksumAddress, market_address: ChecksumAddress,
-        limit: int = 100, offset: int = 0
-    ) -> list[dict[str, Any]]:
-        """Get filled orders for a user.
+    async def get_token_by_id(self, token_id: str) -> dict[str, Any]:
+        return await self._rest._request("GET", f"/tokens/{token_id}")
 
-        Args:
-            user_address: EVM address of the user
-            market_address: EVM address of the market
-            limit: Range 1-1000
-            offset: Min value 0
+    async def search_tokens(self, query: str, market_type: str | None = None) -> dict[str, Any]:
+        params: dict[str, Any] = {"query": query}
+        if market_type is not None:
+            params["marketType"] = market_type
+        return await self._rest._request("GET", "/tokens/search", params=params)
 
-        Returns:
-            List of Orders
-        """
-        params = {"limit": limit, "offset": offset, "market_address": str(market_address)}
-        response = await self._rest._request("GET", f"/users/{user_address}/filled_orders", params=params)
-        return response
+    # ===== Markets =====
+    async def get_markets(self, cursor: str | None = None, limit: int = 100, market_type: str | None = None, sort_by: str = "marketCap", token_id: str | None = None) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit, "sortBy": sort_by}
+        if cursor is not None:
+            params["cursor"] = cursor
+        if market_type is not None:
+            params["marketType"] = market_type
+        if token_id is not None:
+            params["tokenId"] = token_id
+        return await self._rest._request("GET", "/markets", params=params)
 
-    async def get_user_order_history(
-        self, user_address: ChecksumAddress, market_address: ChecksumAddress,
-    ) -> list[dict[str, Any]]:
-        """Get order history for a user.
+    async def get_market_by_id(self, market_id: str) -> dict[str, Any]:
+        return await self._rest._request("GET", f"/markets/{market_id}")
 
-        Args:
-            user_address: EVM address of the user
-            market_address: EVM address of the market
+    async def search_markets(self, query: str, market_type: str | None = None) -> dict[str, Any]:
+        params: dict[str, Any] = {"query": query}
+        if market_type is not None:
+            params["marketType"] = market_type
+        return await self._rest._request("GET", "/markets/search", params=params)
 
-        Returns:
-            List of Orders
-        """
-        params = {"market_address": str(market_address)}
-        response = await self._rest._request("GET", f"/users/{user_address}/order_history", params=params)
-        return response
+    async def get_dash_markets(self, dash_type: str, limit: int = 100) -> dict[str, Any]:
+        params = {"limit": limit, "dashType": dash_type}
+        return await self._rest._request("GET", "/markets/dash", params=params)
 
+    async def get_market_candles(self, market_id: str, from_ts: int, interval: str, to_ts: int | None = None, limit: int = 100) -> dict[str, Any]:
+        params: dict[str, Any] = {"from": from_ts, "interval": interval, "limit": limit}
+        if to_ts is not None:
+            params["to"] = to_ts
+        return await self._rest._request("GET", f"/markets/{market_id}/candles", params=params)
+
+    async def get_market_trades(self, market_id: str, cursor: str | None = None, user: str | ChecksumAddress | None = None, limit: int = 25) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if cursor is not None:
+            params["cursor"] = cursor
+        if user is not None:
+            params["user"] = str(user)
+        return await self._rest._request("GET", f"/markets/{market_id}/trades", params=params)
+        
     # ================= WEBSOCKET API METHODS =================
 
-    async def subscribe_trades(self, market: ChecksumAddress, callback: Callable[[dict[str, Any]], Any]):
-        """Subscribe to trades for a market.
+    # ===== Perps =====
+    async def subscribe_perp_trades(self, market_id: str, callback: Callable[[dict[str, Any]], Any]):
+        """Subscribe to perp trades for a market.
 
         Args:
-            market: Market address
+            market_id: Market ID (e.g., "BTC-USDC")
             callback: Function to call when a trade is received
         """
-        subscription_key = f"trades_{market}"
-        await self._websocket.subscribe("trades.subscribe", {"market": market}, callback)
+        subscription_key = f"perp_trades_{market_id}"
+        await self._websocket.subscribe("perp_trades", {"marketId": market_id}, callback)
         self._subscriptions[subscription_key] = {
-            "type": "trades",
-            "market": market,
-            "params": {"market": market}
+            "type": "perp_trades",
+            "market_id": market_id,
+            "params": {"marketId": market_id}
         }
 
-    async def unsubscribe_trades(self, market: ChecksumAddress):
-        """Unsubscribe from trades for a market.
+    async def unsubscribe_perp_trades(self, market_id: str):
+        """Unsubscribe from perp trades for a market.
 
         Args:
-            market: Market address
+            market_id: Market ID
         """
-        subscription_key = f"trades_{market}"
+        subscription_key = f"perp_trades_{market_id}"
         if subscription_key in self._subscriptions:
-            await self._websocket.unsubscribe("trades.unsubscribe", {"market": market})
+            await self._websocket.unsubscribe("perp_trades", {"marketId": market_id})
             del self._subscriptions[subscription_key]
 
-    async def subscribe_candles(self, market: ChecksumAddress, interval: str, callback: Callable[[dict[str, Any]], Any]):
-        """Subscribe to candles for a market.
+    async def subscribe_perp_book(self, market_id: str, callback: Callable[[dict[str, Any]], Any]):
+        """Subscribe to perp L2 orderbook for a market.
 
         Args:
-            market: Market address
-            interval: Candle interval (1s, 30s, 1m, 3m, 5m, 15m, 30m, 1h, 4h, 6h, 8h, 12h, 1d, 1w)
-            callback: Function to call when a candle is received
-        """
-        subscription_key = f"candles_{market}_{interval}"
-        await self._websocket.subscribe(
-            "candles.subscribe", {"market": market, "interval": interval}, callback
-        )
-        self._subscriptions[subscription_key] = {
-            "type": "candles",
-            "market": market,
-            "interval": interval,
-            "interval": interval,
-            "params": {"market": market, "interval": interval}
-        }
-
-    async def unsubscribe_candles(self, market: ChecksumAddress, interval: str):
-        """Unsubscribe from candles for a market.
-
-        Args:
-            market: Market address
-            interval: Candle interval
-        """
-        subscription_key = f"candles_{market}_{interval}"
-        if subscription_key in self._subscriptions:
-            await self._websocket.unsubscribe("candles.unsubscribe", {"market": market, "interval": interval})
-            del self._subscriptions[subscription_key]
-
-    async def subscribe_orderbook(
-            self, market: ChecksumAddress, callback: Callable[[dict[str, Any]], Any], limit: int = 10):
-        """Subscribe to orderbook for a market.
-
-        Args:
-            market: Market address
-            limit: Number of levels to include (defaults to 10)
+            market_id: Market ID (e.g., "BTC-USDC")
             callback: Function to call when an orderbook update is received
         """
-        subscription_key = f"orderbook_{market}_{limit}"
-        await self._websocket.subscribe('book.subscribe', {"market": market, "limit": limit}, callback)
+        subscription_key = f"perp_book_{market_id}"
+        await self._websocket.subscribe("perp_book", {"marketId": market_id}, callback)
         self._subscriptions[subscription_key] = {
-            "type": "orderbook",
-            "market": market,
-            "limit": limit,
-            "params": {"market": market, "limit": limit}
+            "type": "perp_book",
+            "market_id": market_id,
+            "params": {"marketId": market_id}
         }
 
-    async def unsubscribe_orderbook(self, market: ChecksumAddress, limit: int = 10):
-        """Unsubscribe from orderbook for a market.
+    async def unsubscribe_perp_book(self, market_id: str):
+        """Unsubscribe from perp orderbook for a market.
 
         Args:
-            market: Market address
-            limit: Number of levels that was used for subscription
+            market_id: Market ID
         """
-        subscription_key = f"orderbook_{market}_{limit}"
+        subscription_key = f"perp_book_{market_id}"
         if subscription_key in self._subscriptions:
-            await self._websocket.unsubscribe('book.unsubscribe', {"market": market, "limit": limit})
+            await self._websocket.unsubscribe("perp_book", {"marketId": market_id})
+            del self._subscriptions[subscription_key]
+
+    async def subscribe_perp_candles(self, market_id: str, interval: str, callback: Callable[[dict[str, Any]], Any]):
+        """Subscribe to perp candles for a market.
+
+        Args:
+            market_id: Market ID (e.g., "BTC-USDC")
+            interval: Candle interval (1s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m, 20m, 30m, 1h, 4h, 1d, 1w)
+            callback: Function to call when a candle is received
+        """
+        subscription_key = f"perp_candles_{market_id}_{interval}"
+        await self._websocket.subscribe("perp_candles", {"marketId": market_id, "interval": interval}, callback)
+        self._subscriptions[subscription_key] = {
+            "type": "perp_candles",
+            "market_id": market_id,
+            "interval": interval,
+            "params": {"marketId": market_id, "interval": interval}
+        }
+
+    async def unsubscribe_perp_candles(self, market_id: str, interval: str):
+        """Unsubscribe from perp candles for a market.
+        
+        Args:
+            market_id: Market ID
+            interval: Candle interval
+        """
+        subscription_key = f"perp_candles_{market_id}_{interval}"
+        if subscription_key in self._subscriptions:
+            await self._websocket.unsubscribe("perp_candles", {"marketId": market_id, "interval": interval})
+            del self._subscriptions[subscription_key]
+
+    async def subscribe_perp_positions(self, user: str | ChecksumAddress, market_id: str | None = None, callback: Callable[[dict[str, Any]], Any] | None = None):
+        """Subscribe to perp positions for a user.
+
+        Args:
+            user: User address
+            market_id: Optional market ID to filter by
+            callback: Function to call when position updates are received
+        """
+        subscription_key = f"perp_positions_{user}_{market_id or 'all'}"
+        params = {"user": str(user)}
+        if market_id:
+            params["marketId"] = market_id
+        if callback:
+            await self._websocket.subscribe("perp_positions", params, callback)
+        self._subscriptions[subscription_key] = {
+            "type": "perp_positions",
+            "user": str(user),
+            "market_id": market_id,
+            "params": params
+        }
+
+    async def unsubscribe_perp_positions(self, user: str | ChecksumAddress, market_id: str | None = None):
+        """Unsubscribe from perp positions for a user.
+        
+        Args:
+            user: User address
+            market_id: Optional market ID that was used for subscription
+        """
+        subscription_key = f"perp_positions_{user}_{market_id or 'all'}"
+        if subscription_key in self._subscriptions:
+            params = {"user": str(user)}
+            if market_id:
+                params["marketId"] = market_id
+            await self._websocket.unsubscribe("perp_positions", params)
+            del self._subscriptions[subscription_key]
+
+    async def subscribe_perp_open_orders(self, user: str | ChecksumAddress, market_id: str | None = None, callback: Callable[[dict[str, Any]], Any] | None = None):
+        """Subscribe to perp open orders for a user.
+
+        Args:
+            user: User address
+            market_id: Optional market ID to filter by
+            callback: Function to call when order updates are received
+        """
+        subscription_key = f"perp_open_orders_{user}_{market_id or 'all'}"
+        params = {"user": str(user)}
+        if market_id:
+            params["marketId"] = market_id
+        if callback:
+            await self._websocket.subscribe("perp_open_orders", params, callback)
+        self._subscriptions[subscription_key] = {
+            "type": "perp_open_orders",
+            "user": str(user),
+            "market_id": market_id,
+            "params": params
+        }
+
+    async def unsubscribe_perp_open_orders(self, user: str | ChecksumAddress, market_id: str | None = None):
+        """Unsubscribe from perp open orders for a user.
+        
+        Args:
+            user: User address
+            market_id: Optional market ID that was used for subscription
+        """
+        subscription_key = f"perp_open_orders_{user}_{market_id or 'all'}"
+        if subscription_key in self._subscriptions:
+            params = {"user": str(user)}
+            if market_id:
+                params["marketId"] = market_id
+            await self._websocket.unsubscribe("perp_open_orders", params)
+            del self._subscriptions[subscription_key]
+
+    # ===== Spot CLOB =====
+    async def subscribe_spotclob_trades(self, market_id: str, callback: Callable[[dict[str, Any]], Any]):
+        """Subscribe to spot CLOB trades for a market.
+        
+        Args:
+            market_id: Market ID (e.g., "0x123...")
+            callback: Function to call when a trade is received
+        """
+        subscription_key = f"spotclob_trades_{market_id}"
+        await self._websocket.subscribe("spotclob_trades", {"marketId": market_id}, callback)
+        self._subscriptions[subscription_key] = {
+            "type": "spotclob_trades",
+            "market_id": market_id,
+            "params": {"marketId": market_id}
+        }
+
+    async def unsubscribe_spotclob_trades(self, market_id: str):
+        """Unsubscribe from spot CLOB trades for a market.
+        
+        Args:
+            market_id: Market ID
+        """
+        subscription_key = f"spotclob_trades_{market_id}"
+        if subscription_key in self._subscriptions:
+            await self._websocket.unsubscribe("spotclob_trades", {"marketId": market_id})
+            del self._subscriptions[subscription_key]
+
+    async def subscribe_spotclob_book(self, market_id: str, callback: Callable[[dict[str, Any]], Any]):
+        """Subscribe to spot CLOB L2 orderbook for a market.
+
+        Args:
+            market_id: Market ID (e.g., "0x123...")
+            callback: Function to call when an orderbook update is received
+        """
+        subscription_key = f"spotclob_book_{market_id}"
+        await self._websocket.subscribe("spotclob_book", {"marketId": market_id}, callback)
+        self._subscriptions[subscription_key] = {
+            "type": "spotclob_book",
+            "market_id": market_id,
+            "params": {"marketId": market_id}
+        }
+
+    async def unsubscribe_spotclob_book(self, market_id: str):
+        """Unsubscribe from spot CLOB orderbook for a market.
+
+        Args:
+            market_id: Market ID
+        """
+        subscription_key = f"spotclob_book_{market_id}"
+        if subscription_key in self._subscriptions:
+            await self._websocket.unsubscribe("spotclob_book", {"marketId": market_id})
+            del self._subscriptions[subscription_key]
+
+    async def subscribe_spotclob_candles(self, market_id: str, interval: str, callback: Callable[[dict[str, Any]], Any]):
+        """Subscribe to spot CLOB candles for a market.
+
+        Args:
+            market_id: Market ID (e.g., "0x123...")
+            interval: Candle interval (1s, 15s, 30s, 1m, 2m, 3m, 5m, 10m, 15m, 20m, 30m, 1h, 4h, 1d, 1w)
+            callback: Function to call when a candle is received
+        """
+        subscription_key = f"spotclob_candles_{market_id}_{interval}"
+        await self._websocket.subscribe("spotclob_candles", {"marketId": market_id, "interval": interval}, callback)
+        self._subscriptions[subscription_key] = {
+            "type": "spotclob_candles",
+            "market_id": market_id,
+            "interval": interval,
+            "params": {"marketId": market_id, "interval": interval}
+        }
+
+    async def unsubscribe_spotclob_candles(self, market_id: str, interval: str):
+        """Unsubscribe from spot CLOB candles for a market.
+
+        Args:
+            market_id: Market ID
+            interval: Candle interval
+        """
+        subscription_key = f"spotclob_candles_{market_id}_{interval}"
+        if subscription_key in self._subscriptions:
+            await self._websocket.unsubscribe("spotclob_candles", {"marketId": market_id, "interval": interval})
+            del self._subscriptions[subscription_key]
+
+    async def subscribe_spotclob_open_orders(self, user: str | ChecksumAddress, market_id: str | None = None, callback: Callable[[dict[str, Any]], Any] | None = None):
+        """Subscribe to spot CLOB open orders for a user.
+
+        Args:
+            user: User address
+            market_id: Optional market ID to filter by
+            callback: Function to call when order updates are received
+        """
+        subscription_key = f"spotclob_open_orders_{user}_{market_id or 'all'}"
+        params = {"user": str(user)}
+        if market_id:
+            params["marketId"] = market_id
+        if callback:
+            await self._websocket.subscribe("spotclob_open_orders", params, callback)
+        self._subscriptions[subscription_key] = {
+            "type": "spotclob_open_orders",
+            "user": str(user),
+            "market_id": market_id,
+            "params": params
+        }
+
+    async def unsubscribe_spotclob_open_orders(self, user: str | ChecksumAddress, market_id: str | None = None):
+        """Unsubscribe from spot CLOB open orders for a user.
+
+        Args:
+            user: User address
+            market_id: Optional market ID that was used for subscription
+        """
+        subscription_key = f"spotclob_open_orders_{user}_{market_id or 'all'}"
+        if subscription_key in self._subscriptions:
+            params = {"user": str(user)}
+            if market_id:
+                params["marketId"] = market_id
+            await self._websocket.unsubscribe("spotclob_open_orders", params)
             del self._subscriptions[subscription_key]
 
     # Subscription management methods
@@ -465,28 +519,68 @@ class InfoClient:
         """
         return len(self._subscriptions)
 
-    def has_subscription(self, market: ChecksumAddress, subscription_type: str, **kwargs) -> bool:
+    def has_subscription(self, subscription_type: str, **kwargs) -> bool:
         """
         Check if a specific subscription exists.
         
         Args:
-            market: Market address
-            subscription_type: Type of subscription ("trades", "candles", "orderbook")
-            **kwargs: Additional parameters (interval for candles, limit for orderbook)
+            subscription_type: Type of subscription (e.g., "perp_trades", "spotclob_book", etc.)
+            **kwargs: Additional parameters (market_id, user, interval, etc.)
             
         Returns:
             True if subscription exists, False otherwise
         """
-        if subscription_type == "trades":
-            subscription_key = f"trades_{market}"
-        elif subscription_type == "candles":
+        if subscription_type.startswith("perp_"):
+            market_id = kwargs.get("market_id")
+            user = kwargs.get("user")
             interval = kwargs.get("interval")
-            if not interval:
+            
+            if subscription_type == "perp_trades":
+                if not market_id:
+                    return False
+                subscription_key = f"perp_trades_{market_id}"
+            elif subscription_type == "perp_book":
+                if not market_id:
+                    return False
+                subscription_key = f"perp_book_{market_id}"
+            elif subscription_type == "perp_candles":
+                if not market_id or not interval:
+                    return False
+                subscription_key = f"perp_candles_{market_id}_{interval}"
+            elif subscription_type == "perp_positions":
+                if not user:
+                    return False
+                subscription_key = f"perp_positions_{user}_{market_id or 'all'}"
+            elif subscription_type == "perp_open_orders":
+                if not user:
+                    return False
+                subscription_key = f"perp_open_orders_{user}_{market_id or 'all'}"
+            else:
                 return False
-            subscription_key = f"candles_{market}_{interval}"
-        elif subscription_type == "orderbook":
-            limit = kwargs.get("limit", 10)
-            subscription_key = f"orderbook_{market}_{limit}"
+                
+        elif subscription_type.startswith("spotclob_"):
+            market_id = kwargs.get("market_id")
+            user = kwargs.get("user")
+            interval = kwargs.get("interval")
+            
+            if subscription_type == "spotclob_trades":
+                if not market_id:
+                    return False
+                subscription_key = f"spotclob_trades_{market_id}"
+            elif subscription_type == "spotclob_book":
+                if not market_id:
+                    return False
+                subscription_key = f"spotclob_book_{market_id}"
+            elif subscription_type == "spotclob_candles":
+                if not market_id or not interval:
+                    return False
+                subscription_key = f"spotclob_candles_{market_id}_{interval}"
+            elif subscription_type == "spotclob_open_orders":
+                if not user:
+                    return False
+                subscription_key = f"spotclob_open_orders_{user}_{market_id or 'all'}"
+            else:
+                return False
         else:
             return False
             
@@ -498,31 +592,63 @@ class InfoClient:
         """
         for subscription_key, subscription_data in list(self._subscriptions.items()):
             try:
-                if subscription_data["type"] == "trades":
-                    await self.unsubscribe_trades(subscription_data["market"])
-                elif subscription_data["type"] == "candles":
-                    await self.unsubscribe_candles(subscription_data["market"], subscription_data["interval"])
-                elif subscription_data["type"] == "orderbook":
-                    await self.unsubscribe_orderbook(subscription_data["market"], subscription_data["limit"])
+                sub_type = subscription_data["type"]
+                
+                if sub_type == "perp_trades":
+                    await self.unsubscribe_perp_trades(subscription_data["market_id"])
+                elif sub_type == "perp_book":
+                    await self.unsubscribe_perp_book(subscription_data["market_id"])
+                elif sub_type == "perp_candles":
+                    await self.unsubscribe_perp_candles(subscription_data["market_id"], subscription_data["interval"])
+                elif sub_type == "perp_positions":
+                    await self.unsubscribe_perp_positions(subscription_data["user"], subscription_data.get("market_id"))
+                elif sub_type == "perp_open_orders":
+                    await self.unsubscribe_perp_open_orders(subscription_data["user"], subscription_data.get("market_id"))
+                elif sub_type == "spotclob_trades":
+                    await self.unsubscribe_spotclob_trades(subscription_data["market_id"])
+                elif sub_type == "spotclob_book":
+                    await self.unsubscribe_spotclob_book(subscription_data["market_id"])
+                elif sub_type == "spotclob_candles":
+                    await self.unsubscribe_spotclob_candles(subscription_data["market_id"], subscription_data["interval"])
+                elif sub_type == "spotclob_open_orders":
+                    await self.unsubscribe_spotclob_open_orders(subscription_data["user"], subscription_data.get("market_id"))
             except Exception as e:
                 logger.error(f"Error unsubscribing from {subscription_key}: {e}")
         
         self._subscriptions.clear()
 
-    async def unsubscribe_all_trades(self) -> None:
-        """Unsubscribe from all trade subscriptions."""
+    async def unsubscribe_all_perp_trades(self) -> None:
+        """Unsubscribe from all perp trade subscriptions."""
         for subscription_key, subscription_data in list(self._subscriptions.items()):
-            if subscription_data["type"] == "trades":
-                await self.unsubscribe_trades(subscription_data["market"])
+            if subscription_data["type"] == "perp_trades":
+                await self.unsubscribe_perp_trades(subscription_data["market_id"])
 
-    async def unsubscribe_all_candles(self) -> None:
-        """Unsubscribe from all candle subscriptions."""
+    async def unsubscribe_all_perp_candles(self) -> None:
+        """Unsubscribe from all perp candle subscriptions."""
         for subscription_key, subscription_data in list(self._subscriptions.items()):
-            if subscription_data["type"] == "candles":
-                await self.unsubscribe_candles(subscription_data["market"], subscription_data["interval"])
+            if subscription_data["type"] == "perp_candles":
+                await self.unsubscribe_perp_candles(subscription_data["market_id"], subscription_data["interval"])
 
-    async def unsubscribe_all_orderbooks(self) -> None:
-        """Unsubscribe from all orderbook subscriptions."""
+    async def unsubscribe_all_perp_books(self) -> None:
+        """Unsubscribe from all perp orderbook subscriptions."""
         for subscription_key, subscription_data in list(self._subscriptions.items()):
-            if subscription_data["type"] == "orderbook":
-                await self.unsubscribe_orderbook(subscription_data["market"], subscription_data["limit"])
+            if subscription_data["type"] == "perp_book":
+                await self.unsubscribe_perp_book(subscription_data["market_id"])
+
+    async def unsubscribe_all_spotclob_trades(self) -> None:
+        """Unsubscribe from all spot CLOB trade subscriptions."""
+        for subscription_key, subscription_data in list(self._subscriptions.items()):
+            if subscription_data["type"] == "spotclob_trades":
+                await self.unsubscribe_spotclob_trades(subscription_data["market_id"])
+
+    async def unsubscribe_all_spotclob_candles(self) -> None:
+        """Unsubscribe from all spot CLOB candle subscriptions."""
+        for subscription_key, subscription_data in list(self._subscriptions.items()):
+            if subscription_data["type"] == "spotclob_candles":
+                await self.unsubscribe_spotclob_candles(subscription_data["market_id"], subscription_data["interval"])
+
+    async def unsubscribe_all_spotclob_books(self) -> None:
+        """Unsubscribe from all spot CLOB orderbook subscriptions."""
+        for subscription_key, subscription_data in list(self._subscriptions.items()):
+            if subscription_data["type"] == "spotclob_book":
+                await self.unsubscribe_spotclob_book(subscription_data["market_id"])

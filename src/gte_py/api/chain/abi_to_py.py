@@ -4,7 +4,7 @@ import re
 import keyword
 import builtins
 from eth_utils.crypto import keccak
-from typing import Any, NamedTuple
+from typing import Any
 
 # Get the directory where this script is located
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -122,10 +122,16 @@ def extract_all_structs_from_abis(abi_files: list[str]) -> dict[str, str]:
         with open(abi_file, "r") as f:
             abi = json.load(f)
         
+        # Check if this is perp_manager ABI
+        is_perp_manager = "perp_manager.json" in abi_file
+        
         def process_type(type_info):
             if type_info.get("type") == "tuple" and type_info.get("components"):
                 struct_name = extract_struct_name(type_info.get("internalType", ""))
                 if struct_name:
+                    # Append "Perp" suffix for perp_manager structs
+                    if is_perp_manager:
+                        struct_name += "Perp"
                     struct_types.add(struct_name)
                     # Recursively process nested structs
                     for component in type_info["components"]:
@@ -146,15 +152,21 @@ def extract_all_structs_from_abis(abi_files: list[str]) -> dict[str, str]:
         with open(abi_file, "r") as f:
             abi = json.load(f)
         
+        # Check if this is perp_manager ABI
+        is_perp_manager = "perp_manager.json" in abi_file
+        
         def generate_struct_definitions(type_info):
             if type_info.get("type") == "tuple" and type_info.get("components"):
                 struct_name = extract_struct_name(type_info.get("internalType", ""))
-                if struct_name and struct_name not in all_structs:
-                    # Generate nested structs first
-                    for component in type_info["components"]:
-                        generate_struct_definitions(component)
-                    # Generate this struct
-                    all_structs[struct_name] = generate_struct_class(struct_name, type_info["components"], struct_types)
+                if struct_name:
+                    # Append "Perp" suffix for perp_manager structs
+                    final_struct_name = struct_name + "Perp" if is_perp_manager else struct_name
+                    if final_struct_name not in all_structs:
+                        # Generate nested structs first
+                        for component in type_info["components"]:
+                            generate_struct_definitions(component)
+                        # Generate this struct
+                        all_structs[final_struct_name] = generate_struct_class(final_struct_name, type_info["components"], struct_types)
         
         for item in abi:
             if item.get("type") == "function":
@@ -193,16 +205,51 @@ def get_structs_used_by_abi(abi: list[dict[str, Any]]) -> set[str]:
     
     return structs_used
 
-def generate_event_class(event: dict[str, Any], struct_types: set[str]) -> tuple[str, str]:
+def get_perp_structs_used_by_abi(abi: list[dict[str, Any]]) -> set[str]:
+    """Get all struct names used by PerpManager ABI with 'Perp' suffix"""
+    structs_used = set()
+    
+    def process_type(type_info):
+        if type_info.get("type") == "tuple" and type_info.get("components"):
+            struct_name = extract_struct_name(type_info.get("internalType", ""))
+            if struct_name:
+                # Append 'Perp' to avoid conflicts with CLOB structs
+                structs_used.add(struct_name + "Perp")
+                # Recursively process nested structs
+                for component in type_info["components"]:
+                    process_type(component)
+    
+    for item in abi:
+        if item.get("type") == "function":
+            for inp in item.get("inputs", []):
+                process_type(inp)
+            for out in item.get("outputs", []):
+                process_type(out)
+        elif item.get("type") == "event":
+            for inp in item.get("inputs", []):
+                process_type(inp)
+    
+    return structs_used
+
+def generate_event_class(event: dict[str, Any], struct_types: set[str], contract_name: str = '') -> tuple[str, str]:
     # Ensure event class name is UpperCamelCase (PascalCase) and matches event name exactly
     pascal_name = event['name'] + "Event"
+    
+    # For perp_manager events, append "Perp" to the class name
+    if contract_name == "perp_manager":
+        pascal_name = event['name'] + "PerpEvent"
+    
     lines = [f"@dataclass", f"class {pascal_name}:"]
     for inp in event.get('inputs', []):
         if inp.get("type") == "tuple" and inp.get("components"):
             # This is a struct - use the struct name as the type
             struct_name = extract_struct_name(inp.get("internalType", ""))
             if struct_name:
-                typ = struct_name
+                # For perp_manager events, use Perp structs
+                if contract_name == "perp_manager":
+                    typ = struct_name + "Perp"
+                else:
+                    typ = struct_name
             else:
                 typ = "Any"
         else:
@@ -294,18 +341,46 @@ def generate_enums_template(enum_names: set[str]) -> str:
     
     return "\n".join(lines)
 
-def generate_output_type(outputs, fn_name):
+def generate_output_type(outputs, fn_name, contract_name=None, struct_types=None):
+    if struct_types is None:
+        struct_types = set()
+    
     if not outputs:
         return "Any", None, None
     if len(outputs) == 1:
-        typ = solidity_to_pytype(outputs[0]["type"])
-        return typ, None, [outputs[0].get("name") or f"{fn_name}_result0"]
+        output = outputs[0]
+        if output.get("type") == "tuple" and output.get("components"):
+            # This is a struct output
+            struct_name = extract_struct_name(output.get("internalType", ""))
+            if struct_name:
+                # For PerpManager, append "Perp" to struct names
+                if contract_name == "perp_manager":
+                    typ = struct_name + "Perp"
+                else:
+                    typ = struct_name
+            else:
+                typ = "Any"
+        else:
+            typ = solidity_to_pytype(output["type"], struct_types)
+        return typ, None, [output.get("name") or f"{fn_name}_result0"]
     # Multiple outputs: use tuple with field names for documentation
     # Build a tuple type hint using TYPE_MAP for each output
     tuple_types = []
     for out in outputs:
-        sol_type = out["type"]
-        tuple_types.append(TYPE_MAP.get(sol_type, "Any"))
+        if out.get("type") == "tuple" and out.get("components"):
+            # This is a struct output
+            struct_name = extract_struct_name(out.get("internalType", ""))
+            if struct_name:
+                # For PerpManager, append "Perp" to struct names
+                if contract_name == "perp_manager":
+                    tuple_types.append(struct_name + "Perp")
+                else:
+                    tuple_types.append(struct_name)
+            else:
+                tuple_types.append("Any")
+        else:
+            sol_type = out["type"]
+            tuple_types.append(TYPE_MAP.get(sol_type, "Any"))
     tuple_type_hint = f"tuple[{', '.join(tuple_types)}]"
     fields = [normalize_param_name(out.get("name") or f"{fn_name}_result{idx}") for idx, out in enumerate(outputs)]
     return tuple_type_hint, None, fields
@@ -319,7 +394,11 @@ def generate_contract_class(abi: list[dict[str, Any]], class_name: str, event_cl
     imports.append("from hexbytes import HexBytes")
     
     # Import structs used by this ABI
-    structs_used = get_structs_used_by_abi(abi)
+    if contract_name == "perp_manager":
+        structs_used = get_perp_structs_used_by_abi(abi)
+    else:
+        structs_used = get_structs_used_by_abi(abi)
+    
     if structs_used:
         imports.append(f"from .structs import {', '.join(sorted(structs_used))}")
     
@@ -341,7 +420,7 @@ def generate_contract_class(abi: list[dict[str, Any]], class_name: str, event_cl
             is_view = item.get("stateMutability") in ("view", "pure")
             
             # Output type
-            ret_type, tuple_fields, output_field_names = generate_output_type(outputs, snake_fn)
+            ret_type, tuple_fields, output_field_names = generate_output_type(outputs, snake_fn, contract_name, struct_types)
             # No more namedtuples - field names will be used in docstring
             
             # Method signature
@@ -356,7 +435,11 @@ def generate_contract_class(abi: list[dict[str, Any]], class_name: str, event_cl
                     # This is a struct - use the struct name as the type
                     struct_name = extract_struct_name(inp.get("internalType", ""))
                     if struct_name:
-                        typ = struct_name
+                        # For PerpManager, append "Perp" to struct names to match our naming convention
+                        if contract_name == "perp_manager":
+                            typ = struct_name + "Perp"
+                        else:
+                            typ = struct_name
                         struct_args.append(True)
                     else:
                         typ = "Any"
@@ -506,6 +589,11 @@ struct_types = set(all_structs.keys())
 for abi_file in abi_files:
     with open(abi_file, "r") as f:
         abi = json.load(f)
+    
+    # Determine contract name from filename
+    base = os.path.splitext(os.path.basename(abi_file))[0]
+    contract_name = base
+    
     event_class_names = set()
     for item in abi:
         if item.get("type") == "event":
@@ -514,10 +602,15 @@ for abi_file in abi_files:
                 if inp.get("type") == "tuple" and inp.get("components"):
                     struct_name = extract_struct_name(inp.get("internalType", ""))
                     if struct_name:
-                        events_struct_usage.add(struct_name)
+                        # For perp_manager events, track Perp structs
+                        if contract_name == "perp_manager":
+                            events_struct_usage.add(struct_name + "Perp")
+                        else:
+                            events_struct_usage.add(struct_name)
             
-            event_class, class_name = generate_event_class(item, struct_types)
-            all_events[class_name] = event_class  # Will overwrite duplicates, which is fine
+            event_class, class_name = generate_event_class(item, struct_types, contract_name)
+            # Always add the event - we want both regular and Perp versions
+            all_events[class_name] = event_class
             event_class_names.add(class_name)
     abi_event_map[abi_file] = event_class_names
 
@@ -526,9 +619,22 @@ with open(os.path.join(output_dir, "events.py"), "w") as f:
     f.write("# This file is auto-generated. Do not edit manually.\n")
     f.write("from dataclasses import dataclass\n")
     f.write("from eth_typing import ChecksumAddress\n")
-    # Import structs used by events
+    f.write("from typing import Any\n")
+    f.write("from hexbytes import HexBytes\n")
+    # Import structs used by events - need both regular and Perp versions
     if events_struct_usage:
-        f.write(f"from .structs import {', '.join(sorted(events_struct_usage))}\n")
+        # Separate regular and Perp structs
+        regular_structs = [s for s in events_struct_usage if not s.endswith('Perp')]
+        perp_structs = [s for s in events_struct_usage if s.endswith('Perp')]
+        
+        imports = []
+        if regular_structs:
+            imports.append(f"from .structs import {', '.join(sorted(regular_structs))}")
+        if perp_structs:
+            imports.append(f"from .structs import {', '.join(sorted(perp_structs))}")
+        
+        for import_line in imports:
+            f.write(import_line + "\n")
     f.write("\n")
     for class_name in sorted(all_events.keys()):  # Sort for consistent output
         f.write(all_events[class_name] + "\n\n")

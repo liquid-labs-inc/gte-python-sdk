@@ -8,6 +8,10 @@ from gte_py.api.chain.uniswap_router import UniswapRouter
 from gte_py.api.chain.erc20 import Erc20
 from gte_py.api.chain.weth import Weth
 from gte_py.api.chain.launchpad import Launchpad
+from gte_py.api.chain.perp_manager import PerpManager
+from gte_py.api.chain.account_manager import AccountManager
+from gte_py.api.chain.operator_contract import OperatorContract
+from gte_py.api.chain.uniswap_factory import UniswapFactory
 
 
 class ChainClient:
@@ -20,29 +24,44 @@ class ChainClient:
     - Automatic caching to avoid redundant router calls and contract instantiation
     """
 
-    def __init__(self, web3: AsyncWeb3, router_address: ChecksumAddress):
+    def __init__(self, web3: AsyncWeb3, router_address: ChecksumAddress, launchpad_address: ChecksumAddress, clob_manager_address: ChecksumAddress, perp_manager_address: ChecksumAddress, account_manager_address: ChecksumAddress, operator_address: ChecksumAddress, weth_address: ChecksumAddress):
         """
         Initialize the chain client.
 
         Args:
             web3: AsyncWeb3 instance
             router_address: Address of the router contract
+            launchpad_address: Address of the launchpad contract
+            clob_manager_address: Address of the clob manager contract
+            perp_manager_address: Address of the perp manager contract
+            account_manager_address: Address of the account manager contract
+            operator_address: Address of the operator contract
+            weth_address: Address of the weth contract
         """
         self._web3 = web3
         self._router_address = router_address
+        self._launchpad_address = launchpad_address
+        self._clob_manager_address = clob_manager_address
+        self._perp_manager_address = perp_manager_address
+        self._account_manager_address = account_manager_address
+        self._operator_address = operator_address
+        self._weth_address = weth_address
+
         self._router = Router(web3=web3, address=self._router_address)
+        self._launchpad = Launchpad(web3=web3, address=self._launchpad_address)
+        self._clob_manager = ClobManager(web3=web3, address=self._clob_manager_address)
+        self._perp_manager = PerpManager(web3=web3, address=self._perp_manager_address)
+        self._account_manager = AccountManager(web3=web3, address=self._account_manager_address)
+        self._operator = OperatorContract(web3=web3, address=self._operator_address)
         
-        # Cached addresses
-        self._clob_manager_address: ChecksumAddress | None = None
         self._univ2_router_address: ChecksumAddress | None = None
-        self._weth_address: ChecksumAddress | None = None
-        self._launchpad_address: ChecksumAddress | None = None
+        self._univ2_factory_address: ChecksumAddress | None = None
+        self._weth_address: ChecksumAddress= weth_address
         
         # Cached contract instances
         self._univ2_router: UniswapRouter | None = None
-        self._clob_manager: ClobManager | None = None
-        self._weth: Weth | None = None
-        self._launchpad: Launchpad | None = None
+        self._univ2_factory: UniswapFactory | None = None
+        self._weth: Weth = Weth(web3=web3, address=self._weth_address)
         self._clob_contracts: dict[ChecksumAddress, Clob] = {}
         self._erc20_contracts: dict[ChecksumAddress, Erc20] = {}
 
@@ -50,21 +69,12 @@ class ChainClient:
         """
         Initialize the chain client by fetching required addresses.
         """
-        if self._clob_manager_address and self._univ2_router_address and self._weth_address:
-            return
-
         # Get and cache addresses from router
-        self._clob_manager_address = await self._router.clob_factory()
-        self._univ2_router_address = await self._router.uni_v2_router()
-        self._weth_address = await self._router.weth()
-        self._launchpad_address = await self._router.launchpad()
-        
-        self._clob_manager = ClobManager(web3=self._web3, address=self._clob_manager_address)
+        self._univ2_router_address = await self._launchpad.uni_v2_router()
+        self._univ2_factory_address = await self._launchpad.uni_v2_factory()
+        self._univ2_factory = UniswapFactory(web3=self._web3, address=self._univ2_factory_address)
         self._univ2_router = UniswapRouter(web3=self._web3, address=self._univ2_router_address)
-        self._weth = Weth(web3=self._web3, address=self._weth_address)
-        self._launchpad = Launchpad(web3=self._web3, address=self._launchpad_address)
 
-    # Router properties
     @property
     def router(self) -> Router:
         """Get the router contract instance."""
@@ -89,7 +99,6 @@ class ChainClient:
             raise ValueError("CLOB manager address is not initialized. Call init() first.")
         return self._clob_manager_address
     
-    # UniswapV2 Router properties
     @property
     def univ2_router(self) -> UniswapRouter:
         """Get the UniswapV2 router contract instance."""
@@ -103,8 +112,21 @@ class ChainClient:
         if not self._univ2_router_address:
             raise ValueError("UniswapV2 router address is not initialized. Call init() first.")
         return self._univ2_router_address
+    
+    @property
+    def univ2_factory(self) -> UniswapFactory:
+        """Get the UniswapV2 factory contract instance."""
+        if not self._univ2_factory:
+            raise ValueError("UniswapV2 factory is not initialized. Call init() first.")
+        return self._univ2_factory
 
-    # WETH properties (singleton)
+    @property
+    def univ2_factory_address(self) -> ChecksumAddress:
+        """Get the UniswapV2 factory contract address."""
+        if not self._univ2_factory_address:
+            raise ValueError("UniswapV2 factory address is not initialized. Call init() first.")
+        return self._univ2_factory_address
+
     @property
     def weth(self) -> Weth:
         """Get the WETH contract instance."""
@@ -133,7 +155,48 @@ class ChainClient:
             raise ValueError("Launchpad is not initialized. Call init() first.")
         return self._launchpad
     
-    # ICLOB methods (parameterized)
+    @property
+    def perp_manager_address(self) -> ChecksumAddress:
+        """Get the Perp manager contract instance."""
+        if not self._perp_manager_address:
+            raise ValueError("Perp manager address is not initialized. Call init() first.")
+        return self._perp_manager_address
+    
+    @property
+    def perp_manager(self) -> PerpManager:
+        """Get the Perp manager contract instance."""
+        if not self._perp_manager:
+            raise ValueError("Perp manager is not initialized. Call init() first.")
+        return self._perp_manager
+    
+    @property
+    def account_manager_address(self) -> ChecksumAddress:
+        """Get the Account manager contract instance."""
+        if not self._account_manager_address:
+            raise ValueError("Account manager address is not initialized. Call init() first.")
+        return self._account_manager_address
+    
+    @property
+    def account_manager(self) -> AccountManager:
+        """Get the Account manager contract instance."""
+        if not self._account_manager:
+            raise ValueError("Account manager is not initialized. Call init() first.")
+        return self._account_manager
+    
+    @property
+    def operator_address(self) -> ChecksumAddress:
+        """Get the Operator contract instance."""
+        if not self._operator_address:
+            raise ValueError("Operator address is not initialized. Call init() first.")
+        return self._operator_address
+    
+    @property
+    def operator(self) -> OperatorContract:
+        """Get the Operator contract instance."""
+        if not self._operator:
+            raise ValueError("Operator is not initialized. Call init() first.")
+        return self._operator
+    
     def get_clob(self, clob_address: ChecksumAddress) -> Clob:
         """
         Get the ICLOB contract instance.
@@ -150,7 +213,6 @@ class ChainClient:
             )
         return self._clob_contracts[clob_address]
 
-    # ERC20 methods (parameterized)
     def get_erc20(self, token_address: ChecksumAddress) -> Erc20:
         """
         Get the ERC20 contract instance.
