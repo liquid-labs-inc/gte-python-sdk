@@ -173,7 +173,7 @@ class RestApi:
             raise last_exception
         assert False, "Unreachable retry fall-through"
 
-    async def get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any] | list[dict[str, Any]]:
+    async def get(self, endpoint: str, params: dict[str, Any] | None = None):
         """Make a GET request.
         
         Args:

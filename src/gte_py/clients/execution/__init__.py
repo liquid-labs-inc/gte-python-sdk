@@ -1045,12 +1045,10 @@ class ExecutionClient:
         
         logger.info(f"Buying {launch_token} with exactly {quote_amount_in} {quote_token}")
 
-        tx = self._chain_client.launchpad.buy(
-            account=self.wallet_address,
-            token=launch_token,
-            recipient=self.wallet_address,
+        tx = self._chain_client.router.launchpad_buy(
+            launch_token=launch_token,
             amount_out_base=min_base_out,
-            max_amount_in_quote=quote_amount_atomic,
+            worst_amount_in_quote=quote_amount_atomic,
             **kwargs,
         )
         
@@ -1102,12 +1100,10 @@ class ExecutionClient:
         
         logger.info(f"Selling exactly {base_amount_in} {launch_token} for {quote_token}")
 
-        tx = self._chain_client.launchpad.sell(
-            account=self.wallet_address,
-            token=launch_token,
-            recipient=self.wallet_address,
+        tx = self._chain_client.router.launchpad_sell(
+            launch_token=launch_token,
             amount_in_base=base_amount_atomic,
-            min_amount_out_quote=min_quote_out,
+            worst_amount_out_quote=min_quote_out,
             **kwargs,
         )
         
@@ -1269,65 +1265,6 @@ class ExecutionClient:
             return await self._scheduler.return_transaction_data(swap_tx)
         return await self._scheduler.send_wait(swap_tx)
 
-    def _get_swap_for_exact_function(
-        self,
-        token_in: ChecksumAddress,
-        token_out: ChecksumAddress,
-        amount_out_atomic: int,
-        amount_in_max: int,
-        path: list[ChecksumAddress],
-        deadline: int,
-        **kwargs,
-    ) -> TypedContractFunction[Any]:
-        """
-        Get the appropriate swap function for exact output based on whether WETH is involved.
-        
-        Args:
-            token_in: Input token
-            token_out: Output token
-            amount_out_atomic: Exact output amount in atomic units
-            amount_in_max: Maximum input amount
-            path: Swap path
-            deadline: Transaction deadline
-            **kwargs: Additional transaction parameters
-            
-        Returns:
-            TypedContractFunction for the appropriate swap method
-        """
-        is_eth_in = token_in == self._chain_client.weth_address
-        is_eth_out = token_out == self._chain_client.weth_address
-        
-        if is_eth_in and not is_eth_out:
-            # ETH -> Token: use swapETHForExactTokens
-            return self._chain_client.univ2_router.swap_eth_for_exact_tokens(
-                amount_out=amount_out_atomic,
-                path=path,
-                to=self.wallet_address,
-                deadline=deadline,
-                value=amount_in_max,  # ETH value sent with transaction
-                **kwargs,
-            )
-        elif not is_eth_in and is_eth_out:
-            # Token -> ETH: use swapTokensForExactETH
-            return self._chain_client.univ2_router.swap_tokens_for_exact_eth(
-                amount_out=amount_out_atomic,
-                amount_in_max=amount_in_max,
-                path=path,
-                to=self.wallet_address,
-                deadline=deadline,
-                **kwargs,
-            )
-        else:
-            # Token -> Token: use swapTokensForExactTokens
-            return self._chain_client.univ2_router.swap_tokens_for_exact_tokens(
-                amount_out=amount_out_atomic,
-                amount_in_max=amount_in_max,
-                path=path,
-                to=self.wallet_address,
-                deadline=deadline,
-                **kwargs,
-            )
-
     async def swap_tokens_for_exact_output(
         self,
         token_in: ChecksumAddress,
@@ -1369,11 +1306,11 @@ class ExecutionClient:
         deadline = int(time.time()) + deadline_seconds
 
         # Get the appropriate swap function
-        swap_tx = self._get_swap_for_exact_function(
+        swap_tx = self._get_swap_function(
             token_in=token_in,
             token_out=token_out,
-            amount_out_atomic=amount_out_atomic,
-            amount_in_max=amount_in_max,
+            amount_out_min=amount_out_atomic,
+            amount_in_atomic=amount_in_max,
             path=path,
             deadline=deadline,
             **kwargs,
