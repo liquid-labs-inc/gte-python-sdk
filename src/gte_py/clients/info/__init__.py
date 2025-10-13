@@ -7,9 +7,6 @@ import requests
 
 from gte_py.api.rest import RestApi
 from gte_py.api.ws import WebSocketApi
-from gte_py.models import (
-    Token, Market, Candle, Trade, Position, OrderBookSnapshot
-)
 
 logger = logging.getLogger(__name__)
 

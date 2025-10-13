@@ -8,9 +8,10 @@ import asyncio
 
 from gte_py.clients import GTEClient
 from gte_py.configs import TESTNET_CONFIG
-from gte_py.models import OrderSide, TimeInForce
+from gte_py.api.chain.structs import Side
 from examples.utils import WALLET_ADDRESS, print_separator
 from examples.constants import BTC_USD_CLOB
+from gte_py.api.chain.structs import TiF
 
 async def main():
     config = TESTNET_CONFIG
@@ -18,19 +19,19 @@ async def main():
     
     async with GTEClient(config=config, wallet_address=WALLET_ADDRESS) as client:
         
-        side = OrderSide.BUY
+        side = Side.BUY
         size = Decimal('0.01')
         
         market = await client.info.get_market(BTC_USD_CLOB)
         
         # Place a market order
-        order = await client.execution.place_market_order(market, side, size, slippage=0.05, return_built_tx=True)
+        order = await client.execution.spot_place_order(market, side, size, price=Decimal(0), time_in_force=TiF.GTC, return_built_tx=True)
         print(order)
         
         best_bid, best_ask = await client.execution.get_tob(market)
         print(f"Best bid: {best_bid}, Best ask: {best_ask}")    
         
-        if side == OrderSide.BUY:
+        if side == Side.BUY:
             # For BUY orders, use the best bid price (highest buying price)
             price = best_bid+1
         else:
@@ -40,7 +41,7 @@ async def main():
         print(f"TOB Price: {price}")
 
         # Place a limit order
-        order = await client.execution.place_limit_order(market, side, size, price, time_in_force=TimeInForce.GTC, return_built_tx=True)
+        order = await client.execution.spot_place_order(market, side, size, price, time_in_force=TiF.GTC, return_built_tx=True)
         print(order)
 
 if __name__ == "__main__":

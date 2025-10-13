@@ -16,6 +16,7 @@ from async_timeout import timeout
 from eth_account import Account
 from web3._utils.events import EventLogErrorFlags
 from web3.datastructures import AttributeDict
+from web3.types import RPCEndpoint
 from eth_account.datastructures import SignedTransaction
 from eth_account.signers.local import LocalAccount
 from eth_account.types import PrivateKeyType, TransactionDictType
@@ -307,7 +308,7 @@ def normalize_receipt(receipt: TxReceipt) -> TxReceipt:
                 return HexBytes(v)
         return v
 
-    return {k: parse_field(k, v) for k, v in receipt.items()}
+    return {k: parse_field(k, v) for k, v in receipt.items()} # type: ignore
 
 
 class BoundedNonceTxScheduler:
@@ -336,11 +337,6 @@ class BoundedNonceTxScheduler:
         self.last_sent = 0
         self.chain_id: int | None = None
         
-        # Optional stuck nonce monitoring
-        self._monitoring_task: asyncio.Task[None] | None = None
-        self._stuck_nonce_threshold = 30  # seconds
-        self._monitor_interval = 10  # seconds
-        
         self.logger = logging.getLogger(__name__)
     
     @property
@@ -350,27 +346,16 @@ class BoundedNonceTxScheduler:
         return self._account
 
     async def start(self):
-        """Initialize scheduler and optionally start background monitoring."""
+        """Initialize scheduler."""
         self.last_confirmed = await self.web3.eth.get_transaction_count(self.from_address, "latest")
         self.last_sent = self.last_confirmed
         self.chain_id = await self.web3.eth.chain_id
         
         self.logger.info(f"BoundedNonceTxScheduler started for {self.from_address}")
         self.logger.info(f"Initial nonce: {self.last_confirmed}, Chain ID: {self.chain_id}")
-        
-        # Start optional stuck nonce monitoring (only if needed)
-        if self._monitor_interval > 0:
-            self._monitoring_task = asyncio.create_task(self._monitor_stuck_nonces())
     
     async def stop(self):
-        """Stop scheduler and cancel background monitoring."""
-        if self._monitoring_task:
-            self._monitoring_task.cancel()
-            try:
-                await self._monitoring_task
-            except asyncio.CancelledError:
-                pass
-        
+        """Stop scheduler."""
         # Wait for pending transactions to confirm
         await self._sync_confirmed_nonce()
         pending_count = await self.get_pending_count()
@@ -378,6 +363,8 @@ class BoundedNonceTxScheduler:
             self.logger.warning(f"Stopping with {pending_count} pending transactions")
         
         self.logger.info("BoundedNonceTxScheduler stopped")
+
+    # ================= NONCE MANAGEMENT =================
 
     async def get_pending_count(self) -> int:
         """Get current number of pending transactions."""
@@ -389,6 +376,8 @@ class BoundedNonceTxScheduler:
         network_confirmed = await self.web3.eth.get_transaction_count(self.from_address, "latest")
         self.last_confirmed = network_confirmed
         self.logger.debug(f"Synced confirmed nonce: {self.last_confirmed}")
+
+    # ================= ERROR HANDLING =================
 
     async def _handle_nonce_error_and_retry(self, contract_func: "TypedContractFunction[Any]") -> str:
         """Handle nonce error by getting fresh nonce and resending transaction."""
@@ -478,6 +467,25 @@ class BoundedNonceTxScheduler:
                 f"{final_pending}/{self.max_pending_window} transactions pending"
             )
 
+    # ================= TRANSACTION BUILDING =================
+
+    def _build_tx_params(self, contract_func: "TypedContractFunction[Any]", nonce: int) -> TransactionDictType:
+        """Build transaction parameters with given nonce."""
+        if self.chain_id is None:
+            raise ValueError("Chain ID is not set")
+        
+        return {
+            "chainId": self.chain_id,
+            "from": self.from_address,
+            "nonce": Nonce(nonce),
+            "to": contract_func.func_call.address,
+            "data": contract_func.func_call._encode_transaction_data(),
+            "gas": contract_func.params.get("gas", 1_000_000_000),
+            "maxFeePerGas": contract_func.params.get("maxFeePerGas", 2_500_000),
+            "maxPriorityFeePerGas": contract_func.params.get("maxPriorityFeePerGas", 0),
+            "value": contract_func.params.get("value", 0),
+        }
+
     async def return_transaction_data(self, contract_func: "TypedContractFunction[Any]") -> TransactionDictType:
         """
         Return the transaction data for a contract function.
@@ -492,20 +500,7 @@ class BoundedNonceTxScheduler:
         if not self.web3.eth.default_account:
             raise ValueError("No default account set")
         nonce = await self.web3.eth.get_transaction_count(self.web3.eth.default_account, "latest")
-        if not self.chain_id:
-            raise ValueError("Chain ID is not set")
-        tx_params: TransactionDictType = {
-                "chainId": self.chain_id,
-                "from": self.from_address,
-                "nonce": Nonce(nonce),
-                "to": contract_func.func_call.address,
-                "data": contract_func.func_call._encode_transaction_data(),
-                "gas": contract_func.params.get("gas", 1_000_000_000), # max gas (1 giga gas)
-                "maxFeePerGas": contract_func.params.get("maxFeePerGas", 2_500_000), # 0.0025 gwei
-                "maxPriorityFeePerGas": contract_func.params.get("maxPriorityFeePerGas", 0),
-                "value": contract_func.params.get("value", 0),
-            }
-        return tx_params
+        return self._build_tx_params(contract_func, nonce)
 
     async def _sign_transaction(self, contract_func: "TypedContractFunction[Any]") -> SignedTransaction:
         """
@@ -525,21 +520,8 @@ class BoundedNonceTxScheduler:
             self.last_sent += 1
         
         try:
-            if self.chain_id is None:
-                raise ValueError("Chain ID is not set")
-            
             # Build transaction with required parameters
-            tx_params: TransactionDictType = {
-                "chainId": self.chain_id,
-                "from": self.from_address,
-                "nonce": Nonce(nonce),
-                "to": contract_func.func_call.address,
-                "data": contract_func.func_call._encode_transaction_data(),
-                "gas": contract_func.params.get("gas", 1_000_000_000), # max gas (1 giga gas)
-                "maxFeePerGas": contract_func.params.get("maxFeePerGas", 2_500_000), # 0.0025 gwei
-                "maxPriorityFeePerGas": contract_func.params.get("maxPriorityFeePerGas", 0),
-                "value": contract_func.params.get("value", 0),
-            }
+            tx_params = self._build_tx_params(contract_func, nonce)
             
             # Sign the transaction using the account's sign_transaction method
             signed = self.account.sign_transaction(tx_params)
@@ -553,6 +535,8 @@ class BoundedNonceTxScheduler:
                 self.last_sent -= 1
             self.logger.error(f"Failed to sign transaction with nonce {nonce}: {e}")
             raise
+
+    # ================= TRANSACTION EXECUTION =================
 
     async def send(self, contract_func: "TypedContractFunction[Any]") -> str:
         """
@@ -601,20 +585,8 @@ class BoundedNonceTxScheduler:
                     raise ValueError("Chain ID is not set")
                 
                 # Simulate the transaction to get the revert reason
-                await self.web3.eth.call(
-                        {
-                        "chainId": self.chain_id,
-                        "from": self.from_address,
-                        "nonce": Nonce(self.last_sent - 1),
-                        "to": contract_func.func_call.address,
-                        "data": contract_func.func_call._encode_transaction_data(),
-                        "gas": contract_func.params.get("gas", 1_000_000_000), # max gas (1 giga gas)
-                        "maxFeePerGas": contract_func.params.get("maxFeePerGas", 2_500_000), # 0.0025 gwei
-                        "maxPriorityFeePerGas": contract_func.params.get("maxPriorityFeePerGas", 0),
-                        "value": contract_func.params.get("value", 0),
-                    },
-                    receipt['blockNumber'] - 1
-                )
+                tx_params = self._build_tx_params(contract_func, self.last_sent - 1)
+                await self.web3.eth.call(cast(TxParams, tx_params), receipt['blockNumber'] - 1)
             except Exception as call_error:
                 # Extract revert data and check against known errors
                 from .errors import ERROR_SELECTORS
@@ -657,80 +629,10 @@ class BoundedNonceTxScheduler:
             self.logger.error(f"Failed to get receipt for transaction {tx_hash.hex()}: {e}")
             raise
 
-    async def _monitor_stuck_nonces(self):
-        """
-        Background task to monitor and cancel stuck nonces.
-        Runs every _monitor_interval seconds.
-        """
-        stuck_nonce_timestamps: dict[int, float] = {}
-        
-        while True:
-            try:
-                await asyncio.sleep(self._monitor_interval)
-                
-                # Get current nonce states
-                latest_nonce = await self.web3.eth.get_transaction_count(self.from_address, "latest")
-                pending_nonce = await self.web3.eth.get_transaction_count(self.from_address, "pending")
-                
-                # If pending_nonce < last_sent, we have a gap
-                # This means the network is waiting for a nonce we think we sent
-                if pending_nonce < self.last_sent:
-                    # The stuck nonce is the pending_nonce (the one the network is waiting for)
-                    stuck_nonce = pending_nonce
-                    current_time = time.time()
-                    
-                    if stuck_nonce not in stuck_nonce_timestamps:
-                        stuck_nonce_timestamps[stuck_nonce] = current_time
-                        self.logger.info(f"Possible stuck nonce {stuck_nonce} (latest: {latest_nonce}, last_sent: {self.last_sent})")
-                    
-                    elif current_time - stuck_nonce_timestamps[stuck_nonce] > self._stuck_nonce_threshold:
-                        # Nonce stuck too long - submit cancel transaction
-                        await self._cancel_stuck_nonce(stuck_nonce)
-                        del stuck_nonce_timestamps[stuck_nonce]
-                else:
-                    # No gap - clear stuck nonce tracking
-                    stuck_nonce_timestamps.clear()
-                    
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                self.logger.error(f"Error in stuck nonce monitoring: {e}")
-
-    async def _cancel_stuck_nonce(self, stuck_nonce: int):
-        """
-        Submit a cancel transaction for a stuck nonce.
-        Sends 0 ETH to self with higher gas price.
-        """
-        try:
-            # Get current gas price info
-            block = await self.web3.eth.get_block("latest")
-            base_fee = block.get("baseFeePerGas", 10_000_000_000)
-            
-            # Cancel transaction: send 0 ETH to self with higher fees
-            cancel_tx: TransactionDictType = {
-                "chainId": self.chain_id or 6342,
-                "from": self.from_address,
-                "to": self.from_address,
-                "nonce": Nonce(stuck_nonce),
-                "value": 0,
-                "gas": 21000,
-                "maxFeePerGas": int(base_fee * 2),
-                "maxPriorityFeePerGas": 0,
-                "data": b"",
-            }
-            
-            # Sign and send cancel transaction
-            signed_cancel = self.account.sign_transaction(cancel_tx)
-            tx_hash = await self.web3.eth.send_raw_transaction(signed_cancel.raw_transaction)
-            
-            self.logger.info(f"Submitted cancel transaction for stuck nonce {stuck_nonce}: {tx_hash.hex()}")
-            
-        except Exception as e:
-            self.logger.error(f"Failed to cancel stuck nonce {stuck_nonce}: {e}")
 
     async def _send_realtime(self, raw_tx: HexBytes) -> TxReceipt:
         """Send transaction using realtime endpoint."""
         return await self.web3.manager.coro_request(
-            "realtime_sendRawTransaction",
+            cast(RPCEndpoint, "realtime_sendRawTransaction"),
             [raw_tx.hex()]
         )

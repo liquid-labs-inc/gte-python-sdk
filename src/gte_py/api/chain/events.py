@@ -70,6 +70,13 @@ class BuilderRevShareBpsUpdatedPerpEvent:
     nonce: int
 
 @dataclass
+class BurnEvent:
+    sender: ChecksumAddress
+    amount0: int
+    amount1: int
+    to: ChecksumAddress
+
+@dataclass
 class CancelFailedEvent:
     event_nonce: int
     order_id: int
@@ -332,6 +339,12 @@ class MinLimitOrderAmountInBaseUpdatedPerpEvent:
     nonce: int
 
 @dataclass
+class MintEvent:
+    sender: ChecksumAddress
+    amount0: int
+    amount1: int
+
+@dataclass
 class OperatorApprovedEvent:
     event_nonce: int
     account: ChecksumAddress
@@ -529,6 +542,11 @@ class SwapEvent:
     next_amount_sold: int
     new_price: int
     event_nonce: int
+
+@dataclass
+class SyncEvent:
+    reserve0: Any
+    reserve1: Any
 
 @dataclass
 class TakerFeeRatesUpdatedPerpEvent:

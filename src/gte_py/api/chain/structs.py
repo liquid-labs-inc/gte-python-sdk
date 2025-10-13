@@ -89,12 +89,6 @@ class BookSettingsPerp(NamedTuple):
     min_limit_order_amount_in_base: int
     tick_size: int
 
-class CancelArgs(NamedTuple):
-    """Struct definition for CancelArgs."""
-
-    order_ids: list[int]
-    settlement: int
-
 class ConditionPerp(NamedTuple):
     """Struct definition for ConditionPerp."""
 
@@ -342,27 +336,6 @@ class PositionPerp(NamedTuple):
     leverage: int
     last_cumulative_funding: int
 
-class PostFillOrderArgs(NamedTuple):
-    """Struct definition for PostFillOrderArgs."""
-
-    amount: int
-    price_limit: int
-    side: int
-    amount_is_base: bool
-    fill_order_type: int
-    settlement: int
-
-class PostLimitOrderArgs(NamedTuple):
-    """Struct definition for PostLimitOrderArgs."""
-
-    amount_in_base: int
-    price: int
-    cancel_timestamp: int
-    side: int
-    client_order_id: int
-    limit_order_type: int
-    settlement: int
-
 class SettingsParams(NamedTuple):
     """Struct definition for SettingsParams."""
 
@@ -393,6 +366,15 @@ class SignDataPerp(NamedTuple):
     sig: HexBytes
     nonce: int
     expiry: int
+
+class SwapData(NamedTuple):
+    """Struct definition for SwapData."""
+
+    amount0_out: int
+    amount1_out: int
+    to: ChecksumAddress
+    user: ChecksumAddress
+    data: HexBytes
 
 class TwapOrderArgsPerp(NamedTuple):
     """Struct definition for TwapOrderArgsPerp."""

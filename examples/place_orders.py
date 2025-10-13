@@ -18,35 +18,39 @@ async def main():
     config = TESTNET_CONFIG
 
     async with GTEClient(config=config, wallet_private_key=WALLET_PRIVATE_KEY) as client:
-        # deposit tokens to AM
-        tx = await client.execution.account_deposit(token=to_checksum_address("0xba881A0b1B01aBc545Ad80eB0D9bdD837e22D05f"), amount=int(Decimal(10**18) * (10**18)))
-        print(tx)
 
+        # # approve capUSD for account manager
+        # capUSD_address = to_checksum_address("0xe9b6e75c243b6100ffcb1c66e8f78f96feea727f")
+        # await client.execution.approve_token(capUSD_address, config.account_manager_address)
+
+        # # withdraw capUSD from perp manager
+        # tx = await client.execution.perp_withdraw(amount=Decimal(10**6))
+        # print(tx)
+
+        side = Side.SELL
+        size = Decimal('0.001')
+        market_address = to_checksum_address("0x120637A748B07D99f86Ce2357CA720F299dB198E")
+        
+        # # Place a market order
+        for i in range(20):
+            order = await client.execution.spot_place_order(market_address, side, size, price=Decimal(100_000+i), time_in_force=TiF.GTC)
+        
+            print_separator(f"Market order placed: {order}")
         side = Side.BUY
-        size = Decimal('0.01')
-        
-        market = await client.info.get_market("0xba881A0b1B01aBc545Ad80eB0D9bdD837e22D05f")
-        
-        # Place a market order
-        order = await client.execution.spot_place_order(market, side, size, price=Decimal(0), time_in_force=TiF.GTC)
-        
+        order = await client.execution.spot_place_order(market_address, side, size*5, price=Decimal(0), time_in_force=TiF.IOC)
         print_separator(f"Market order placed: {order}")
-        best_bid, best_ask = await client.execution.get_tob(market)
-        print(f"Best bid: {best_bid}, Best ask: {best_ask}")    
-        
-        if side == Side.BUY:
-            # For BUY orders, use the best bid price (highest buying price)
-            price = best_bid+1
-        else:
-            # For SELL orders, use the best ask price (lowest selling price)
-            price = best_ask-1
-        
-        print(f"TOB Price: {price}")
+        order = await client.execution.spot_place_order(market_address, side, size*5, price=Decimal(0), time_in_force=TiF.IOC)
+        print_separator(f"Market order placed: {order}")
+
+        await asyncio.sleep(1)
+
+        best_bid, best_ask = await client.execution.get_tob(market_address)
+        print(f"Best bid: {best_bid}, Best ask: {best_ask}")
 
         # Place a limit order
-        order = await client.execution.spot_place_order(market, side, size, price, time_in_force=TiF.GTC)
+        # order = await client.execution.spot_place_order(market, side, size, price, time_in_force=TiF.GTC)
         
-        print_separator(f"Limit order placed: {order}")
+        # print_separator(f"Limit order placed: {order}")
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -21,29 +21,23 @@ async def main():
         # await client.execution.approve_token(capUSD, config.perp_manager_address)
 
         # deposit capUSD to perp manager
-        # tx = await client.execution.perp_deposit(Decimal(10**6)) # 1 million capUSD
+        tx = await client.execution.perp_deposit(Decimal(3*10**6)) # 1 million capUSD
         # print(tx)
-        # add margin
+
         # check perp account balance
         perp_account_balance = await client.execution.perp_get_free_collateral_balance()
         print_separator(f"Perp account balance: {perp_account_balance / (10**18)}")
         # i have 3 million capUSD in free collateral 
 
-        market_id = "FAKEBTC"
+        market_id = "FAKEBTC-USD"
 
-        # add margin to subaccount 1
-        tx = await client.execution.perp_add_margin(subaccount=1, amount=Decimal(10**5))
-        print(tx)
-
-        # get margin balance
-        margin_balance = await client.execution.perp_get_margin_balance(1)
-        print_separator(f"Margin balance: {margin_balance / (10**18)}")
+        # # add margin to subaccount 1 (only works if you have a position)
+        # tx = await client.execution.perp_add_margin(subaccount=1, amount=Decimal(10**5))
+        # print(tx)
 
         # cancel all existing orders
         # cancel_response = await client.execution.perp_cancel_limit_orders(market_id, subaccount=1, order_ids=[71])
         # print(cancel_response)
-
-        # Check if market exists and get its status
 
         mark_price = await client.execution.perp_get_mark_price(market_id)
         print_separator(f"Mark price: {mark_price / 10**18}")
@@ -52,9 +46,13 @@ async def main():
         margin_balance = await client.execution.perp_get_margin_balance(0)
         print_separator(f"Margin balance before order: {margin_balance / (10**18)}")
 
-        # buy .1 btc at $100,000 (much higher than mark price to ensure it's a limit order)
-        tx = await client.execution.perp_place_order(market_id, Side.SELL, Decimal(0.1), Decimal(100_000), subaccount=1, tif=TiF.GTC)
-        print(tx)
+        # buy .1 btc at $100,000
+        for i in range(10):
+            tx = await client.execution.perp_place_order(market_id, Side.BUY, Decimal(0.1), Decimal(99_999-i), subaccount=0, tif=TiF.GTC)
+            print(tx)
+        for i in range(10):
+            tx = await client.execution.perp_place_order(market_id, Side.SELL, Decimal(0.1), Decimal(100_001+i), subaccount=0, tif=TiF.GTC)
+            print(tx)
 
         # update leverage
         await client.execution.perp_update_leverage(market_id, subaccount=0, leverage=Decimal(1))
