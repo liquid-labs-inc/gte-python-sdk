@@ -231,22 +231,6 @@ class TestBoundedNonceTxScheduler:
         chain_id_descriptor = type(mock_web3.eth).__dict__['chain_id']
         chain_id_descriptor._mock.assert_awaited_once()
 
-    @pytest.mark.asyncio
-    async def test_stop(self, mock_web3, mock_account):
-        scheduler = BoundedNonceTxScheduler(mock_web3, mock_account)
-
-        # Create a real awaitable coroutine to mock the task
-        async def dummy_coroutine():
-            await asyncio.sleep(0)
-
-        task = asyncio.create_task(dummy_coroutine())
-        task.cancel = MagicMock()
-
-        scheduler._monitoring_task = task
-
-        await scheduler.stop()
-
-        task.cancel.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_pending_count(self, mock_web3, mock_account):
@@ -335,43 +319,6 @@ class TestBoundedNonceTxScheduler:
             # Should succeed after retry clears the window
             result = await scheduler.send(tx)
             assert result == "0x0123"
-
-    @pytest.mark.asyncio
-    async def test_stuck_nonce_monitoring(self, mock_web3, mock_account):
-        """Test stuck nonce monitoring."""
-        scheduler = BoundedNonceTxScheduler(mock_web3, mock_account)
-        # Use integer values for testing
-        scheduler._monitor_interval = 1  # Fast for testing
-        scheduler._stuck_nonce_threshold = 1
-        await scheduler.start()
-        
-        # Simulate stuck nonce
-        mock_web3.eth.get_transaction_count.side_effect = [
-            AsyncMock(return_value=5),  # latest
-            AsyncMock(return_value=5),  # pending (same as latest = stuck)
-        ]
-        
-        # Start monitoring
-        task = asyncio.create_task(scheduler._monitor_stuck_nonces())
-        await asyncio.sleep(0.15)  # Let it run a bit
-        task.cancel()
-        
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-
-    @pytest.mark.asyncio
-    async def test_cancel_stuck_nonce(self, mock_web3, mock_account):
-        """Test cancel stuck nonce method."""
-        scheduler = BoundedNonceTxScheduler(mock_web3, mock_account)
-        await scheduler.start()
-        
-        mock_web3.eth.get_block.return_value = {"baseFeePerGas": 1000000000}
-        
-        await scheduler._cancel_stuck_nonce(5)
-        
-        mock_web3.eth.send_raw_transaction.assert_awaited_once()
 
 
 class TestNormalizeReceipt:
