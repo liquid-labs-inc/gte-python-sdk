@@ -66,7 +66,7 @@ class AmendArgs(NamedTuple):
     order_or_client_id: int
     amount_in_base: int
     price: int
-    cancel_timestamp: int
+    expiry_time: int
     side: int
 
 class AmendLimitOrderArgsPerp(NamedTuple):
@@ -201,7 +201,7 @@ class Order(NamedTuple):
     """Struct definition for Order."""
 
     side: int
-    cancel_timestamp: int
+    expiry_time: int
     maker_fee_rate: Any
     id_: int
     prev_order_id: int

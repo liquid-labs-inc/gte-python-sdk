@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from eth_typing import ChecksumAddress
 from typing import Any
 from hexbytes import HexBytes
-from .structs import AmendArgs, ConfigParams, Order, OrderProcessedData, SettingsParams
+from .structs import ConfigParams, Order, OrderProcessedData, SettingsParams
 from .structs import BookSettingsPerp, FundingRateSettingsPerp, MarketSettingsPerp, OrderPerp, OrderProcessedDataPerp
 
 @dataclass
@@ -160,6 +160,11 @@ class FundingSettledPerpEvent:
     funding: int
     cumulative_funding: int
     open_interest: int
+    nonce: int
+
+@dataclass
+class GTLUpdatedPerpEvent:
+    gtl: ChecksumAddress
     nonce: int
 
 @dataclass
@@ -373,13 +378,17 @@ class OperatorDisapprovedPerpEvent:
     removed_roles: int
 
 @dataclass
+class OracleUpdatedPerpEvent:
+    oracle: ChecksumAddress
+    nonce: int
+
+@dataclass
 class OrderAmendedEvent:
     event_nonce: int
-    pre_amend: Order
-    args: AmendArgs
+    order_id: int
+    new_order: Order
     quote_token_delta: int
     base_token_delta: int
-    maker_fee_rate: Any
 
 @dataclass
 class OrderAmendedPerpEvent:
@@ -407,6 +416,7 @@ class OrderCanceledPerpEvent:
     subaccount: int
     collateral_refunded: int
     book_type: int
+    cancel_type: int
     nonce: int
 
 @dataclass
@@ -474,6 +484,13 @@ class PartialLiquidationRateUpdatedPerpEvent:
 class PartialLiquidationThresholdUpdatedPerpEvent:
     asset: HexBytes
     partial_liquidation_threshold: int
+    nonce: int
+
+@dataclass
+class PerpManagerInitializedPerpEvent:
+    quote: ChecksumAddress
+    oracle: ChecksumAddress
+    gtl: ChecksumAddress
     nonce: int
 
 @dataclass

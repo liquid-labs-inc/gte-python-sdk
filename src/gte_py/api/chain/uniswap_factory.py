@@ -34,8 +34,8 @@ class UniswapFactory:
         func = self.contract.functions.feeToSetter()
         return await func.call()
 
-    async def get_pair(self, token0: ChecksumAddress, token1: ChecksumAddress) -> ChecksumAddress:
-        func = self.contract.functions.getPair(token0, token1)
+    async def get_pair(self, param1: ChecksumAddress, param2: ChecksumAddress) -> ChecksumAddress:
+        func = self.contract.functions.getPair(param1, param2)
         return await func.call()
 
     def initialize(self, fee_to_setter: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:

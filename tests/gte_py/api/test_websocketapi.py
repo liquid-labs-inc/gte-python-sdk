@@ -171,10 +171,10 @@ class TestWebSocketApiListenLoop:
         ws._shutting_down = False
         ws.ws = MagicMock()
         callback = AsyncMock()
-        ws.callbacks = {('book', VALID_ADDRESS): callback}
+        ws.callbacks = {123: callback}
         msg = MagicMock()
         msg.type = aiohttp.WSMsgType.TEXT
-        msg.data = json.dumps({'s': 'book', 'd': {'m': VALID_ADDRESS}})
+        msg.data = json.dumps({'id': 123, 'd': {'m': VALID_ADDRESS}})
         ws.ws.__aiter__.return_value = [msg]
         with patch.object(ws, '_handle_message', new_callable=AsyncMock) as mock_handle:
             await ws._listen()
@@ -335,62 +335,60 @@ class TestWebSocketApiReconnectLogic:
 
 class TestWebSocketApiMessageHandling:
     @pytest.mark.asyncio
-    async def test_handle_message_valid_s_valid_market_calls_callback(self):
-        ws = WebSocketApi()
-        callback = AsyncMock()
-        ws.callbacks = {('book', VALID_ADDRESS): callback}
-        data = {'s': 'book', 'd': {'m': VALID_ADDRESS}}
-        with patch('eth_utils.address.to_checksum_address', return_value=VALID_ADDRESS):
+    async def test_handle_message_subscription_acknowledgment_logs_debug(self, caplog):
+        ws = WebSocketApi(enable_logging=True)
+        data = {'id': 123}
+        with caplog.at_level(logging.DEBUG):
             await ws._handle_message(data)
-            callback.assert_awaited_once()
+        assert "Subscription acknowledged" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_handle_message_invalid_or_missing_market_logs_and_returns(self, caplog):
+    async def test_handle_message_valid_data_calls_callback(self):
         ws = WebSocketApi()
-        data = {'s': 'book', 'd': {}}
-        with patch('eth_utils.address.to_checksum_address', side_effect=ValueError("bad address")):
-            await ws._handle_message(data)
-        assert "Invalid market address" in caplog.text
+        callback = AsyncMock()
+        ws.callbacks = {123: callback}
+        data = {'id': 123, 'd': {'m': VALID_ADDRESS}}
+        await ws._handle_message(data)
+        callback.assert_awaited_once_with({'m': VALID_ADDRESS})
 
     @pytest.mark.asyncio
     async def test_handle_message_no_matching_callback_logs_warning(self, caplog):
         ws = WebSocketApi()
         ws.callbacks = {}
-        data = {'s': 'book', 'd': {'m': VALID_ADDRESS}}
-        with patch('eth_utils.address.to_checksum_address', return_value=VALID_ADDRESS):
-            await ws._handle_message(data)
-        assert "No callback for stream" in caplog.text
+        data = {'id': 123, 'd': {'m': VALID_ADDRESS}}
+        await ws._handle_message(data)
+        assert "No callback for subscription ID" in caplog.text
 
     @pytest.mark.asyncio
     async def test_handle_message_callback_raises_logs_error(self, caplog):
         ws = WebSocketApi()
         def bad_callback(payload):
             raise Exception("fail")
-        ws.callbacks = {('book', VALID_ADDRESS): bad_callback}
-        data = {'s': 'book', 'd': {'m': VALID_ADDRESS}}
-        with patch('eth_utils.address.to_checksum_address', return_value=VALID_ADDRESS):
-            await ws._handle_message(data)
-        assert "Error in callback for" in caplog.text
+        ws.callbacks = {123: bad_callback}
+        data = {'id': 123, 'd': {'m': VALID_ADDRESS}}
+        await ws._handle_message(data)
+        assert "Error in callback for subscription" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_handle_message_unknown_format_logs_warning(self, caplog):
+        ws = WebSocketApi()
+        data = {'unknown': 'format'}
+        await ws._handle_message(data)
+        assert "Unknown message format" in caplog.text
 
 class TestWebSocketApiSubscribeLogic:
     @pytest.mark.asyncio
-    async def test_subscribe_invalid_method_raises(self):
+    async def test_subscribe_missing_marketId_raises(self):
         ws = WebSocketApi()
         with pytest.raises(ValueError):
-            await ws.subscribe('badmethod', {'market': VALID_ADDRESS}, AsyncMock())
-
-    @pytest.mark.asyncio
-    async def test_subscribe_missing_market_raises(self):
-        ws = WebSocketApi()
-        with pytest.raises(ValueError):
-            await ws.subscribe('book.subscribe', {}, AsyncMock())
+            await ws.subscribe('book', {}, AsyncMock())
 
     @pytest.mark.asyncio
     async def test_subscribe_invalid_market_raises(self):
         ws = WebSocketApi()
         with patch('eth_utils.address.to_checksum_address', side_effect=ValueError("bad address")):
             with pytest.raises(ValueError):
-                await ws.subscribe('book.subscribe', {'market': 'bad'}, AsyncMock())
+                await ws.subscribe('book', {'marketId': 'bad'}, AsyncMock())
 
     @pytest.mark.asyncio
     async def test_subscribe_with_closed_ws_triggers_connect(self):
@@ -407,7 +405,7 @@ class TestWebSocketApiSubscribeLogic:
 
         with patch.object(ws, 'connect', new=AsyncMock(side_effect=connect_side_effect)) as mock_connect, \
             patch('eth_utils.address.to_checksum_address', return_value=VALID_ADDRESS):
-            await ws.subscribe('book.subscribe', {'market': VALID_ADDRESS}, lambda x: None)
+            await ws.subscribe('book', {'marketId': VALID_ADDRESS}, lambda x: None)
 
         mock_connect.assert_awaited()
 
@@ -418,9 +416,11 @@ class TestWebSocketApiSubscribeLogic:
         ws.ws.closed = False
         with patch('eth_utils.address.to_checksum_address', return_value=VALID_ADDRESS), \
              patch.object(ws.ws, 'send_json', new_callable=AsyncMock) as mock_send_json:
-            await ws.subscribe('book.subscribe', {'market': VALID_ADDRESS}, AsyncMock())
+            await ws.subscribe('book', {'marketId': VALID_ADDRESS}, AsyncMock())
             mock_send_json.assert_awaited()
-            assert ('book', VALID_ADDRESS) in ws.callbacks
+            # Check that callback is stored by subscription ID
+            assert len(ws.callbacks) == 1
+            assert len(ws.subscriptions) == 1
 
     @pytest.mark.asyncio
     async def test_subscribe_fails_sending_json_removes_callback(self):
@@ -430,8 +430,9 @@ class TestWebSocketApiSubscribeLogic:
         with patch('eth_utils.address.to_checksum_address', return_value=VALID_ADDRESS), \
              patch.object(ws.ws, 'send_json', new_callable=AsyncMock, side_effect=Exception("fail")):
             with pytest.raises(Exception):
-                await ws.subscribe('book.subscribe', {'market': VALID_ADDRESS}, AsyncMock())
-            assert ('book', VALID_ADDRESS) not in ws.callbacks
+                await ws.subscribe('book', {'marketId': VALID_ADDRESS}, AsyncMock())
+            assert len(ws.callbacks) == 0
+            assert len(ws.subscriptions) == 0
 
 class TestWebSocketApiUnsubscribeLogic:
     @pytest.mark.asyncio
@@ -439,34 +440,43 @@ class TestWebSocketApiUnsubscribeLogic:
         ws = WebSocketApi()
         ws.state = ConnectionState.DISCONNECTED
         with patch.object(ws, 'ws', create=True):
-            await ws.unsubscribe('book.unsubscribe', {'market': VALID_ADDRESS})
+            await ws.unsubscribe('book', {'marketId': VALID_ADDRESS})
         # Should not raise
 
     @pytest.mark.asyncio
-    async def test_unsubscribe_invalid_method_raises(self):
+    async def test_unsubscribe_missing_marketId_raises(self):
         ws = WebSocketApi()
         ws.state = ConnectionState.CONNECTED
         with pytest.raises(ValueError):
-            await ws.unsubscribe('badmethod', {'market': VALID_ADDRESS})
+            await ws.unsubscribe('book', {})
 
     @pytest.mark.asyncio
-    async def test_unsubscribe_missing_or_invalid_market_raises(self):
+    async def test_unsubscribe_invalid_market_raises(self):
         ws = WebSocketApi()
         ws.state = ConnectionState.CONNECTED
-        with pytest.raises(ValueError):
-            await ws.unsubscribe('book.unsubscribe', {})
         with patch('eth_utils.address.to_checksum_address', side_effect=ValueError("bad address")):
             with pytest.raises(ValueError):
-                await ws.unsubscribe('book.unsubscribe', {'market': 'bad'})
+                await ws.unsubscribe('book', {'marketId': 'bad'})
+
+    @pytest.mark.asyncio
+    async def test_unsubscribe_no_active_subscription_logs_warning(self, caplog):
+        ws = WebSocketApi()
+        ws.state = ConnectionState.CONNECTED
+        ws.ws = MagicMock()
+        ws.subscriptions = {}
+        with patch('eth_utils.address.to_checksum_address', return_value=VALID_ADDRESS):
+            await ws.unsubscribe('book', {'marketId': VALID_ADDRESS})
+        assert "No active subscription" in caplog.text
 
     @pytest.mark.asyncio
     async def test_unsubscribe_sends_request_logs_error_if_send_fails(self, caplog):
         ws = WebSocketApi()
         ws.state = ConnectionState.CONNECTED
         ws.ws = MagicMock()
+        ws.subscriptions = {('book', VALID_ADDRESS): 123}
         with patch('eth_utils.address.to_checksum_address', return_value=VALID_ADDRESS), \
              patch.object(ws.ws, 'send_json', new_callable=AsyncMock, side_effect=Exception("fail")):
-            await ws.unsubscribe('book.unsubscribe', {'market': VALID_ADDRESS})
+            await ws.unsubscribe('book', {'marketId': VALID_ADDRESS})
         assert "Failed to send unsubscribe request" in caplog.text
 
     @pytest.mark.asyncio
@@ -474,11 +484,13 @@ class TestWebSocketApiUnsubscribeLogic:
         ws = WebSocketApi(enable_logging=True)
         ws.state = ConnectionState.CONNECTED
         ws.ws = MagicMock()
-        ws.callbacks = {('book', VALID_ADDRESS): AsyncMock()}
+        ws.callbacks = {123: AsyncMock()}
+        ws.subscriptions = {('book', VALID_ADDRESS): 123}
         with patch('eth_utils.address.to_checksum_address', return_value=VALID_ADDRESS), \
              patch.object(ws.ws, 'send_json', new_callable=AsyncMock):
-            await ws.unsubscribe('book.unsubscribe', {'market': VALID_ADDRESS})
-        assert ('book', VALID_ADDRESS) not in ws.callbacks
+            await ws.unsubscribe('book', {'marketId': VALID_ADDRESS})
+        assert 123 not in ws.callbacks
+        assert ('book', VALID_ADDRESS) not in ws.subscriptions
 
 class TestWebSocketApiUtilityMethods:
     def test_next_request_id_increments_monotonically(self):
@@ -489,10 +501,10 @@ class TestWebSocketApiUtilityMethods:
 
     def test_get_subscriptions_returns_tracked_callbacks(self):
         ws = WebSocketApi()
-        ws.callbacks = {('book', VALID_ADDRESS): lambda x: None, ('trades', VALID_ADDRESS): lambda x: None}
+        ws.subscriptions = {('book', VALID_ADDRESS): 123, ('trades', VALID_ADDRESS): 456}
         subs = ws.get_subscriptions()
-        assert {'stream_type': 'book', 'market': VALID_ADDRESS} in subs
-        assert {'stream_type': 'trades', 'market': VALID_ADDRESS} in subs
+        assert {'topic': 'book', 'market': VALID_ADDRESS, 'subscription_id': 123} in subs
+        assert {'topic': 'trades', 'market': VALID_ADDRESS, 'subscription_id': 456} in subs
 
     def test_is_connected_returns_correct_boolean(self):
         ws = WebSocketApi()

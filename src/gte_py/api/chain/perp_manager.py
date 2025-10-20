@@ -5,7 +5,7 @@ from eth_typing import ChecksumAddress
 from web3 import AsyncWeb3
 from hexbytes import HexBytes
 from .structs import AmendLimitOrderArgsPerp, BookSettingsPerp, ConditionPerp, FundingRateSettingsPerp, MarketParamsPerp, MarketSettingsPerp, MerkleDataPerp, OrderPerp, OrderProcessedDataPerp, PlaceOrderArgsPerp, PlaceOrderResultPerp, PositionPerp, SignDataPerp, TwapOrderArgsPerp
-from .events import BuilderCodeRegisteredPerpEvent, BuilderRevShareBpsUpdatedPerpEvent, CancelFailedPerpEvent, ConditionalCanceledPerpEvent, CrossMarginDisabledPerpEvent, CrossMarginEnabledPerpEvent, DepositPerpEvent, DivergenceCapUpdatedPerpEvent, FeeTierUpdatedPerpEvent, FundingClampsUpdatedPerpEvent, FundingIntervalUpdatedPerpEvent, FundingSettledPerpEvent, IndexFairClampUpdatedPerpEvent, InitializedPerpEvent, InsuranceFundDepositPerpEvent, InsuranceFundWithdrawalPerpEvent, InterestRateUpdatedPerpEvent, LiquidationFeeRateUpdatedPerpEvent, LiquidationPerpEvent, LiquidatorPointsSetPerpEvent, MaintenanceMarginRatioUpdatedPerpEvent, MakerFeeRatesUpdatedPerpEvent, MarginAddedPerpEvent, MarginRemovedPerpEvent, MarkPriceUpdatedPerpEvent, MarketCreatedPerpEvent, MarketStatusUpdatedPerpEvent, MaxLeverageUpdatedPerpEvent, MaxLimitsPerTxUpdatedPerpEvent, MaxNumOrdersUpdatedPerpEvent, MicroPriceClipBpsUpdatedPerpEvent, MinLimitOrderAmountInBaseUpdatedPerpEvent, OperatorApprovedPerpEvent, OperatorDisapprovedPerpEvent, OrderAmendedPerpEvent, OrderCanceledPerpEvent, OrderProcessedPerpEvent, OwnershipHandoverCanceledPerpEvent, OwnershipHandoverRequestedPerpEvent, OwnershipTransferredPerpEvent, PartialLiquidationRateUpdatedPerpEvent, PartialLiquidationThresholdUpdatedPerpEvent, PositionLeverageSetPerpEvent, ProtocolActivatedPerpEvent, ProtocolDeactivatedPerpEvent, ReduceOnlyCapUpdatedPerpEvent, RemoveExemptFromLimitPerTxCapPerpEvent, ResetIterationsUpdatedPerpEvent, RolesUpdatedPerpEvent, SetExemptFromLimitPerTxCapPerpEvent, TakerFeeRatesUpdatedPerpEvent, TickSizeUpdatedPerpEvent, TwapCanceledPerpEvent, WithdrawPerpEvent
+from .events import BuilderCodeRegisteredPerpEvent, BuilderRevShareBpsUpdatedPerpEvent, CancelFailedPerpEvent, ConditionalCanceledPerpEvent, CrossMarginDisabledPerpEvent, CrossMarginEnabledPerpEvent, DepositPerpEvent, DivergenceCapUpdatedPerpEvent, FeeTierUpdatedPerpEvent, FundingClampsUpdatedPerpEvent, FundingIntervalUpdatedPerpEvent, FundingSettledPerpEvent, GTLUpdatedPerpEvent, IndexFairClampUpdatedPerpEvent, InitializedPerpEvent, InsuranceFundDepositPerpEvent, InsuranceFundWithdrawalPerpEvent, InterestRateUpdatedPerpEvent, LiquidationFeeRateUpdatedPerpEvent, LiquidationPerpEvent, LiquidatorPointsSetPerpEvent, MaintenanceMarginRatioUpdatedPerpEvent, MakerFeeRatesUpdatedPerpEvent, MarginAddedPerpEvent, MarginRemovedPerpEvent, MarkPriceUpdatedPerpEvent, MarketCreatedPerpEvent, MarketStatusUpdatedPerpEvent, MaxLeverageUpdatedPerpEvent, MaxLimitsPerTxUpdatedPerpEvent, MaxNumOrdersUpdatedPerpEvent, MicroPriceClipBpsUpdatedPerpEvent, MinLimitOrderAmountInBaseUpdatedPerpEvent, OperatorApprovedPerpEvent, OperatorDisapprovedPerpEvent, OracleUpdatedPerpEvent, OrderAmendedPerpEvent, OrderCanceledPerpEvent, OrderProcessedPerpEvent, OwnershipHandoverCanceledPerpEvent, OwnershipHandoverRequestedPerpEvent, OwnershipTransferredPerpEvent, PartialLiquidationRateUpdatedPerpEvent, PartialLiquidationThresholdUpdatedPerpEvent, PerpManagerInitializedPerpEvent, PositionLeverageSetPerpEvent, ProtocolActivatedPerpEvent, ProtocolDeactivatedPerpEvent, ReduceOnlyCapUpdatedPerpEvent, RemoveExemptFromLimitPerTxCapPerpEvent, ResetIterationsUpdatedPerpEvent, RolesUpdatedPerpEvent, SetExemptFromLimitPerTxCapPerpEvent, TakerFeeRatesUpdatedPerpEvent, TickSizeUpdatedPerpEvent, TwapCanceledPerpEvent, WithdrawPerpEvent
 
 
 class PerpManager:
@@ -187,6 +187,10 @@ class PerpManager:
         func = self.contract.functions.getFundingRate(asset)
         return await func.call()
 
+    async def get_gtl(self) -> ChecksumAddress:
+        func = self.contract.functions.getGTL()
+        return await func.call()
+
     async def get_impact_ask(self, asset: HexBytes, impact_notional: int) -> int:
         func = self.contract.functions.getImpactAsk(asset, impact_notional)
         return await func.call()
@@ -359,6 +363,18 @@ class PerpManager:
         func = self.contract.functions.getOperatorRoleApprovals(account, operator)
         return await func.call()
 
+    async def get_oracle(self) -> ChecksumAddress:
+        func = self.contract.functions.getOracle()
+        return await func.call()
+
+    async def get_order_id_by_client_id(self, asset: HexBytes, client_id: int) -> int:
+        func = self.contract.functions.getOrderIdByClientId(asset, client_id)
+        return await func.call()
+
+    async def get_order_id_by_client_id_backstop(self, asset: HexBytes, client_id: int) -> int:
+        func = self.contract.functions.getOrderIdByClientIdBackstop(asset, client_id)
+        return await func.call()
+
     async def get_orderbook_collateral(self, account: ChecksumAddress, subaccount: int) -> int:
         func = self.contract.functions.getOrderbookCollateral(account, subaccount)
         return await func.call()
@@ -447,8 +463,8 @@ class PerpManager:
         func = self.contract.functions.hasAnyRole(user, roles)
         return await func.call()
 
-    def initialize(self, owner_: ChecksumAddress, taker_fees: list[Any], maker_fees: list[Any], **kwargs) -> TypedContractFunction[Any]:
-        func = self.contract.functions.initialize(owner_, taker_fees, maker_fees)
+    def initialize(self, owner_: ChecksumAddress, taker_fees: list[Any], maker_fees: list[Any], quote: ChecksumAddress, oracle: ChecksumAddress, gtl: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.initialize(owner_, taker_fees, maker_fees, quote, oracle, gtl)
         return TypedContractFunction(func, params={**kwargs})
 
     def insurance_fund_deposit(self, amount: int, **kwargs) -> TypedContractFunction[Any]:
@@ -647,6 +663,10 @@ class PerpManager:
         func = self.contract.functions.setFundingRateSettings(asset, tuple(settings))
         return TypedContractFunction(func, params={**kwargs})
 
+    def set_gtl(self, gtl: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.setGTL(gtl)
+        return TypedContractFunction(func, params={**kwargs})
+
     def set_index_fair_clamp(self, asset: HexBytes, index_fair_clamp: int, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.setIndexFairClamp(asset, index_fair_clamp)
         return TypedContractFunction(func, params={**kwargs})
@@ -697,6 +717,10 @@ class PerpManager:
 
     def set_min_margin_ratio(self, asset: HexBytes, maintenance_margin_ratio: int, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.setMinMarginRatio(asset, maintenance_margin_ratio)
+        return TypedContractFunction(func, params={**kwargs})
+
+    def set_oracle(self, oracle: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:
+        func = self.contract.functions.setOracle(oracle)
         return TypedContractFunction(func, params={**kwargs})
 
     def set_partial_liquidation_rate(self, asset: HexBytes, partial_liquidation_rate: int, **kwargs) -> TypedContractFunction[Any]:

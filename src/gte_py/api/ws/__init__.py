@@ -22,7 +22,7 @@ class ConnectionState(Enum):
 class WebSocketApi:
     def __init__(
         self,
-        ws_url: str = "wss://api-testnet.gte.xyz/ws",
+        ws_url: str = "wss://dev-api.gte.xyz/ws",
         heartbeat_interval: float = 30.0,
         reconnect_attempts: int = 5,
         reconnect_delay: float = 1.0,
@@ -40,7 +40,10 @@ class WebSocketApi:
         self.ws: aiohttp.ClientWebSocketResponse | None = None
         self.session: aiohttp.ClientSession | None = None
 
-        self.callbacks: dict[tuple[str, str], Callable[[dict[str, Any]], Any] | Callable[[dict[str, Any]], Awaitable[Any]]] = {}
+        # Map subscription_id -> callback
+        self.callbacks: dict[int, Callable[[dict[str, Any]], Any] | Callable[[dict[str, Any]], Awaitable[Any]]] = {}
+        # Map (topic, market) -> subscription_id for tracking
+        self.subscriptions: dict[tuple[str, str], int] = {}
 
         self.listen_task: asyncio.Task[Any] | None = None
         self.reconnect_task: asyncio.Task[Any] | None = None
@@ -181,20 +184,21 @@ class WebSocketApi:
         logger.error("Failed to reconnect after all attempts")
 
     async def _handle_message(self, data: dict[str, Any]):
-        if "s" in data:
-            stream_type = data["s"]
-            payload = data.get("d", {})
-
-            try:
-                market = to_checksum_address(payload.get("m", ""))
-            except (KeyError, ValueError) as e:
-                logger.error(f"Invalid market address in payload: {e}")
-                return
-
-            callback = self.callbacks.get((stream_type, market))
+        # Handle subscription acknowledgment (just {"id": int64})
+        if "id" in data and "d" not in data:
+            if self.enable_logging:
+                logger.debug(f"Subscription acknowledged: {data}")
+            return
+        
+        # Handle data messages {"id": int64, "d": {...}}
+        if "id" in data and "d" in data:
+            subscription_id = data["id"]
+            payload = data["d"]
+            
+            callback = self.callbacks.get(subscription_id)  
             if not callback:
                 if self.enable_logging:
-                    logger.warning(f"No callback for stream {stream_type} and market {market}")
+                    logger.warning(f"No callback for subscription ID {subscription_id}")
                 return
 
             try:
@@ -203,55 +207,57 @@ class WebSocketApi:
                 else:
                     callback(payload)
             except Exception:
-                logger.error(f"Error in callback for {stream_type}:{market}", exc_info=True)
+                logger.error(f"Error in callback for subscription {subscription_id}", exc_info=True)
+        else:
+            if self.enable_logging:
+                logger.warning(f"Unknown message format: {data}")
 
-    async def subscribe(self, method: str, params: dict[str, Any], callback: Callable[[dict[str, Any]], Any] | Callable[[dict[str, Any]], Awaitable[Any]]):
-        if "." not in method:
-            raise ValueError(f"Invalid method format: {method}. Expected format: 'stream.subscribe'")
-
-        stream_type = method.split(".")[0]
-
+    async def subscribe(self, topic: str, params: dict[str, Any], callback: Callable[[dict[str, Any]], Any] | Callable[[dict[str, Any]], Awaitable[Any]]):
         try:
-            market = to_checksum_address(params["market"])
+            market = to_checksum_address(params["marketId"])
         except KeyError:
-            raise ValueError("params must include 'market' key")
+            raise ValueError("params must include 'marketId' key")
         except ValueError as e:
             raise ValueError(f"Invalid market address: {e}")
-
-        self.callbacks[(stream_type, market)] = callback
 
         if not self.ws or self.ws.closed:
             await self.connect()
 
-        request_id = self._next_request_id()
-        request = {"id": request_id, "method": method, "params": params}
+        subscription_id = self._next_request_id()
+        self.callbacks[subscription_id] = callback
+        self.subscriptions[(topic, market)] = subscription_id
+        
+        request = {"id": subscription_id, "method": "subscribe", "topic": topic, "params": params}
 
         try:
             if self.ws is None:
                 raise RuntimeError("WebSocket connection is not established")
             await self.ws.send_json(request)
             if self.enable_logging:
-                logger.debug(f"Subscribed to {method} for market {market}")
+                logger.debug(f"Subscribed to {topic} for market {market} with ID {subscription_id}")
         except Exception:
-            self.callbacks.pop((stream_type, market), None)
+            self.callbacks.pop(subscription_id, None)
+            self.subscriptions.pop((topic, market), None)
             raise
 
-    async def unsubscribe(self, method: str, params: dict[str, Any]):
+    async def unsubscribe(self, topic: str, params: dict[str, Any]):
         if self.state != ConnectionState.CONNECTED:
             return
 
-        if "." not in method:
-            raise ValueError(f"Invalid method format: {method}. Expected format: 'stream.unsubscribe'")
-
         try:
-            market = to_checksum_address(params["market"])
+            market = to_checksum_address(params["marketId"])
         except KeyError:
-            raise ValueError("params must include 'market' key")
+            raise ValueError("params must include 'marketId' key")
         except ValueError as e:
             raise ValueError(f"Invalid market address: {e}")
 
-        request = {"method": method, "params": params}
-        stream_type = method.split(".")[0]
+        # Get the subscription ID
+        subscription_id = self.subscriptions.get((topic, market))
+        if subscription_id is None:
+            logger.warning(f"No active subscription for {topic} and market {market}")
+            return
+
+        request = {"id": subscription_id, "method": "unsubscribe", "topic": topic, "params": params}
 
         try:
             if self.ws is None:
@@ -261,10 +267,11 @@ class WebSocketApi:
         except Exception as e:
             logger.warning(f"Failed to send unsubscribe request: {e}")
 
-        self.callbacks.pop((stream_type, market), None)
+        self.callbacks.pop(subscription_id, None)
+        self.subscriptions.pop((topic, market), None)
 
         if self.enable_logging:
-            logger.debug(f"Unsubscribed from {method} for market {market}")
+            logger.debug(f"Unsubscribed from {topic} for market {market}")
 
     def _next_request_id(self) -> int:
         self.request_id += 1
@@ -272,8 +279,8 @@ class WebSocketApi:
 
     def get_subscriptions(self) -> list[dict[str, Any]]:
         return [
-            {"stream_type": stream_type, "market": market}
-            for (stream_type, market) in self.callbacks.keys()
+            {"topic": topic, "market": market, "subscription_id": sub_id}
+            for (topic, market), sub_id in self.subscriptions.items()
         ]
 
     def is_connected(self) -> bool:

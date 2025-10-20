@@ -119,15 +119,11 @@ class Clob:
         func = self.contract.functions.getOrder(order_id)
         return await func.call()
 
-    async def get_order_by_client_id(self, client_order_id: int) -> Order:
-        func = self.contract.functions.getOrderByClientId(client_order_id)
-        return await func.call()
-
     async def get_order_id_by_client_id(self, client_order_id: int) -> int:
         func = self.contract.functions.getOrderIdByClientId(client_order_id)
         return await func.call()
 
-    async def get_orders_paginated(self, start_order_id: int, page_size: int) -> tuple[Any, Order]:
+    async def get_orders_paginated_(self, start_order_id: int, page_size: int) -> tuple[Any, Order]:
         """
         Returns:
             tuple: (result, next_order)

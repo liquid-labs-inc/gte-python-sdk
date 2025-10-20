@@ -27,16 +27,16 @@ class UniswapPair:
         func = self.contract.functions.PERMIT_TYPEHASH()
         return await func.call()
 
-    async def allowance(self, token0: ChecksumAddress, token1: ChecksumAddress) -> int:
-        func = self.contract.functions.allowance(token0, token1)
+    async def allowance(self, param1: ChecksumAddress, param2: ChecksumAddress) -> int:
+        func = self.contract.functions.allowance(param1, param2)
         return await func.call()
 
     def approve(self, spender: ChecksumAddress, value: int, **kwargs) -> TypedContractFunction[Any]:
         func = self.contract.functions.approve(spender, value)
         return TypedContractFunction(func, params={**kwargs})
 
-    async def balance_of(self, account: ChecksumAddress) -> int:
-        func = self.contract.functions.balanceOf(account)
+    async def balance_of(self, param: ChecksumAddress) -> int:
+        func = self.contract.functions.balanceOf(param)
         return await func.call()
 
     def burn(self, to: ChecksumAddress, **kwargs) -> TypedContractFunction[Any]:

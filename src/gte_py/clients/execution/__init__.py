@@ -578,28 +578,24 @@ class ExecutionClient:
     async def perp_get_position(
         self,
         asset: str,
-        subaccount: int,
+        account: ChecksumAddress | None = None,
+        subaccount: int = 0,
     ):
         """
         Get position information for a perpetuals asset.
-        
+
         Args:
             asset: Asset identifier
+            account: Account address (defaults to wallet address)
             subaccount: Subaccount ID
-            
-        Returns:
-            Position data
         """
-        return await self._chain_client.perp_manager.get_position(
-            asset=self._perp_asset_to_bytes32(asset),
-            account=self.wallet_address,
-            subaccount=subaccount,
-        )
+        account = account if account else self.wallet_address
+        return await self._chain_client.perp_manager.get_position(asset=self._perp_asset_to_bytes32(asset), account=account, subaccount=subaccount)
 
     async def perp_get_margin_balance(
         self,
         subaccount: int,
-    ) -> int:
+    ) -> Decimal:
         """
         Get margin balance for a subaccount.
         
@@ -607,26 +603,28 @@ class ExecutionClient:
             subaccount: Subaccount ID
             
         Returns:
-            Margin balance in atomic units
+            Margin balance in decimal units
         """
-        return await self._chain_client.perp_manager.get_margin_balance(
+        margin_balance_atomic = await self._chain_client.perp_manager.get_margin_balance(
             account=self.wallet_address,
             subaccount=subaccount,
         )
+        return self._convert_atomic_to_decimal(margin_balance_atomic)
 
     async def perp_get_mark_price(
         self,
         asset: str,
-    ) -> int:
+    ) -> Decimal:
         """
         Get mark price for a perpetual market.
         """
-        return await self._chain_client.perp_manager.get_mark_price(self._perp_asset_to_bytes32(asset))
+        mark_price_atomic = await self._chain_client.perp_manager.get_mark_price(self._perp_asset_to_bytes32(asset))
+        return self._convert_atomic_to_decimal(mark_price_atomic)
 
     async def perp_get_account_value(
         self,
         subaccount: int,
-    ) -> int:
+    ) -> Decimal:
         """
         Get total account value for a subaccount.
         
@@ -634,23 +632,25 @@ class ExecutionClient:
             subaccount: Subaccount ID
             
         Returns:
-            Account value in atomic units
+            Account value in decimal units
         """
-        return await self._chain_client.perp_manager.get_account_value(
+        account_value_atomic = await self._chain_client.perp_manager.get_account_value(
             account=self.wallet_address,
             subaccount=subaccount,
         )
+        return self._convert_atomic_to_decimal(account_value_atomic)
 
-    async def perp_get_free_collateral_balance(self) -> int:
+    async def perp_get_free_collateral_balance(self) -> Decimal:
         """
         Get free collateral balance available for trading.
         
         Returns:
-            Free collateral balance in atomic units
+            Free collateral balance in decimal units
         """
-        return await self._chain_client.perp_manager.get_free_collateral_balance(
+        free_collateral_balance_atomic = await self._chain_client.perp_manager.get_free_collateral_balance(
             account=self.wallet_address,
         )
+        return self._convert_atomic_to_decimal(free_collateral_balance_atomic)
 
     async def perp_is_liquidatable(
         self,
@@ -707,7 +707,7 @@ class ExecutionClient:
     async def account_withdraw(
         self,
         token: ChecksumAddress,
-        amount: int,
+        amount: Decimal,
         return_built_tx: bool = False,
         **kwargs: Unpack[TxParams],
     ):
@@ -723,10 +723,11 @@ class ExecutionClient:
         Returns:
             Transaction receipt from the withdraw operation
         """
+        amount_atomic = self._convert_decimal_to_atomic(amount)
         tx = self._chain_client.account_manager.withdraw(
             account=self.wallet_address,
             token=token,
-            amount=amount,
+            amount=amount_atomic,
             **kwargs,
         )
         if return_built_tx:
@@ -735,7 +736,7 @@ class ExecutionClient:
 
     async def account_deposit_from_perps(
         self,
-        amount: int,
+        amount: Decimal,
         return_built_tx: bool = False,
         **kwargs: Unpack[TxParams],
     ):
@@ -743,16 +744,17 @@ class ExecutionClient:
         Deposit collateral from perpetuals to account manager.
         
         Args:
-            amount: Amount to deposit in atomic units
+            amount: Amount to deposit in decimal units
             return_built_tx: Whether to return built transaction data
             **kwargs: Additional transaction parameters
             
         Returns:
             Transaction receipt from the deposit operation
         """
+        amount_atomic = self._convert_decimal_to_atomic(amount)
         tx = self._chain_client.perp_manager.deposit_from_spot(
             account=self.wallet_address,
-            amount=amount,
+            amount=amount_atomic,
             **kwargs,
         )
         if return_built_tx:
@@ -763,7 +765,7 @@ class ExecutionClient:
         self,
         token: ChecksumAddress,
         account: ChecksumAddress | None = None,
-    ) -> int:
+    ) -> Decimal:
         """
         Get account balance for a token from the account manager.
         
@@ -772,14 +774,15 @@ class ExecutionClient:
             account: Account address (defaults to wallet address)
             
         Returns:
-            Balance in atomic units
+            Balance in decimal units
         """
         account_addr = account if account else self.wallet_address
-        return await self._chain_client.account_manager.get_account_balance(
+        account_balance_atomic = await self._chain_client.account_manager.get_account_balance(
             account=account_addr,
             token=token,
         )
-
+        return self._convert_atomic_to_decimal(account_balance_atomic)
+    
     async def account_get_fee_tier(
         self,
         account: ChecksumAddress | None = None,
@@ -791,10 +794,27 @@ class ExecutionClient:
             account: Account address (defaults to wallet address)
             
         Returns:
-            Fee tier
+            Fee tier (0, 1, 2) of the account
         """
         account_addr = account if account else self.wallet_address
-        return await self._chain_client.account_manager.get_fee_tier(account=account_addr)
+        fee_tier = await self._chain_client.account_manager.get_fee_tier(account=account_addr)
+        return fee_tier
+    
+    async def account_get_fee_rates_for_tier(self, fee_tier: int) -> tuple[Decimal, Decimal]:
+        """
+        Get fee rates for a fee tier.
+        
+        Args:
+            fee_tier: Fee tier (0, 1, 2)
+            
+        Returns:
+            Tuple of (maker rate, taker rate) in decimal units
+        """
+        maker_rate_atomic, taker_rate_atomic = await self._chain_client.account_manager.get_fee_rates_for_tier(fee_tier)
+        return (
+            self._convert_atomic_to_decimal(maker_rate_atomic),
+            self._convert_atomic_to_decimal(taker_rate_atomic),
+        )
 
     async def get_account_manager_balance(
             self, token_address: ChecksumAddress, account: ChecksumAddress | None = None
@@ -871,7 +891,7 @@ class ExecutionClient:
             order_or_client_id=order_id,
             amount_in_base=amount_atomic,
             price=price_atomic,
-            cancel_timestamp=0,
+            expiry_time=0,
             side=side.value,
         )
         return clob.amend(account=self.wallet_address, args=args, **kwargs).with_event(clob.contract.events.OrderAmended())
