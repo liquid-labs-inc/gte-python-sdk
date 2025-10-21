@@ -732,7 +732,7 @@ class ExecutionClient:
         )
         if return_built_tx:
             return await self._scheduler.return_transaction_data(tx)
-        return await self._scheduler.send(tx)
+        return await self._scheduler.send_wait(tx)
 
     async def account_deposit_from_perps(
         self,
@@ -759,7 +759,7 @@ class ExecutionClient:
         )
         if return_built_tx:
             return await self._scheduler.return_transaction_data(tx)
-        return await self._scheduler.send(tx)
+        return await self._scheduler.send_wait(tx)
 
     async def account_get_balance(
         self,
@@ -932,7 +932,7 @@ class ExecutionClient:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction hash of the placed order or Event of the placed order
+            Transaction receipt or Event of the placed order
         """
         amount_atomic = self._convert_decimal_to_atomic(amount)
         price_atomic = self._convert_decimal_to_atomic(price)
@@ -945,7 +945,7 @@ class ExecutionClient:
             time_in_force=time_in_force,
             client_order_id=client_order_id,
             **kwargs,
-        )
+        ).with_event(self._chain_client.get_clob(market_address).contract.events.OrderProcessed())
         
         if return_built_tx:
             return await self._scheduler.return_transaction_data(tx)
@@ -1074,7 +1074,7 @@ class ExecutionClient:
         
         if return_built_tx:
             return await self._scheduler.return_transaction_data(tx)
-        return await self._scheduler.send(tx)
+        return await self._scheduler.send_wait(tx)
 
     async def launchpad_sell_exact_base(
         self,
@@ -1129,7 +1129,7 @@ class ExecutionClient:
         
         if return_built_tx:
             return await self._scheduler.return_transaction_data(tx)
-        return await self._scheduler.send(tx)
+        return await self._scheduler.send_wait(tx)
 
     async def get_launchpad_quote_buy(
         self,
@@ -1338,7 +1338,7 @@ class ExecutionClient:
         
         if return_built_tx:
             return await self._scheduler.return_transaction_data(swap_tx)
-        return await self._scheduler.send(swap_tx)
+        return await self._scheduler.send_wait(swap_tx)
 
     async def get_swap_quote(
         self,
@@ -1401,7 +1401,7 @@ class ExecutionClient:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction hash from the wrap operation
+            Transaction receipt from the wrap operation
         """
         weth_token = self._chain_client.get_erc20(self._chain_client.weth_address)
         amount_wei = self._convert_decimal_to_atomic(amount)
@@ -1426,7 +1426,7 @@ class ExecutionClient:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction hash from the unwrap operation
+            Transaction receipt from the unwrap operation
         """
         weth_token = self._chain_client.get_erc20(self._chain_client.weth_address)
         amount_wei = self._convert_decimal_to_atomic(amount)
@@ -1451,7 +1451,7 @@ class ExecutionClient:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction hash from the approve_operator operation
+            Transaction receipt from the approve_operator operation
         """
         logger.info(f"Approving operator {operator_address} for account {self.wallet_address} with roles {roles}")
 
@@ -1463,10 +1463,11 @@ class ExecutionClient:
         )
         if return_built_tx:
             return await self._scheduler.return_transaction_data(tx)
-        return await self._scheduler.send(tx)
+        return await self._scheduler.send_wait(tx)
 
     async def disapprove_operator(self, operator_address: ChecksumAddress,
                                   roles: int,
+                                  return_built_tx: bool = False,
                                   **kwargs: Unpack[TxParams]):
         """
         Disapprove an operator from acting on behalf of the account.
@@ -1477,16 +1478,19 @@ class ExecutionClient:
             **kwargs: Additional transaction parameters
 
         Returns:
-            Transaction hash from the disapprove_operator operation
+            Transaction receipt from the disapprove_operator operation
         """
         logger.info(f"Disapproving operator {operator_address} for account {self.wallet_address} with roles {roles}")
 
-        return await self._scheduler.send(self._chain_client.account_manager.disapprove_operator(
+        tx = self._chain_client.account_manager.disapprove_operator(
             account=self.wallet_address,
             operator=operator_address,
             roles=roles,
             **kwargs
-        ))
+        )
+        if return_built_tx:
+            return await self._scheduler.return_transaction_data(tx)
+        return await self._scheduler.send_wait(tx)
 
     # ================= UTILITY QUERIES =================
 
