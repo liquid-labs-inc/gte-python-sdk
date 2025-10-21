@@ -214,7 +214,7 @@ class WebSocketApi:
 
     async def subscribe(self, topic: str, params: dict[str, Any], callback: Callable[[dict[str, Any]], Any] | Callable[[dict[str, Any]], Awaitable[Any]]):
         try:
-            market = to_checksum_address(params["marketId"])
+            market = params["marketId"]
         except KeyError:
             raise ValueError("params must include 'marketId' key")
         except ValueError as e:
@@ -245,7 +245,7 @@ class WebSocketApi:
             return
 
         try:
-            market = to_checksum_address(params["marketId"])
+            market = params["marketId"]
         except KeyError:
             raise ValueError("params must include 'marketId' key")
         except ValueError as e:
