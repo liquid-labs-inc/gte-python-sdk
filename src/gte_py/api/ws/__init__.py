@@ -55,7 +55,11 @@ class WebSocketApi:
     async def connect(self):
         if self.state in (ConnectionState.CONNECTED, ConnectionState.CONNECTING):
             return
-        await self._connect_internal()
+        try:
+            await self._connect_internal()
+        except Exception as e:
+            logger.warning(f"WebSocket connection failed: {e}")
+            self.state = ConnectionState.DISCONNECTED
 
     async def _connect_internal(self):
         try:
@@ -223,6 +227,11 @@ class WebSocketApi:
         if not self.ws or self.ws.closed:
             await self.connect()
 
+        # If still not connected after attempting to connect, log warning and return
+        if not self.ws or self.ws.closed:
+            logger.warning(f"Cannot subscribe to {topic} - WebSocket is not connected")
+            return
+
         subscription_id = self._next_request_id()
         self.callbacks[subscription_id] = callback
         self.subscriptions[(topic, market)] = subscription_id
@@ -230,15 +239,13 @@ class WebSocketApi:
         request = {"id": subscription_id, "method": "subscribe", "topic": topic, "params": params}
 
         try:
-            if self.ws is None:
-                raise RuntimeError("WebSocket connection is not established")
             await self.ws.send_json(request)
             if self.enable_logging:
                 logger.debug(f"Subscribed to {topic} for market {market} with ID {subscription_id}")
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to subscribe to {topic}: {e}")
             self.callbacks.pop(subscription_id, None)
             self.subscriptions.pop((topic, market), None)
-            raise
 
     async def unsubscribe(self, topic: str, params: dict[str, Any]):
         if self.state != ConnectionState.CONNECTED:

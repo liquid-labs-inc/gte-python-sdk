@@ -68,7 +68,13 @@ class GTEClient:
             return
         
         await self.rest.connect()
-        await self.websocket.connect()
+        
+        # Try to connect websocket, but don't fail if it's unavailable
+        try:
+            await self.websocket.connect()
+            logger.info("WebSocket connected successfully")
+        except Exception as e:
+            logger.warning(f"WebSocket connection failed, continuing without WebSocket: {e}")
         
         if self._execution:
             await self._execution.init()

@@ -407,7 +407,8 @@ class BoundedNonceTxScheduler:
             
         # Already submitted - treat as success
         elif 'already known' in error_message.lower() or 'transaction already in pool' in error_message.lower():
-            self.logger.debug("Transaction already known/in pool")
+            self.logger.info("Transaction already known/in pool - treating as success")
+            # Return a dummy hash but don't fail - the transaction is already submitted
             return f"0x{'0' * 64}"
             
         # Fatal errors - raise exception
@@ -644,6 +645,16 @@ class BoundedNonceTxScheduler:
                 self.logger.debug(f"Regular transaction sent: {tx_hash.hex()}")
                 receipt = await self.wait_for_receipt(tx_hash, timeout=60)  # 60 second timeout for receipt
             except Exception as fallback_error:
+                # Check if this is an "already known" error that we should treat as success
+                if isinstance(fallback_error, Web3RPCError):
+                    error_data = fallback_error.args[0] if fallback_error.args else {}
+                    error_message = error_data.get('message', str(fallback_error)) if isinstance(error_data, dict) else str(fallback_error)
+                    
+                    if 'already known' in error_message.lower() or 'transaction already in pool' in error_message.lower():
+                        self.logger.info("Transaction already known/in pool - treating as success")
+                        # Return a dummy receipt indicating success
+                        return {"status": 1, "transactionHash": f"0x{'0' * 64}", "blockNumber": 0}
+                
                 self.logger.error(f"Both realtime and regular send failed: {fallback_error}")
                 raise Exception(f"Transaction failed: {fallback_error}")
         
