@@ -1,4 +1,5 @@
 """Example of placing a market and limit order on a BTC market."""
+import logging
 from decimal import Decimal
 import sys
 sys.path.append(".")
@@ -22,29 +23,32 @@ async def main():
 
         # deposit capUSD to perp manager
         tx = await client.execution.perp_deposit(Decimal(3*10**6)) # 1 million capUSD
-        # print(tx)
+        print(tx)
 
         # check perp account balance
         perp_account_balance = await client.execution.perp_get_free_collateral_balance()
-        print_separator(f"Perp account balance: {perp_account_balance / (10**18)}")
+        print_separator(f"Perp account balance: {perp_account_balance}")
         # i have 3 million capUSD in free collateral 
 
         market_id = "FAKEBTC-USD"
 
         # # add margin to subaccount 1 (only works if you have a position)
-        # tx = await client.execution.perp_add_margin(subaccount=1, amount=Decimal(10**5))
-        # print(tx)
+        tx = await client.execution.perp_add_margin(subaccount=1, amount=Decimal(5))
+        print('add margin', tx)
+
+        perp_account_balance = await client.execution.perp_get_free_collateral_balance()
+        print_separator(f"Perp account balance: {perp_account_balance}")
 
         # cancel all existing orders
-        # cancel_response = await client.execution.perp_cancel_limit_orders(market_id, subaccount=1, order_ids=[71])
-        # print(cancel_response)
+        cancel_response = await client.execution.perp_cancel_limit_orders(market_id, subaccount=1, order_ids=[71])
+        print(cancel_response)
 
         mark_price = await client.execution.perp_get_mark_price(market_id)
-        print_separator(f"Mark price: {mark_price / 10**18}")
+        print_separator(f"Mark price: {mark_price}")
 
         # Check margin balance before placing order
         margin_balance = await client.execution.perp_get_margin_balance(0)
-        print_separator(f"Margin balance before order: {margin_balance / (10**18)}")
+        print_separator(f"Margin balance before order: {margin_balance}")
 
         # buy .1 btc at $100,000
         for i in range(10):
@@ -70,4 +74,5 @@ async def main():
         
 
 if __name__ == "__main__":
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
     asyncio.run(main())
