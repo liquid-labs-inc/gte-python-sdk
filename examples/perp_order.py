@@ -1,0 +1,78 @@
+"""Example of placing a market and limit order on a BTC market."""
+import logging
+from decimal import Decimal
+import sys
+sys.path.append(".")
+import asyncio
+from eth_utils.address import to_checksum_address
+from hexbytes import HexBytes
+
+from gte_py.clients import GTEClient
+from gte_py.configs import TESTNET_CONFIG
+from gte_py.api.chain.structs import TiF, Side
+from examples.utils import WALLET_PRIVATE_KEY, print_separator
+
+async def main():
+    config = TESTNET_CONFIG
+    async with GTEClient(config=config, wallet_private_key=WALLET_PRIVATE_KEY) as client:
+        # approve capUSD for perp manager
+        capUSD_address = to_checksum_address("0xe9b6e75c243b6100ffcb1c66e8f78f96feea727f")
+        
+        # capUSD = await client.execution.get_erc20(capUSD_address)
+        # await client.execution.approve_token(capUSD, config.perp_manager_address)
+
+        # deposit capUSD to perp manager
+        tx = await client.execution.perp_deposit(Decimal(3*10**6)) # 1 million capUSD
+        print(tx)
+
+        # check perp account balance
+        perp_account_balance = await client.execution.perp_get_free_collateral_balance()
+        print_separator(f"Perp account balance: {perp_account_balance}")
+        # i have 3 million capUSD in free collateral 
+
+        market_id = "FAKEBTC-USD"
+
+        # # add margin to subaccount 1 (only works if you have a position)
+        tx = await client.execution.perp_add_margin(subaccount=1, amount=Decimal(5))
+        print('add margin', tx)
+
+        perp_account_balance = await client.execution.perp_get_free_collateral_balance()
+        print_separator(f"Perp account balance: {perp_account_balance}")
+
+        # cancel all existing orders
+        cancel_response = await client.execution.perp_cancel_limit_orders(market_id, subaccount=1, order_ids=[71])
+        print(cancel_response)
+
+        mark_price = await client.execution.perp_get_mark_price(market_id)
+        print_separator(f"Mark price: {mark_price}")
+
+        # Check margin balance before placing order
+        margin_balance = await client.execution.perp_get_margin_balance(0)
+        print_separator(f"Margin balance before order: {margin_balance}")
+
+        # buy .1 btc at $100,000
+        for i in range(10):
+            tx = await client.execution.perp_place_order(market_id, Side.BUY, Decimal(0.1), Decimal(99_999-i), subaccount=0, tif=TiF.GTC)
+            print(tx)
+        for i in range(10):
+            tx = await client.execution.perp_place_order(market_id, Side.SELL, Decimal(0.1), Decimal(100_001+i), subaccount=0, tif=TiF.GTC)
+            print(tx)
+
+        # update leverage
+        await client.execution.perp_update_leverage(market_id, subaccount=0, leverage=Decimal(1))
+        position = await client.execution.perp_get_position(market_id, subaccount=1)
+        print_separator("Position Details")
+        print(f"Is Long: {position[0]}")
+        print(f"Amount: {position[1] / 10**18:.6f} BTC")
+        print(f"Open Notional: {position[2] / 10**18:.2f} USD")
+        print(f"Current Leverage: {position[3] / 10**18:.1f}x")
+        print(f"Last Cumulative Funding: {position[4] / 10**18:.6f}")
+
+        # get my margin balance
+        margin_balance = await client.execution.perp_get_margin_balance(0)
+        print_separator(f"Margin balance: {margin_balance / (10**18)}")
+        
+
+if __name__ == "__main__":
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    asyncio.run(main())

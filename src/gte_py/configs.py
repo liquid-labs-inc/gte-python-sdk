@@ -49,16 +49,20 @@ class NetworkConfig:
     router_address: ChecksumAddress
     launchpad_address: ChecksumAddress
     clob_manager_address: ChecksumAddress
+    perp_manager_address: ChecksumAddress
+    account_manager_address: ChecksumAddress
+    operator_address: ChecksumAddress
     weth_address: ChecksumAddress
+    collateral_asset_address: ChecksumAddress
 
 
 TESTNET_CONFIG = NetworkConfig(
     name="MegaETH Testnet",
-    api_url="https://api-testnet.gte.xyz/v1",
-    ws_url="wss://api-testnet.gte.xyz/ws",
+    api_url="https://dev-api.gte.xyz/v1",
+    ws_url="wss://dev-api.gte.xyz/ws",
     chain_id=6342,
     native_token="MegaETH Testnet Ether (ETH)",
-    rpc_http=os.environ.get("MEGAETH_TESTNET_RPC_HTTP", "https://api-testnet.gte.xyz/v1/exchange"),
+    rpc_http="https://carrot.megaeth.com/rpc",
     rpc_ws=os.environ.get("MEGAETH_TESTNET_RPC_WS", "wss://carrot.megaeth.com/ws"),
     block_explorer="https://megaexplorer.xyz",
     performance_dashboard="https://uptime.megaeth.com",
@@ -67,8 +71,12 @@ TESTNET_CONFIG = NetworkConfig(
     eip_1559_max_block_size=2_000_000_000,
     eip_1559_target_block_size=1_000_000_000,
     block_time="10ms for mini blocks, 1s for EVM blocks",
-    router_address=to_checksum_address("0x86470efcEa37e50F94E74649463b737C87ada367"),
-    launchpad_address=to_checksum_address("0x0B6cD1DefCe3189Df60A210326E315383fbC14Ed"),
-    clob_manager_address=to_checksum_address("0xD7310f8A0D569Dd0803D28BB29f4E0A471fA84F6"),
+    router_address=to_checksum_address("0x427e373fDdEB61AB4c7bD0CF7a72b90300510126"),
+    launchpad_address=to_checksum_address("0x3EE715d443c0e1ffa1110ab87132d0375c885745"),
+    clob_manager_address=to_checksum_address("0x48A98077ea84c6D8dbe76157c5EAd1CeC7A0fb38"),
+    perp_manager_address=to_checksum_address("0x75598cFaD8912ef7AB801d1f57437eF758176727"),
+    account_manager_address=to_checksum_address("0x5A3b510173d7771D8f8075C8271f78798d826070"),
+    operator_address=to_checksum_address("0xCCDB3Fa82999Ed47CD8A45c03da4be675ffcddC6"),
     weth_address=to_checksum_address("0x776401b9BC8aAe31A685731B7147D4445fD9FB19"),
+    collateral_asset_address=to_checksum_address("0xe9b6e75c243b6100ffcb1c66e8f78f96feea727f"),
 )
