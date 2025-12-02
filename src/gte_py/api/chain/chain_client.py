@@ -1,5 +1,5 @@
 from eth_typing import ChecksumAddress
-from web3 import AsyncWeb3
+from web3 import AsyncWeb3, Web3
 
 from gte_py.api.chain.clob import Clob
 from gte_py.api.chain.clob_manager import ClobManager

@@ -17,14 +17,14 @@ from gte_py.clients.info import InfoClient
 from gte_py.api.chain.chain_client import ChainClient
 from gte_py.api.chain.structs import AmendArgs, AmendLimitOrderArgsPerp, Side, TiF, PlaceOrderArgs, PlaceOrderArgsPerp, AmendLimitOrderArgsPerp
 from gte_py.api.chain.events import OrderAmendedPerpEvent, OrderProcessedPerpEvent, OrderProcessedEvent, OrderAmendedEvent
-from gte_py.api.chain.utils import TypedContractFunction, BoundedNonceTxScheduler
+from gte_py.api.chain.utils import TypedContractFunction, TxScheduler
 from gte_py.api.chain.erc20 import Erc20
 from gte_py.configs import NetworkConfig
 
 logger = logging.getLogger(__name__)
 
 # Per-async-context scheduler so PendingTx doesn't need an explicit reference
-_SCHEDULER_CTX: ContextVar[BoundedNonceTxScheduler] = ContextVar("_SCHEDULER_CTX")
+_SCHEDULER_CTX: ContextVar[TxScheduler] = ContextVar("_SCHEDULER_CTX")
 
 
 class ExecutionClient:
@@ -32,10 +32,10 @@ class ExecutionClient:
 
     def __init__(
             self,
-            web3: AsyncWeb3,
             info: InfoClient,
             config: NetworkConfig,
-            account: LocalAccount | None = None,
+            scheduler: TxScheduler,
+            account: LocalAccount,
     ):
         """
         Initialize the execution client.
@@ -44,17 +44,15 @@ class ExecutionClient:
             web3: AsyncWeb3 instance for on-chain interactions
             info: InfoClient instance for market data
             config: NetworkConfig instance for network configuration
+            scheduler: TxScheduler instance for transaction management
             account: LocalAccount instance for signing transactions
         """
         self._config = config
-        self._web3 = web3
         self._account = account
-        self._wallet_address = web3.eth.default_account
-        self._chain_client = ChainClient(web3, config.router_address, config.launchpad_address, config.clob_manager_address, config.perp_manager_address, config.account_manager_address, config.operator_address, config.weth_address)
-        self._scheduler = BoundedNonceTxScheduler(
-            web3=self._web3,
-            account=self._account,
-        )
+        self._wallet_address = account.address
+        w3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(config.rpc_http))
+        self._chain_client = ChainClient(w3, config.router_address, config.launchpad_address, config.clob_manager_address, config.perp_manager_address, config.account_manager_address, config.operator_address, config.weth_address)
+        self._scheduler = scheduler
         self._info = info
         
         self._approved_am_tokens: set[ChecksumAddress] = set()
@@ -505,7 +503,7 @@ class ExecutionClient:
         )
         if return_built_tx:
             return await self._scheduler.return_transaction_data(tx)
-        return await self._scheduler.send_wait_simple(tx)
+        return await self._scheduler.send_wait(tx)
 
     async def perp_amend_order(
         self,
