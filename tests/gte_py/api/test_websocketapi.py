@@ -427,8 +427,9 @@ class TestWebSocketApiSubscribeLogic:
         ws.ws.closed = False
         with patch('eth_utils.address.to_checksum_address', return_value=VALID_ADDRESS), \
              patch.object(ws.ws, 'send_json', new_callable=AsyncMock, side_effect=Exception("fail")):
-            with pytest.raises(Exception):
-                await ws.subscribe('book', {'marketId': VALID_ADDRESS}, AsyncMock())
+            # Exception is caught and logged, but not re-raised
+            await ws.subscribe('book', {'marketId': VALID_ADDRESS}, AsyncMock())
+            # Callback and subscription should be removed when send_json fails
             assert len(ws.callbacks) == 0
             assert len(ws.subscriptions) == 0
 
