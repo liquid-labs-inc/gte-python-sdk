@@ -50,7 +50,7 @@ class GTEClient:
 
         assert self._account is not None
 
-        scheduler = TxScheduler(self.config.api_url, self._account)
+        scheduler = TxScheduler(self.config.rpc_ws, self._account)
 
         # Initialize API clients
         self.rest = RestApi(base_url=config.api_url)

@@ -69,11 +69,17 @@ class ChainClient:
         """
         Initialize the chain client by fetching required addresses.
         """
-        # Get and cache addresses from router
-        self._univ2_router_address = await self._launchpad.uni_v2_router()
-        self._univ2_factory_address = await self._launchpad.uni_v2_factory()
-        self._univ2_factory = UniswapFactory(web3=self._web3, address=self._univ2_factory_address)
-        self._univ2_router = UniswapRouter(web3=self._web3, address=self._univ2_router_address)
+        # Get and cache addresses from launchpad (optional - only needed for swaps)
+        # These may fail if the launchpad contract doesn't have these functions
+        try:
+            self._univ2_router_address = await self._launchpad.uni_v2_router()
+            self._univ2_factory_address = await self._launchpad.uni_v2_factory()
+            self._univ2_factory = UniswapFactory(web3=self._web3, address=self._univ2_factory_address)
+            self._univ2_router = UniswapRouter(web3=self._web3, address=self._univ2_router_address)
+        except Exception:
+            # univ2_router and univ2_factory are optional (only needed for token swaps)
+            # If they fail to initialize, they'll be None and will raise an error when accessed
+            pass
 
     @property
     def router(self) -> Router:
@@ -103,28 +109,34 @@ class ChainClient:
     def univ2_router(self) -> UniswapRouter:
         """Get the UniswapV2 router contract instance."""
         if not self._univ2_router:
-            raise ValueError("UniswapV2 router is not initialized. Call init() first.")
+            if not self._univ2_router_address:
+                raise ValueError("UniswapV2 router is not available. The launchpad contract may not have this function or the contract is not deployed.")
+            # Lazy initialization if address is available but router not created
+            self._univ2_router = UniswapRouter(web3=self._web3, address=self._univ2_router_address)
         return self._univ2_router
 
     @property
     def univ2_router_address(self) -> ChecksumAddress:
         """Get the UniswapV2 router contract address."""
         if not self._univ2_router_address:
-            raise ValueError("UniswapV2 router address is not initialized. Call init() first.")
+            raise ValueError("UniswapV2 router address is not available. The launchpad contract may not have this function or the contract is not deployed.")
         return self._univ2_router_address
     
     @property
     def univ2_factory(self) -> UniswapFactory:
         """Get the UniswapV2 factory contract instance."""
         if not self._univ2_factory:
-            raise ValueError("UniswapV2 factory is not initialized. Call init() first.")
+            if not self._univ2_factory_address:
+                raise ValueError("UniswapV2 factory is not available. The launchpad contract may not have this function or the contract is not deployed.")
+            # Lazy initialization if address is available but factory not created
+            self._univ2_factory = UniswapFactory(web3=self._web3, address=self._univ2_factory_address)
         return self._univ2_factory
 
     @property
     def univ2_factory_address(self) -> ChecksumAddress:
         """Get the UniswapV2 factory contract address."""
         if not self._univ2_factory_address:
-            raise ValueError("UniswapV2 factory address is not initialized. Call init() first.")
+            raise ValueError("UniswapV2 factory address is not available. The launchpad contract may not have this function or the contract is not deployed.")
         return self._univ2_factory_address
 
     @property
