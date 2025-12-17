@@ -10,6 +10,7 @@ from ..api.chain.utils import make_web3
 from ..api.rest import RestApi
 from ..api.ws import WebSocketApi
 from ..configs import NetworkConfig
+from ..api.chain.utils import TxScheduler
 
 from .execution import ExecutionClient
 from .info import InfoClient
@@ -47,6 +48,10 @@ class GTEClient:
             wallet_private_key=wallet_private_key,
         )
 
+        assert self._account is not None
+
+        scheduler = TxScheduler(self.config.api_url, self._account)
+
         # Initialize API clients
         self.rest = RestApi(base_url=config.api_url)
         self.websocket = WebSocketApi(ws_url=config.ws_url)
@@ -55,7 +60,7 @@ class GTEClient:
         self.info = InfoClient(self.rest, self.websocket)
         
         self._execution = ExecutionClient(
-            web3=self._web3,
+            scheduler=scheduler,
             account=self._account,
             config=config,
             info=self.info,
