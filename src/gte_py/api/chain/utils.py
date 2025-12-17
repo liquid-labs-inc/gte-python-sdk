@@ -10,6 +10,7 @@ import time
 import warnings
 from typing import Any, Generic, TypeVar, Callable, Tuple, Dict, Awaitable, Optional, List
 from typing import cast
+import websockets
 from typing_extensions import Unpack
 
 from async_timeout import timeout
@@ -115,16 +116,6 @@ def lift_callable(func: Callable[[EventData], T | None]) -> Callable[[EventData]
             raise ValueError("Event parser returned None")
         return result
     return wrapper
-
-
-tx_id = 0
-
-
-def next_tx_id() -> int:
-    """Get the next transaction ID"""
-    global tx_id
-    tx_id += 1
-    return tx_id
 
 
 class TypedContractFunction(Generic[T]):
@@ -274,6 +265,7 @@ def make_web3(
         account = Account.from_key(wallet_private_key)
         web3.eth.default_account = account.address
         return web3, account
+    web3.provider.cache_allowed_requests = True
     return web3, None
 
 NUMERIC_FIELDS = {
@@ -307,176 +299,120 @@ def normalize_receipt(receipt: TxReceipt) -> TxReceipt:
                 return HexBytes(v)
         return v
 
-    return {k: parse_field(k, v) for k, v in receipt.items()}
+    return {k: parse_field(k, v) for k, v in receipt.items()} # type: ignore
 
 
-class BoundedNonceTxScheduler:
+class TxScheduler:
     """A transaction scheduler that manages nonce allocation and prevents nonce gaps."""
     
-    def __init__(self, web3: AsyncWeb3, account: LocalAccount | None = None, max_pending_window: int = 499):
+    def __init__(
+        self, 
+        rpc_url: str, 
+        account: LocalAccount
+    ):
         """
-        Initialize the high-throughput transaction scheduler.
+        Initialize the transaction scheduler.
         
         Args:
-            web3: AsyncWeb3 instance for blockchain interaction
+            rpc_url: WebSocket RPC URL (e.g., wss://your-rpc-node.com)
             account: Account for signing transactions
-            max_pending_window: Maximum pending transactions (default: 499)
         """
-        self.web3 = web3
+        self._rpc_url = rpc_url
+        self._ws: websockets.ClientConnection | None = None
         self._account = account
-        if not web3.eth.default_account:
-            web3.eth.default_account = to_checksum_address("0x0000000000000000000000000000000000000000")
-        self.from_address = account.address if account else web3.eth.default_account
-
-        self.max_pending_window = max_pending_window
-        
-        # Lock-based nonce management
-        self.nonce_lock = asyncio.Lock()
-        self.last_confirmed = 0
-        self.last_sent = 0
-        self.chain_id: int | None = None
-        
-        # Optional stuck nonce monitoring
-        self._monitoring_task: asyncio.Task[None] | None = None
-        self._stuck_nonce_threshold = 30  # seconds
-        self._monitor_interval = 10  # seconds
-        
+        self.from_address = account.address
+        self._chain_id: int | None = None
+        self._nonce: int | None = None
+        self._request_id = 0
         self.logger = logging.getLogger(__name__)
     
     @property
+    def ws(self) -> websockets.ClientConnection:
+        """Get the websocket connection."""
+        if self._ws is None:
+            raise ValueError("WebSocket not connected. Call await start() first.")
+        return self._ws
+    
+    @property
     def account(self) -> LocalAccount:
-        if not self._account:
-            raise ValueError("No account set")
+        """Get the account for signing transactions."""
         return self._account
+    
+    @property
+    def chain_id(self) -> int:
+        if self._chain_id is None:
+            raise ValueError("Chain ID not initialized. Call await start() first.")
+        return self._chain_id
+    
+    @property
+    def nonce(self) -> int:
+        if self._nonce is None:
+            raise ValueError("Nonce not initialized. Call await start() first.")
+        return self._nonce
+    
+    def _get_request_id(self) -> int:
+        """Get next request ID for JSON-RPC calls."""
+        self._request_id += 1
+        return self._request_id
+    
+    async def _rpc_call(self, method: str, params: list[Any]) -> Any:
+        """Make a JSON-RPC call over the websocket connection."""
+        request_id = self._get_request_id()
+        payload = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+            "id": request_id,
+        }
+        
+        await self.ws.send(json.dumps(payload))
+        response_text = await self.ws.recv()
+        response = json.loads(response_text)
+        
+        if "error" in response:
+            error = response["error"]
+            raise Exception(f"RPC Error: {error.get('message', error)}")
+        
+        return response.get("result")
+    
+    async def _fetch_nonce(self) -> int:
+        """Fetch the current nonce for the address."""
+        result = await self._rpc_call("eth_getTransactionCount", [self.from_address, "pending"])
+        return int(result, 16)
+
+    async def _fetch_chain_id(self) -> int:
+        """Fetch the chain ID from the RPC node."""
+        result = await self._rpc_call("eth_chainId", [])
+        return int(result, 16)
 
     async def start(self):
-        """Initialize scheduler and optionally start background monitoring."""
-        self.last_confirmed = await self.web3.eth.get_transaction_count(self.from_address, "latest")
-        self.last_sent = self.last_confirmed
-        self.chain_id = await self.web3.eth.chain_id
-        
-        self.logger.info(f"BoundedNonceTxScheduler started for {self.from_address}")
-        self.logger.info(f"Initial nonce: {self.last_confirmed}, Chain ID: {self.chain_id}")
-        
-        # Start optional stuck nonce monitoring (only if needed)
-        if self._monitor_interval > 0:
-            self._monitoring_task = asyncio.create_task(self._monitor_stuck_nonces())
+        """Connect to RPC node and initialize scheduler by fetching chain ID and nonce."""
+        self.logger.info(f"Connecting to RPC node: {self._rpc_url}")
+        self._ws = await websockets.connect(self._rpc_url)
+        self._chain_id = await self._fetch_chain_id()
+        self._nonce = await self._fetch_nonce()
+        self.logger.info(f"TxScheduler started: chain_id={self._chain_id}, nonce={self._nonce}")
     
     async def stop(self):
-        """Stop scheduler and cancel background monitoring."""
-        if self._monitoring_task:
-            self._monitoring_task.cancel()
-            try:
-                await self._monitoring_task
-            except asyncio.CancelledError:
-                pass
-        
-        # Wait for pending transactions to confirm
-        await self._sync_confirmed_nonce()
-        pending_count = await self.get_pending_count()
-        if pending_count > 0:
-            self.logger.warning(f"Stopping with {pending_count} pending transactions")
-        
-        self.logger.info("BoundedNonceTxScheduler stopped")
-
-    async def get_pending_count(self) -> int:
-        """Get current number of pending transactions."""
-        async with self.nonce_lock:
-            return self.last_sent - self.last_confirmed
-
-    async def _sync_confirmed_nonce(self):
-        """Sync last_confirmed from chain (must be called under lock)."""
-        network_confirmed = await self.web3.eth.get_transaction_count(self.from_address, "latest")
-        self.last_confirmed = network_confirmed
-        self.logger.debug(f"Synced confirmed nonce: {self.last_confirmed}")
-
-    async def _handle_nonce_error_and_retry(self, contract_func: "TypedContractFunction[Any]") -> str:
-        """Handle nonce error by getting fresh nonce and resending transaction."""
-        async with self.nonce_lock:
-            # Get the actual pending nonce from the node
-            pending_nonce = await self.web3.eth.get_transaction_count(self.from_address, "pending")
-            self.last_confirmed = await self.web3.eth.get_transaction_count(self.from_address, "latest")
-            self.last_sent = pending_nonce
-            self.logger.info(f"Nonce error - resynced: confirmed={self.last_confirmed}, pending={pending_nonce}")
-        
-        # Now sign and send with the correct nonce
-        signed = await self._sign_transaction(contract_func)
-        tx_hash = await self.web3.eth.send_raw_transaction(signed.raw_transaction)
-        self.logger.info(f"Resent transaction successfully: {tx_hash.hex()}")
-        return tx_hash.to_0x_hex()
-
-    async def _handle_rpc_error(self, e: Web3RPCError, contract_func: "TypedContractFunction[Any]") -> str:
-        """Handle RPC errors with appropriate recovery strategies."""
-        error_data = e.args[0] if e.args else {}
-        error_code = error_data.get('code') if isinstance(error_data, dict) else None
-        error_message = error_data.get('message', str(e)) if isinstance(error_data, dict) else str(e)
-        
-        # Nonce errors - resync and retry
-        if 'nonce too low' in error_message.lower() or 'nonce too high' in error_message.lower():
-            self.logger.warning(f"Nonce error detected: {error_message}")
-            return await self._handle_nonce_error_and_retry(contract_func)
-            
-        # Already submitted - treat as success
-        elif 'already known' in error_message.lower() or 'transaction already in pool' in error_message.lower():
-            self.logger.debug("Transaction already known/in pool")
-            return f"0x{'0' * 64}"
-            
-        # Fatal errors - raise exception
-        elif error_code == -32000 and ('insufficient funds' in error_message.lower() or 'gas' in error_message.lower()):
-            self.logger.error(f"Insufficient funds or gas error: {error_message}")
-            raise Exception(f"Insufficient funds or gas estimation failed: {error_message}")
-            
-        # Other errors - log and continue
-        else:
-            self.logger.warning(f"RPC Error {error_code}: {error_message}")
-            return f"0x{'0' * 64}"
-
-    async def _check_pending_window(self):
-        """
-        Check pending window and sync if needed. Fast fail if still full.
-        Must be called before transaction signing.
-        """
-        async with self.nonce_lock:
-            pending_count = self.last_sent - self.last_confirmed
-            
-            # Fast path: if window is not full, no network calls needed
-            if pending_count < self.max_pending_window:
-                return
-            
-            self.logger.warning(f"Pending window full ({pending_count}/{self.max_pending_window}), syncing with network")
-            
-            # Retry with exponential backoff: 0s, 2s, 4s, 8s
-            retry_delays = [0, 2, 4, 8]
-            
-            for delay in retry_delays:
-                if delay > 0:
-                    self.logger.info(f"Retrying window check in {delay}s")
-                    await asyncio.sleep(delay)
-                    
-                    try:
-                        # Sync with network to get latest confirmed nonce
-                        network_confirmed = await self.web3.eth.get_transaction_count(self.from_address, "latest")
-                        self.last_confirmed = network_confirmed
-                        
-                        # Check if we still have too many pending after sync
-                        pending_after_sync = self.last_sent - self.last_confirmed
-                        
-                        if pending_after_sync < self.max_pending_window:
-                            self.logger.info(f"Window cleared after retry: confirmed={self.last_confirmed}, pending={pending_after_sync}")
-                            return
-                        
-                        self.logger.warning(f"Window still full after attempt: {pending_after_sync}/{self.max_pending_window} pending")
-                        
-                    except Exception as e:
-                        self.logger.error(f"Network error during window check attempt: {e}")
-                        continue
-                
-            # All retries exhausted and window still full
-            final_pending = self.last_sent - self.last_confirmed
-            raise RuntimeError(
-                f"Pending transaction window still full after {len(retry_delays)} retries: ",
-                f"{final_pending}/{self.max_pending_window} transactions pending"
-            )
+        """Disconnect from RPC node and stop scheduler."""
+        if self._ws is not None:
+            await self._ws.close()
+            self._ws = None
+        self.logger.info("TxScheduler stopped")
+    
+    def _build_tx_params(self, contract_func: "TypedContractFunction[Any]", nonce: int) -> TransactionDictType:
+        """Build transaction parameters with given nonce."""        
+        return {
+            "chainId": self.chain_id,
+            "from": self.from_address,
+            "nonce": Nonce(nonce),
+            "to": contract_func.func_call.address,
+            "data": contract_func.func_call._encode_transaction_data(),
+            "gas": contract_func.params.get("gas", 1_000_000_000),
+            "maxFeePerGas": contract_func.params.get("maxFeePerGas", 2_500_000),
+            "maxPriorityFeePerGas": contract_func.params.get("maxPriorityFeePerGas", 0),
+            "value": contract_func.params.get("value", 0),
+        }
 
     async def return_transaction_data(self, contract_func: "TypedContractFunction[Any]") -> TransactionDictType:
         """
@@ -488,24 +424,8 @@ class BoundedNonceTxScheduler:
         Returns:
             TransactionDictType: transaction data
         """
-        # get nonce from chain for web3 default account
-        if not self.web3.eth.default_account:
-            raise ValueError("No default account set")
-        nonce = await self.web3.eth.get_transaction_count(self.web3.eth.default_account, "latest")
-        if not self.chain_id:
-            raise ValueError("Chain ID is not set")
-        tx_params: TransactionDictType = {
-                "chainId": self.chain_id,
-                "from": self.from_address,
-                "nonce": Nonce(nonce),
-                "to": contract_func.func_call.address,
-                "data": contract_func.func_call._encode_transaction_data(),
-                "gas": contract_func.params.get("gas", 1_000_000_000), # max gas (1 giga gas)
-                "maxFeePerGas": contract_func.params.get("maxFeePerGas", 2_500_000), # 0.0025 gwei
-                "maxPriorityFeePerGas": contract_func.params.get("maxPriorityFeePerGas", 0),
-                "value": contract_func.params.get("value", 0),
-            }
-        return tx_params
+        current_nonce = await self._fetch_nonce()
+        return self._build_tx_params(contract_func, current_nonce)
 
     async def _sign_transaction(self, contract_func: "TypedContractFunction[Any]") -> SignedTransaction:
         """
@@ -517,171 +437,182 @@ class BoundedNonceTxScheduler:
         Returns:
             Signed transaction ready for submission
         """
-        await self._check_pending_window()
-        
-        # Atomic nonce increment
-        async with self.nonce_lock:
-            nonce = self.last_sent
-            self.last_sent += 1
-        
         try:
-            if self.chain_id is None:
-                raise ValueError("Chain ID is not set")
-            
             # Build transaction with required parameters
-            tx_params: TransactionDictType = {
-                "chainId": self.chain_id,
-                "from": self.from_address,
-                "nonce": Nonce(nonce),
-                "to": contract_func.func_call.address,
-                "data": contract_func.func_call._encode_transaction_data(),
-                "gas": contract_func.params.get("gas", 1_000_000_000), # max gas (1 giga gas)
-                "maxFeePerGas": contract_func.params.get("maxFeePerGas", 2_500_000), # 0.0025 gwei
-                "maxPriorityFeePerGas": contract_func.params.get("maxPriorityFeePerGas", 0),
-                "value": contract_func.params.get("value", 0),
-            }
+            tx_params = self._build_tx_params(contract_func, self.nonce)
             
             # Sign the transaction using the account's sign_transaction method
             signed = self.account.sign_transaction(tx_params)
             
-            self.logger.debug(f"Signed transaction with nonce {nonce}: {signed.hash.hex()}")
+            self.logger.debug(f"Signed transaction: {signed.hash.hex()}")
             return signed
             
         except Exception as e:
-            # If signing fails, return the nonce to the pool
-            async with self.nonce_lock:
-                self.last_sent -= 1
-            self.logger.error(f"Failed to sign transaction with nonce {nonce}: {e}")
+            self.logger.error(f"Failed to sign transaction: {e}")
             raise
-
-    async def send(self, contract_func: "TypedContractFunction[Any]") -> str:
+    
+    async def send(
+        self, 
+        contract_func: "TypedContractFunction[Any]",
+        callback: Callable[[TxReceipt], Awaitable[None]] | None = None
+    ) -> str:
         """
-        Send transaction with robust error handling and nonce management.
+        Send transaction without waiting for receipt. Optionally call a callback when receipt is received.
+        
+        Args:
+            contract_func: The contract function to execute
+            callback: Optional async callback function to call with the receipt
         
         Returns:
             Transaction hash of the submitted transaction
         """
         try:
-            # Sign and send transaction
+            # Sign transaction
             signed = await self._sign_transaction(contract_func)
-            tx_hash = await self.web3.eth.send_raw_transaction(signed.raw_transaction)
-            self.logger.debug(f"Transaction sent: {tx_hash.hex()}")
-            return tx_hash.to_0x_hex()
             
-        except Web3RPCError as e:
-            return await self._handle_rpc_error(e, contract_func)
+            # Send via realtime_sendRawTransaction
+            request_id = self._get_request_id()
+            payload = {
+                "jsonrpc": "2.0",
+                "method": "realtime_sendRawTransaction",
+                "params": [signed.raw_transaction.hex()],
+                "id": request_id,
+            }
             
-        except ContractCustomError as e:
-            raise convert_web3_error(e, "transaction")
+            await self.ws.send(json.dumps(payload))
+            tx_hash = signed.hash.hex()
+            
+            # Increment nonce after successful send
+            self._nonce = self.nonce + 1
+            
+            self.logger.debug(f"Transaction sent: {tx_hash}")
+            
+            # If callback is provided, spawn a task to wait for receipt and call callback
+            if callback:
+                asyncio.create_task(self._wait_and_callback(request_id, callback))
+            
+            return tx_hash
             
         except Exception as e:
-            self.logger.error(f"Unexpected transaction error: {e}")
+            self.logger.error(f"Failed to send transaction: {e}")
             raise Exception(f"Transaction failed: {str(e)}")
+    
+    async def _wait_and_callback(self, request_id: int, callback: Callable[[TxReceipt], Awaitable[None]]):
+        """Wait for transaction receipt and call the callback."""
+        try:
+            # Wait for response from realtime_sendRawTransaction
+            response_text = await self.ws.recv()
+            response = json.loads(response_text)
+            
+            # Check if this is our response
+            if response.get("id") != request_id:
+                self.logger.warning(f"Received response for different request ID: {response.get('id')} vs {request_id}")
+                return
+            
+            if "error" in response:
+                error = response["error"]
+                self.logger.error(f"Transaction failed: {error}")
+                return
+            
+            # Parse receipt
+            receipt = response.get("result", {})
+            receipt = normalize_receipt(receipt)
+            
+            # Check status
+            if receipt.get("status") == 0:
+                self.logger.error(f"Transaction reverted: {receipt}")
+            
+            # Call callback
+            await callback(receipt)
+            
+        except Exception as e:
+            self.logger.error(f"Error in callback handler: {e}")
 
-    async def send_wait(self, contract_func: "TypedContractFunction[Any]") -> Any:
+    async def send_wait(self, contract_func: "TypedContractFunction[Any]", _retry_count: int = 0) -> Any:
         """
-        Send transaction and wait for receipt.
-        Uses realtime endpoint if available, falls back to regular send + wait.
+        Send transaction and wait for receipt using realtime_sendRawTransaction.
+        
+        Args:
+            contract_func: The contract function to execute
+            _retry_count: Internal parameter to track retry attempts
+            
+        Returns:
+            Parsed event data if event parser is configured, otherwise the receipt
         """
-        # Sign transaction (includes nonce increment)
+        # Sign transaction
         signed = await self._sign_transaction(contract_func)
         
         try:
-            receipt = await self._send_realtime(signed.raw_transaction)
-            self.logger.debug(f"Realtime transaction completed: {signed.hash.hex()}")
-            receipt = normalize_receipt(receipt)
-        except Exception as realtime_error:
-            self.logger.debug(f"Realtime transaction failed: {realtime_error}")
+            # Send via realtime_sendRawTransaction and wait for receipt
+            async with timeout(60):  # 60 second timeout
+                request_id = self._get_request_id()
+                payload = {
+                    "jsonrpc": "2.0",
+                    "method": "realtime_sendRawTransaction",
+                    "params": [signed.raw_transaction.hex()],
+                    "id": request_id,
+                }
+                
+                await self.ws.send(json.dumps(payload))
+                
+                # Increment nonce after successful send
+                self._nonce = self.nonce + 1
+                
+                self.logger.debug(f"Transaction sent via realtime: {signed.hash.hex()}")
+                
+                # Wait for response
+                response_text = await self.ws.recv()
+                response = json.loads(response_text)
+                
+                if "error" in response:
+                    error = response["error"]
+                    error_message = error.get('message', str(error))
+                    
+                    # Check for nonce errors
+                    nonce_error_keywords = ['nonce', 'already known', 'replacement transaction']
+                    is_nonce_error = any(keyword in error_message.lower() for keyword in nonce_error_keywords)
+                    
+                    if is_nonce_error and _retry_count == 0:
+                        self.logger.warning(f"Nonce error detected: {error_message}. Fetching current nonce and retrying...")
+                        # Fetch current nonce from network
+                        self._nonce = await self._fetch_nonce()
+                        self.logger.info(f"Updated nonce to {self._nonce}, retrying transaction...")
+                        # Retry once
+                        return await self.send_wait(contract_func, _retry_count=1)
+                    
+                    raise Exception(f"RPC Error: {error_message}")
+                
+                # Parse receipt
+                receipt = response.get("result", {})
+                receipt = normalize_receipt(receipt)
+                self.logger.debug(f"Transaction completed: {signed.hash.hex()}")
+                
+        except asyncio.TimeoutError:
+            self.logger.error("Transaction timed out after 60 seconds")
+            raise Exception("Transaction timed out - RPC endpoint may be slow")
+        except Exception as e:
+            # Check if this is a nonce error in exception message
+            error_message = str(e).lower()
+            nonce_error_keywords = ['nonce', 'already known', 'replacement transaction']
+            is_nonce_error = any(keyword in error_message for keyword in nonce_error_keywords)
+            
+            if is_nonce_error and _retry_count == 0:
+                self.logger.warning(f"Nonce error detected: {e}. Fetching current nonce and retrying...")
+                # Fetch current nonce from network
+                self._nonce = await self._fetch_nonce()
+                self.logger.info(f"Updated nonce to {self._nonce}, retrying transaction...")
+                # Retry once
+                return await self.send_wait(contract_func, _retry_count=1)
+            
+            self.logger.error(f"Transaction failed: {e}")
             raise
-
+        
+        # Check if transaction reverted (status == 0)
+        if receipt.get("status") == 0:
+            self.logger.error(f"Transaction reverted: {signed.hash.hex()}")
+            # Try to extract error information from receipt logs if available
+            tx_hash = receipt.get("transactionHash", signed.hash.hex())
+            raise Exception(f"Transaction reverted: {tx_hash}")
+        
         # Parse and return event if specified, else return receipt
         return parse_event_from_receipt(receipt, contract_func)
-
-    async def wait_for_receipt(self, tx_hash: HexBytes, timeout: int = 10) -> TxReceipt:
-        """Wait for transaction receipt by hash."""
-        try:
-            receipt = await self.web3.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout)
-            self.logger.debug(f"Received receipt for transaction: {tx_hash.hex()}")
-            receipt = normalize_receipt(receipt)
-            return receipt
-        except Exception as e:
-            self.logger.error(f"Failed to get receipt for transaction {tx_hash.hex()}: {e}")
-            raise
-
-    async def _monitor_stuck_nonces(self):
-        """
-        Background task to monitor and cancel stuck nonces.
-        Runs every _monitor_interval seconds.
-        """
-        stuck_nonce_timestamps: dict[int, float] = {}
-        
-        while True:
-            try:
-                await asyncio.sleep(self._monitor_interval)
-                
-                # Get current nonce states
-                latest_nonce = await self.web3.eth.get_transaction_count(self.from_address, "latest")
-                pending_nonce = await self.web3.eth.get_transaction_count(self.from_address, "pending")
-                
-                # If pending_nonce < last_sent, we have a gap
-                # This means the network is waiting for a nonce we think we sent
-                if pending_nonce < self.last_sent:
-                    # The stuck nonce is the pending_nonce (the one the network is waiting for)
-                    stuck_nonce = pending_nonce
-                    current_time = time.time()
-                    
-                    if stuck_nonce not in stuck_nonce_timestamps:
-                        stuck_nonce_timestamps[stuck_nonce] = current_time
-                        self.logger.info(f"Possible stuck nonce {stuck_nonce} (latest: {latest_nonce}, last_sent: {self.last_sent})")
-                    
-                    elif current_time - stuck_nonce_timestamps[stuck_nonce] > self._stuck_nonce_threshold:
-                        # Nonce stuck too long - submit cancel transaction
-                        await self._cancel_stuck_nonce(stuck_nonce)
-                        del stuck_nonce_timestamps[stuck_nonce]
-                else:
-                    # No gap - clear stuck nonce tracking
-                    stuck_nonce_timestamps.clear()
-                    
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                self.logger.error(f"Error in stuck nonce monitoring: {e}")
-
-    async def _cancel_stuck_nonce(self, stuck_nonce: int):
-        """
-        Submit a cancel transaction for a stuck nonce.
-        Sends 0 ETH to self with higher gas price.
-        """
-        try:
-            # Get current gas price info
-            block = await self.web3.eth.get_block("latest")
-            base_fee = block.get("baseFeePerGas", 10_000_000_000)
-            
-            # Cancel transaction: send 0 ETH to self with higher fees
-            cancel_tx: TransactionDictType = {
-                "chainId": self.chain_id or 6342,
-                "from": self.from_address,
-                "to": self.from_address,
-                "nonce": Nonce(stuck_nonce),
-                "value": 0,
-                "gas": 21000,
-                "maxFeePerGas": int(base_fee * 2),
-                "maxPriorityFeePerGas": 0,
-                "data": b"",
-            }
-            
-            # Sign and send cancel transaction
-            signed_cancel = self.account.sign_transaction(cancel_tx)
-            tx_hash = await self.web3.eth.send_raw_transaction(signed_cancel.raw_transaction)
-            
-            self.logger.info(f"Submitted cancel transaction for stuck nonce {stuck_nonce}: {tx_hash.hex()}")
-            
-        except Exception as e:
-            self.logger.error(f"Failed to cancel stuck nonce {stuck_nonce}: {e}")
-
-    async def _send_realtime(self, raw_tx: HexBytes) -> TxReceipt:
-        """Send transaction using realtime endpoint."""
-        return await self.web3.manager.coro_request(
-            "realtime_sendRawTransaction",
-            [raw_tx.hex()]
-        )

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 from hexbytes import HexBytes
@@ -11,7 +12,7 @@ from typing import cast
 
 from gte_py.api.chain.utils import (
     TypedContractFunction, 
-    BoundedNonceTxScheduler,
+    TxScheduler,
     parse_event_from_receipt,
     normalize_receipt
 )
@@ -82,6 +83,16 @@ def mock_contract_event():
         {"args": {"from": "0x123", "to": "0x456", "value": 1000}}
     ])
     return event
+
+
+@pytest.fixture
+def mock_websocket():
+    """Create a mock websocket connection."""
+    ws = AsyncMock()
+    ws.send = AsyncMock()
+    ws.recv = AsyncMock()
+    ws.close = AsyncMock()
+    return ws
 
 
 class TestTypedContractFunction:
@@ -191,189 +202,6 @@ class TestParseEventFromReceipt:
         assert result == receipt
 
 
-class TestBoundedNonceTxScheduler:
-    """Test BoundedNonceTxScheduler class."""
-
-    @pytest.mark.asyncio
-    async def test_initialization(self, mock_web3, mock_account):
-        """Test BoundedNonceTxScheduler initialization."""
-        scheduler = BoundedNonceTxScheduler(mock_web3, mock_account)
-        
-        assert scheduler.web3 is mock_web3
-        assert scheduler.account is mock_account
-        assert scheduler.from_address == mock_account.address
-        assert scheduler.max_pending_window == 499
-        assert scheduler.last_confirmed == 0
-        assert scheduler.last_sent == 0
-        assert scheduler.chain_id is None
-
-    @pytest.mark.asyncio
-    async def test_initialization_custom_window(self, mock_web3, mock_account):
-        """Test BoundedNonceTxScheduler initialization with custom window."""
-        scheduler = BoundedNonceTxScheduler(mock_web3, mock_account, max_pending_window=100)
-        
-        assert scheduler.max_pending_window == 100
-
-    @pytest.mark.asyncio
-    async def test_start(self, mock_web3, mock_account):
-        """Test scheduler start method."""
-        scheduler = BoundedNonceTxScheduler(mock_web3, mock_account)
-        
-        await scheduler.start()
-        
-        assert scheduler.last_confirmed == 5
-        assert scheduler.last_sent == 5
-        assert scheduler.chain_id == 1
-        mock_web3.eth.get_transaction_count.assert_awaited_once_with(
-            mock_account.address, "latest"
-        )
-        # Access the underlying mock for assertion
-        chain_id_descriptor = type(mock_web3.eth).__dict__['chain_id']
-        chain_id_descriptor._mock.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_stop(self, mock_web3, mock_account):
-        scheduler = BoundedNonceTxScheduler(mock_web3, mock_account)
-
-        # Create a real awaitable coroutine to mock the task
-        async def dummy_coroutine():
-            await asyncio.sleep(0)
-
-        task = asyncio.create_task(dummy_coroutine())
-        task.cancel = MagicMock()
-
-        scheduler._monitoring_task = task
-
-        await scheduler.stop()
-
-        task.cancel.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_get_pending_count(self, mock_web3, mock_account):
-        """Test get_pending_count method."""
-        scheduler = BoundedNonceTxScheduler(mock_web3, mock_account)
-        scheduler.last_confirmed = 5
-        scheduler.last_sent = 8
-        
-        count = await scheduler.get_pending_count()
-        
-        assert count == 3
-
-    @pytest.mark.asyncio
-    async def test_send_success(self, mock_web3, mock_account, mock_contract_function):
-        """Test successful send method."""
-        scheduler = BoundedNonceTxScheduler(mock_web3, mock_account)
-        await scheduler.start()
-        
-        tx = TypedContractFunction(mock_contract_function)
-        result = await scheduler.send(tx)
-        
-        assert result == "0x0123"
-        mock_web3.eth.send_raw_transaction.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_send_wait_success(self, mock_web3, mock_account, mock_contract_function):
-        """Test successful send_wait method."""
-        scheduler = BoundedNonceTxScheduler(mock_web3, mock_account)
-        await scheduler.start()
-        
-        mock_web3.manager.coro_request.return_value = {"status": 1, "transactionHash": "0x123"}
-        
-        tx = TypedContractFunction(mock_contract_function)
-        result = await scheduler.send_wait(tx)
-        
-        # The normalize_receipt function converts transactionHash to HexBytes
-        assert result["status"] == 1
-        assert result["transactionHash"] == HexBytes("0x123")
-        mock_web3.manager.coro_request.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_send_wait_with_event(self, mock_web3, mock_account, mock_contract_function, mock_contract_event):
-        """Test send_wait method with event parsing."""
-        scheduler = BoundedNonceTxScheduler(mock_web3, mock_account)
-        await scheduler.start()
-        
-        def parser(event_data):
-            return {"parsed": event_data["args"]}
-        
-        mock_web3.manager.coro_request.return_value = {"status": 1, "transactionHash": "0x123"}
-        
-        tx = TypedContractFunction(mock_contract_function)
-        tx.with_event(mock_contract_event, parser)
-        result = await scheduler.send_wait(tx)
-        
-        assert result == {"parsed": {"from": "0x123", "to": "0x456", "value": 1000}}
-
-    @pytest.mark.asyncio
-    async def test_wait_for_receipt(self, mock_web3, mock_account):
-        """Test wait_for_receipt method."""
-        scheduler = BoundedNonceTxScheduler(mock_web3, mock_account)
-        mock_web3.eth.wait_for_transaction_receipt.return_value = {"status": 1}
-        
-        tx_hash = HexBytes("0x123")
-        result = await scheduler.wait_for_receipt(tx_hash)
-        
-        assert result == {"status": 1}
-        mock_web3.eth.wait_for_transaction_receipt.assert_awaited_once_with(tx_hash, timeout=10)
-
-    @pytest.mark.asyncio
-    async def test_pending_window_full(self, mock_web3, mock_account, mock_contract_function):
-        """Test behavior when pending window is full."""
-        scheduler = BoundedNonceTxScheduler(mock_web3, mock_account, max_pending_window=2)
-        await scheduler.start()
-        
-        # Fill the window: last_confirmed=5, last_sent=7 means 2 pending
-        scheduler.last_sent = 7  # 2 pending (5-7)
-        
-        # Mock get_transaction_count to return 5 first (window full), then 7 (window cleared)
-        # This simulates that during retry, pending transactions get confirmed
-        mock_web3.eth.get_transaction_count.side_effect = [5, 7]
-        
-        tx = TypedContractFunction(mock_contract_function)
-        
-        with patch("gte_py.api.chain.utils.asyncio.sleep", new=AsyncMock()):
-            # Should succeed after retry clears the window
-            result = await scheduler.send(tx)
-            assert result == "0x0123"
-
-    @pytest.mark.asyncio
-    async def test_stuck_nonce_monitoring(self, mock_web3, mock_account):
-        """Test stuck nonce monitoring."""
-        scheduler = BoundedNonceTxScheduler(mock_web3, mock_account)
-        # Use integer values for testing
-        scheduler._monitor_interval = 1  # Fast for testing
-        scheduler._stuck_nonce_threshold = 1
-        await scheduler.start()
-        
-        # Simulate stuck nonce
-        mock_web3.eth.get_transaction_count.side_effect = [
-            AsyncMock(return_value=5),  # latest
-            AsyncMock(return_value=5),  # pending (same as latest = stuck)
-        ]
-        
-        # Start monitoring
-        task = asyncio.create_task(scheduler._monitor_stuck_nonces())
-        await asyncio.sleep(0.15)  # Let it run a bit
-        task.cancel()
-        
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-
-    @pytest.mark.asyncio
-    async def test_cancel_stuck_nonce(self, mock_web3, mock_account):
-        """Test cancel stuck nonce method."""
-        scheduler = BoundedNonceTxScheduler(mock_web3, mock_account)
-        await scheduler.start()
-        
-        mock_web3.eth.get_block.return_value = {"baseFeePerGas": 1000000000}
-        
-        await scheduler._cancel_stuck_nonce(5)
-        
-        mock_web3.eth.send_raw_transaction.assert_awaited_once()
-
-
 class TestNormalizeReceipt:
     """Test normalize_receipt function."""
 
@@ -435,3 +263,273 @@ class TestNormalizeReceipt:
         
         assert result["extraField"] == "should_be_preserved"
         assert result["nested"]["innerField"] == "also_preserved"
+
+
+class TestTxScheduler:
+    """Test TxScheduler class."""
+
+    @pytest.mark.asyncio
+    async def test_initialization(self, mock_account):
+        """Test TxScheduler initialization."""
+        scheduler = TxScheduler("wss://test-rpc.com", mock_account)
+        
+        assert scheduler._rpc_url == "wss://test-rpc.com"
+        assert scheduler.account is mock_account
+        assert scheduler.from_address == mock_account.address
+        assert scheduler._chain_id is None
+        assert scheduler._nonce is None
+
+    @pytest.mark.asyncio
+    async def test_start(self, mock_account, mock_websocket):
+        """Test scheduler start method."""
+        scheduler = TxScheduler("wss://test-rpc.com", mock_account)
+        
+        # Mock websocket connection and RPC responses
+        with patch("websockets.connect", new_callable=AsyncMock) as mock_connect:
+            mock_connect.return_value = mock_websocket
+            
+            # Mock chain_id response
+            chain_id_response = json.dumps({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": "0x1"
+            })
+            
+            # Mock nonce response
+            nonce_response = json.dumps({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "result": "0x5"
+            })
+            
+            # Set up recv to return chain_id then nonce
+            mock_websocket.recv.side_effect = [chain_id_response, nonce_response]
+            
+            await scheduler.start()
+            
+            assert scheduler.chain_id == 1
+            assert scheduler.nonce == 5
+            assert scheduler._ws is mock_websocket
+            mock_connect.assert_awaited_once_with("wss://test-rpc.com")
+
+    @pytest.mark.asyncio
+    async def test_stop(self, mock_account, mock_websocket):
+        """Test scheduler stop method."""
+        scheduler = TxScheduler("wss://test-rpc.com", mock_account)
+        scheduler._ws = mock_websocket
+        
+        await scheduler.stop()
+        
+        assert scheduler._ws is None
+        mock_websocket.close.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_stop_no_connection(self, mock_account):
+        """Test scheduler stop when not connected."""
+        scheduler = TxScheduler("wss://test-rpc.com", mock_account)
+        
+        # Should not raise an error
+        await scheduler.stop()
+        assert scheduler._ws is None
+
+    @pytest.mark.asyncio
+    async def test_chain_id_property_not_initialized(self, mock_account):
+        """Test chain_id property raises error when not initialized."""
+        scheduler = TxScheduler("wss://test-rpc.com", mock_account)
+        
+        with pytest.raises(ValueError, match="Chain ID not initialized"):
+            _ = scheduler.chain_id
+
+    @pytest.mark.asyncio
+    async def test_nonce_property_not_initialized(self, mock_account):
+        """Test nonce property raises error when not initialized."""
+        scheduler = TxScheduler("wss://test-rpc.com", mock_account)
+        
+        with pytest.raises(ValueError, match="Nonce not initialized"):
+            _ = scheduler.nonce
+
+    @pytest.mark.asyncio
+    async def test_ws_property_not_connected(self, mock_account):
+        """Test ws property raises error when not connected."""
+        scheduler = TxScheduler("wss://test-rpc.com", mock_account)
+        
+        with pytest.raises(ValueError, match="WebSocket not connected"):
+            _ = scheduler.ws
+
+    @pytest.mark.asyncio
+    async def test_return_transaction_data(self, mock_account, mock_websocket, mock_contract_function):
+        """Test return_transaction_data method."""
+        scheduler = TxScheduler("wss://test-rpc.com", mock_account)
+        scheduler._ws = mock_websocket
+        scheduler._chain_id = 1
+        
+        # Mock nonce response
+        nonce_response = json.dumps({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": "0x5"
+        })
+        mock_websocket.recv.return_value = nonce_response
+        
+        tx = TypedContractFunction(mock_contract_function)
+        result = await scheduler.return_transaction_data(tx)
+        
+        assert result["chainId"] == 1
+        assert result["from"] == mock_account.address
+        assert result["nonce"] == 5
+        assert result["to"] == mock_contract_function.address
+
+    @pytest.mark.asyncio
+    async def test_send(self, mock_account, mock_websocket, mock_contract_function):
+        """Test send method."""
+        scheduler = TxScheduler("wss://test-rpc.com", mock_account)
+        scheduler._ws = mock_websocket
+        scheduler._chain_id = 1
+        scheduler._nonce = 5
+        
+        # Mock signed transaction
+        signed_tx = MagicMock()
+        signed_tx.hash = HexBytes("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+        signed_tx.raw_transaction = HexBytes("0xabcdef")
+        mock_account.sign_transaction.return_value = signed_tx
+        
+        tx = TypedContractFunction(mock_contract_function)
+        result = await scheduler.send(tx)
+        
+        assert result == signed_tx.hash.hex()
+        assert scheduler.nonce == 6  # Nonce should be incremented
+        mock_websocket.send.assert_awaited_once()
+        # Verify the payload contains realtime_sendRawTransaction
+        call_args = mock_websocket.send.call_args[0][0]
+        payload = json.loads(call_args)
+        assert payload["method"] == "realtime_sendRawTransaction"
+
+    @pytest.mark.asyncio
+    async def test_send_wait(self, mock_account, mock_websocket, mock_contract_function):
+        """Test send_wait method."""
+        scheduler = TxScheduler("wss://test-rpc.com", mock_account)
+        scheduler._ws = mock_websocket
+        scheduler._chain_id = 1
+        scheduler._nonce = 5
+        
+        # Mock signed transaction
+        signed_tx = MagicMock()
+        signed_tx.hash = HexBytes("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+        signed_tx.raw_transaction = HexBytes("0xabcdef")
+        mock_account.sign_transaction.return_value = signed_tx
+        
+        # Mock receipt response
+        receipt_response = json.dumps({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "status": "0x1",
+                "transactionHash": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+                "blockNumber": "0x100"
+            }
+        })
+        mock_websocket.recv.return_value = receipt_response
+        
+        tx = TypedContractFunction(mock_contract_function)
+        result = await scheduler.send_wait(tx)
+        
+        assert result["status"] == 1
+        assert scheduler.nonce == 6  # Nonce should be incremented
+        mock_websocket.send.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_send_wait_with_event(self, mock_account, mock_websocket, mock_contract_function, mock_contract_event):
+        """Test send_wait method with event parsing."""
+        scheduler = TxScheduler("wss://test-rpc.com", mock_account)
+        scheduler._ws = mock_websocket
+        scheduler._chain_id = 1
+        scheduler._nonce = 5
+        
+        # Mock signed transaction
+        signed_tx = MagicMock()
+        signed_tx.hash = HexBytes("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+        signed_tx.raw_transaction = HexBytes("0xabcdef")
+        mock_account.sign_transaction.return_value = signed_tx
+        
+        # Mock receipt response
+        receipt_response = json.dumps({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "status": "0x1",
+                "transactionHash": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+                "blockNumber": "0x100"
+            }
+        })
+        mock_websocket.recv.return_value = receipt_response
+        
+        def parser(event_data):
+            return {"parsed": event_data["args"]}
+        
+        tx = TypedContractFunction(mock_contract_function)
+        tx.with_event(mock_contract_event, parser)
+        result = await scheduler.send_wait(tx)
+        
+        # Should return parsed event data
+        assert result == {"parsed": {"from": "0x123", "to": "0x456", "value": 1000}}
+
+    @pytest.mark.asyncio
+    async def test_send_wait_reverted(self, mock_account, mock_websocket, mock_contract_function):
+        """Test send_wait method with reverted transaction."""
+        scheduler = TxScheduler("wss://test-rpc.com", mock_account)
+        scheduler._ws = mock_websocket
+        scheduler._chain_id = 1
+        scheduler._nonce = 5
+        
+        # Mock signed transaction
+        signed_tx = MagicMock()
+        signed_tx.hash = HexBytes("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+        signed_tx.raw_transaction = HexBytes("0xabcdef")
+        mock_account.sign_transaction.return_value = signed_tx
+        
+        # Mock receipt response with status 0 (reverted)
+        receipt_response = json.dumps({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+                "status": "0x0",
+                "transactionHash": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+                "blockNumber": "0x100"
+            }
+        })
+        mock_websocket.recv.return_value = receipt_response
+        
+        tx = TypedContractFunction(mock_contract_function)
+        
+        with pytest.raises(Exception, match="Transaction reverted"):
+            await scheduler.send_wait(tx)
+
+    @pytest.mark.asyncio
+    async def test_send_wait_rpc_error(self, mock_account, mock_websocket, mock_contract_function):
+        """Test send_wait method with RPC error."""
+        scheduler = TxScheduler("wss://test-rpc.com", mock_account)
+        scheduler._ws = mock_websocket
+        scheduler._chain_id = 1
+        scheduler._nonce = 5
+        
+        # Mock signed transaction
+        signed_tx = MagicMock()
+        signed_tx.hash = HexBytes("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+        signed_tx.raw_transaction = HexBytes("0xabcdef")
+        mock_account.sign_transaction.return_value = signed_tx
+        
+        # Mock error response
+        error_response = json.dumps({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "error": {
+                "code": -32000,
+                "message": "Transaction failed"
+            }
+        })
+        mock_websocket.recv.return_value = error_response
+        
+        tx = TypedContractFunction(mock_contract_function)
+        
+        with pytest.raises(Exception, match="RPC Error"):
+            await scheduler.send_wait(tx)

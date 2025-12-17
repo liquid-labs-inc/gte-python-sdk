@@ -10,6 +10,7 @@ from ..api.chain.utils import make_web3
 from ..api.rest import RestApi
 from ..api.ws import WebSocketApi
 from ..configs import NetworkConfig
+from ..api.chain.utils import TxScheduler
 
 from .execution import ExecutionClient
 from .info import InfoClient
@@ -47,6 +48,10 @@ class GTEClient:
             wallet_private_key=wallet_private_key,
         )
 
+        assert self._account is not None
+
+        scheduler = TxScheduler(self.config.rpc_ws, self._account)
+
         # Initialize API clients
         self.rest = RestApi(base_url=config.api_url)
         self.websocket = WebSocketApi(ws_url=config.ws_url)
@@ -55,9 +60,9 @@ class GTEClient:
         self.info = InfoClient(self.rest, self.websocket)
         
         self._execution = ExecutionClient(
-            web3=self._web3,
+            scheduler=scheduler,
             account=self._account,
-            gte_router_address=config.router_address,
+            config=config,
             info=self.info,
         )
         
@@ -68,7 +73,13 @@ class GTEClient:
             return
         
         await self.rest.connect()
-        await self.websocket.connect()
+        
+        # Try to connect websocket, but don't fail if it's unavailable
+        try:
+            await self.websocket.connect()
+            logger.info("WebSocket connected successfully")
+        except Exception as e:
+            logger.warning(f"WebSocket connection failed, continuing without WebSocket: {e}")
         
         if self._execution:
             await self._execution.init()
